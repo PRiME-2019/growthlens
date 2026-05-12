@@ -1,0 +1,448 @@
+// GrowthLens - district-facing value-added interpretation tool
+// Copyright (C) 2026 Andrew Camp
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published
+// by the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+
+// Export page — builds a PPTX deck of key GrowthLens results from window data.
+// Uses PptxGenJS (loaded from CDN in GrowthLens.html) to generate native
+// PowerPoint shapes/text — fully editable downstream.
+//
+// The page itself shows preview cards approximating each slide so a user can
+// see what they'll get before generating.
+
+function ExportPage({ ctx }) {
+  const data = window.GAPS_DATA;
+  const heat = window.HEATMAP_DATA;
+  if (!data) return null;
+  const { meta, schools } = data;
+
+  // Slice + summary stats reused on multiple slides.
+  const summary = React.useMemo(() => {
+    const eligible = schools.filter(s => s.meets_min_cell !== false);
+    const sorted = [...eligible].sort((a, b) => b.shrunk_gap - a.shrunk_gap);
+    const top    = sorted.slice(0, 5);
+    const bottom = sorted.slice(-3).reverse();
+    const meetingThreshold = eligible.length;
+    return { sorted, top, bottom, meetingThreshold };
+  }, [schools]);
+
+  const subjectLabel = (meta.subject || 'ela').toUpperCase();
+  const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · 2024–25`;
+  const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const slides = [
+    {
+      n: '01', kind: 'cover',
+      title: 'GrowthLens · District Report',
+      sub: sliceText,
+      meta: `PRiME Center · Saint Louis University · ${today}`,
+    },
+    {
+      n: '02', kind: 'headline',
+      title: 'Headline',
+      bullets: [
+        ['District gap',     fmt2(meta.districtGap) + ' SD'],
+        ['Between-school τ', Math.sqrt(Math.max(0, meta.tauSquared)).toFixed(2) + ' SD'],
+        ['Schools meeting threshold', `${summary.meetingThreshold} / ${schools.length}`],
+      ],
+    },
+    {
+      n: '03', kind: 'top-gaps',
+      title: 'Top schools by gap',
+      rows: summary.top,
+    },
+    {
+      n: '04', kind: 'negative-gaps',
+      title: `Reversed gaps (${meta.groupB} ahead of ${meta.groupA})`,
+      rows: summary.bottom,
+    },
+    {
+      n: '05', kind: 'hotspots',
+      title: 'System Scan · hotspots',
+      hot: scanHotspots(heat),
+    },
+    {
+      n: '06', kind: 'methods',
+      title: 'Methods & caveats',
+    },
+  ];
+
+  const [busy, setBusy] = React.useState(false);
+  const exportPPTX = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await buildPPTX({ slides, meta, schools, summary, heat, today });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <BriefHeader eyebrow="Export" slice={sliceText}
+        title="Download a board-ready deck"
+        blurb={'Six slides covering the headline, the schools at the extremes of the gap, system-scan hotspots, and a methods note. Editable native PowerPoint — text, tables, and shapes, no flattened screenshots.'} />
+
+      <section style={{
+        background: '#fff', borderRadius: 8, border: `1px solid ${SLU.rule2}`,
+        borderTop: `3px solid ${SLU.gold}`,
+        boxShadow: '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.04)',
+        padding: 24, fontFamily: FONT,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                       gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
+              {slides.length} slides · {sliceText}
+            </div>
+            <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
+              Generated locally in your browser. The same threshold and unit settings used elsewhere in GrowthLens apply.
+            </div>
+          </div>
+          <button onClick={exportPPTX} disabled={busy} style={{
+            padding: '10px 18px', borderRadius: 6,
+            background: busy ? SLU.mute : SLU.blue, color: '#fff', border: 'none',
+            fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ fontFamily: MONO, fontSize: 10.5, padding: '1px 5px',
+                            border: '1px solid rgba(255,255,255,0.45)', borderRadius: 3,
+                            letterSpacing: 0.5 }}>PPTX</span>
+            {busy ? 'Generating…' : 'Export PPTX →'}
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {slides.map(s => <SlideCard key={s.n} slide={s} meta={meta} sliceText={sliceText} today={today} schools={schools} summary={summary} />)}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function fmt2(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2); }
+
+// Identify 3 hottest negative and 3 hottest positive school×grade cells from
+// the heatmap dataset (or null if heat data isn't loaded yet).
+function scanHotspots(heat) {
+  if (!heat) return null;
+  const cells = [];
+  for (const s of heat.schools) {
+    for (const g of [3, 4, 5, 6, 7, 8]) {
+      const c = s.grades?.[g];
+      if (c && c.ok) cells.push({ school: s.school_id, grade: g, r: c.r, n: c.n });
+    }
+  }
+  cells.sort((a, b) => a.r - b.r);
+  return {
+    cold: cells.slice(0, 3),
+    hot:  cells.slice(-3).reverse(),
+  };
+}
+
+// ---- Slide preview cards ---------------------------------------------------
+function SlideCard({ slide, meta, sliceText, today, schools, summary }) {
+  return (
+    <div style={{
+      background: '#FDFCFA', borderRadius: 6, border: `1px solid ${SLU.rule2}`,
+      overflow: 'hidden', display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{ aspectRatio: '16 / 9', position: 'relative',
+                     background: slide.kind === 'cover' ? SLU.blueDark : '#fff',
+                     borderBottom: `1px solid ${SLU.rule2}` }}>
+        <SlideBody slide={slide} meta={meta} sliceText={sliceText} today={today} schools={schools} summary={summary} />
+        <div style={{
+          position: 'absolute', top: 6, left: 8,
+          fontFamily: LABEL, fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2,
+          textTransform: 'uppercase',
+          color: slide.kind === 'cover' ? 'rgba(255,255,255,0.55)' : SLU.mute,
+        }}>{slide.n}</div>
+      </div>
+      <div style={{ padding: '8px 12px 10px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: SLU.ink }}>{slide.title}</div>
+      </div>
+    </div>
+  );
+}
+
+function SlideBody({ slide, meta, sliceText, today, summary }) {
+  if (slide.kind === 'cover') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, padding: '10% 8%', color: '#fff',
+                     display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                     fontFamily: FONT }}>
+        <div style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 22, letterSpacing: -0.4, lineHeight: 1 }}>GrowthLens</div>
+        <div style={{ height: 1, width: 24, background: SLU.goldLight, margin: '6px 0 10px' }} />
+        <div style={{ fontFamily: LABEL, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1.4, opacity: 0.75 }}>District Report</div>
+        <div style={{ marginTop: 14, fontFamily: SERIF, fontWeight: 500, fontSize: 11, color: SLU.goldLight }}>{sliceText}</div>
+        <div style={{ marginTop: 'auto', fontSize: 7, opacity: 0.55, fontFamily: LABEL, textTransform: 'uppercase', letterSpacing: 1.2 }}>PRiME · SLU · {today}</div>
+      </div>
+    );
+  }
+  if (slide.kind === 'headline') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, padding: '8% 6% 6%', fontFamily: FONT,
+                     display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, fontWeight: 600, color: SLU.ink }}>{slide.title}</div>
+        <div style={{ height: 1, background: SLU.rule2 }} />
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {slide.bullets.map(([k, v], i) => (
+            <div key={i} style={{ flex: 1 }}>
+              <div style={{ fontSize: 6.5, fontFamily: LABEL, textTransform: 'uppercase', letterSpacing: 1, color: SLU.mute }}>{k}</div>
+              <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 600, color: SLU.ink, marginTop: 2 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (slide.kind === 'top-gaps' || slide.kind === 'negative-gaps') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, padding: '8% 6% 6%', fontFamily: FONT }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, fontWeight: 600, color: SLU.ink }}>{slide.title}</div>
+        <div style={{ height: 1, background: SLU.rule2, marginTop: 4 }} />
+        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {slide.rows.map((s, i) => (
+            <div key={s.school_id} style={{ display: 'flex', alignItems: 'baseline', gap: 6,
+                                              fontFamily: MONO, fontSize: 8 }}>
+              <span style={{ width: 36, color: SLU.ink2 }}>{s.school_id}</span>
+              <span style={{ flex: 1, color: s.shrunk_gap >= 0 ? SLU.blue : SLU.gold, fontWeight: 600 }}>
+                {fmt2(s.shrunk_gap)}
+              </span>
+              <span style={{ color: SLU.mute }}>n={s.n_a + s.n_b}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (slide.kind === 'hotspots') {
+    const h = slide.hot;
+    if (!h) return <Empty />;
+    return (
+      <div style={{ position: 'absolute', inset: 0, padding: '8% 6% 6%', fontFamily: FONT }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, fontWeight: 600, color: SLU.ink }}>{slide.title}</div>
+        <div style={{ height: 1, background: SLU.rule2, marginTop: 4 }} />
+        <div style={{ marginTop: 6, display: 'flex', gap: 10 }}>
+          {['hot', 'cold'].map(k => (
+            <div key={k} style={{ flex: 1 }}>
+              <div style={{ fontSize: 6.5, fontFamily: LABEL, textTransform: 'uppercase', letterSpacing: 1, color: SLU.mute }}>
+                {k === 'hot' ? 'Above district' : 'Below district'}
+              </div>
+              {h[k].map((c, i) => (
+                <div key={i} style={{ fontFamily: MONO, fontSize: 8, color: SLU.ink2, marginTop: 2 }}>
+                  {c.school} · G{c.grade} <span style={{ color: c.r >= 0 ? SLU.blue : SLU.gold, fontWeight: 600 }}>{fmt2(c.r)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (slide.kind === 'methods') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, padding: '8% 6% 6%', fontFamily: FONT }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, fontWeight: 600, color: SLU.ink }}>{slide.title}</div>
+        <div style={{ height: 1, background: SLU.rule2, marginTop: 4 }} />
+        <ul style={{ margin: 6, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3,
+                      fontFamily: SERIF, fontSize: 8, color: SLU.ink2, lineHeight: 1.4 }}>
+          <li>— Empirical-Bayes shrinkage toward the district mean</li>
+          <li>— Cells below n threshold flagged</li>
+          <li>— Descriptive, not causal — use to ask questions</li>
+        </ul>
+      </div>
+    );
+  }
+  return null;
+}
+
+function Empty() {
+  return <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', color: SLU.mute, fontSize: 10 }}>—</div>;
+}
+
+// ---- PPTX generation -------------------------------------------------------
+async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
+  if (typeof window.PptxGenJS !== 'function') {
+    alert('PptxGenJS not loaded.');
+    return;
+  }
+  const pres = new window.PptxGenJS();
+  pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5"
+  pres.author = 'GrowthLens';
+  pres.title  = 'GrowthLens District Report';
+
+  const BLUE = '003DA5', INK = '1A1B1F', MUTE = '7B7E85', GOLD = '9A7611',
+        GOLD_LIGHT = 'C8A84A', RULE = 'EDEDEF', BG = 'FAFAFB';
+  const FONT_FACE = 'Mulish';
+  const SERIF_FACE = 'Crimson Pro';
+  const MONO_FACE = 'JetBrains Mono';
+  const subjectLabel = (meta.subject || 'ela').toUpperCase();
+  const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · 2024–25`;
+
+  // ---- 01 cover
+  const s1 = pres.addSlide();
+  s1.background = { color: '002A75' };
+  s1.addText('GrowthLens', { x: 0.7, y: 2.0, w: 8, h: 1.2, fontFace: SERIF_FACE, fontSize: 60, bold: true, color: 'FFFFFF' });
+  s1.addShape('rect', { x: 0.72, y: 3.25, w: 0.6, h: 0.05, fill: { color: GOLD_LIGHT }, line: { color: GOLD_LIGHT } });
+  s1.addText('District Report', { x: 0.7, y: 3.4, w: 8, h: 0.35, fontFace: FONT_FACE, fontSize: 12, color: 'FFFFFF', charSpacing: 4 });
+  s1.addText(sliceText, { x: 0.7, y: 3.9, w: 12, h: 0.5, fontFace: SERIF_FACE, fontSize: 22, italic: true, color: GOLD_LIGHT });
+  s1.addText(`PRiME Center · Saint Louis University · ${today}`, {
+    x: 0.7, y: 6.7, w: 12, h: 0.3, fontFace: FONT_FACE, fontSize: 10, color: 'FFFFFF', transparency: 50, charSpacing: 4,
+  });
+
+  // ---- 02 headline
+  const s2 = pres.addSlide();
+  s2.addNotes(`The headline. District-wide gap is the random-effects pooled mean of per-school gaps with its 95% CI. Tau is the between-school SD of true gaps under the model. Threshold count tells the audience how many schools were included.`);
+  addHeader(s2, '02 · Headline', `District gap, between-school variation, and coverage at the current threshold.`);
+  const tau = Math.sqrt(Math.max(0, meta.tauSquared)).toFixed(2);
+  const re = (window.districtMeanRE && window.districtMeanRE(schools, meta.tauSquared)) || null;
+  const muStr = re ? (re.mu >= 0 ? '+' : '−') + Math.abs(re.mu).toFixed(2) : fmt2(meta.districtGap);
+  const ciStr = re ? `[${(re.ciLo>=0?'+':'−')}${Math.abs(re.ciLo).toFixed(2)}, ${(re.ciHi>=0?'+':'−')}${Math.abs(re.ciHi).toFixed(2)}]` : '';
+  const stats = [
+    { k: 'District gap',          v: muStr + ' SD',                            note: ciStr ? `95% CI ${ciStr}` : `${meta.groupA} − ${meta.groupB}` },
+    { k: 'Between-school τ',      v: tau + ' SD',                               note: `True-gap spread, τ² = ${meta.tauSquared.toFixed(3)}` },
+    { k: 'Schools meeting threshold', v: `${summary.meetingThreshold} / ${schools.length}`, note: 'Cell-size ≥ minimum-n' },
+  ];
+  stats.forEach((s, i) => {
+    const x = 0.7 + i * 4.2, y = 2.4;
+    s2.addText(s.k, { x, y, w: 4, h: 0.3, fontFace: FONT_FACE, fontSize: 10, color: MUTE, bold: true, charSpacing: 3 });
+    s2.addText(s.v, { x, y: y + 0.4, w: 4, h: 1.0, fontFace: MONO_FACE, fontSize: 48, bold: true, color: INK });
+    s2.addText(s.note, { x, y: y + 1.6, w: 4, h: 0.4, fontFace: FONT_FACE, fontSize: 11, color: MUTE, italic: true });
+  });
+  // distribution strip with auto-range so dots don't pile at the edges
+  const gaps = schools.map(s => s.shrunk_gap);
+  const stripLo = Math.min(meta.districtGap - 0.05, ...gaps);
+  const stripHi = Math.max(meta.districtGap + 0.05, ...gaps);
+  const stripPad = Math.max(0.05, (stripHi - stripLo) * 0.1);
+  const sMin = stripLo - stripPad, sMax = stripHi + stripPad;
+  const stripX = (g) => 0.7 + ((g - sMin) / (sMax - sMin)) * 12;
+  s2.addShape('rect', { x: 0.7, y: 5.2, w: 12, h: 0.04, fill: { color: 'D9D9DD' }, line: { color: 'D9D9DD' } });
+  schools.forEach((s) => {
+    const px = stripX(s.shrunk_gap);
+    s2.addShape('ellipse', { x: px - 0.08, y: 5.13, w: 0.16, h: 0.16,
+                              fill: { color: INK }, line: { color: 'FFFFFF', width: 0.5 } });
+  });
+  const dx = stripX(meta.districtGap);
+  s2.addShape('line', { x: dx, y: 4.85, w: 0, h: 0.7, line: { color: GOLD, width: 1.5, dashType: 'dash' } });
+  s2.addText(`District: ${muStr}`, { x: dx + 0.05, y: 4.78, w: 1.8, h: 0.3, fontFace: MONO_FACE, fontSize: 9, color: GOLD });
+  s2.addText('Each dot = one school (shrunken gap). Dashed line = district-wide pooled mean.', {
+    x: 0.7, y: 5.7, w: 12, h: 0.3, fontFace: FONT_FACE, fontSize: 10, color: MUTE, italic: true,
+  });
+
+  // ---- 03 top gaps
+  const s3 = pres.addSlide();
+  s3.addNotes(`The five schools with the largest shrunken gap, ${meta.groupA} above ${meta.groupB}. CIs that don't cross zero indicate the gap is unlikely to be sampling noise. Below-threshold schools are excluded.`);
+  addHeader(s3, '03 · Top schools by gap', 'Five widest gaps (shrunken estimate, 95% credible interval). Below-threshold cells excluded.');
+  addGapTable(s3, pres, summary.top, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+
+  // ---- 04 reversed gaps
+  const s4 = pres.addSlide();
+  s4.addNotes(`The three schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA} — the rare cases worth understanding for whatever they're doing right.`);
+  addHeader(s4, '04 · Reversed gaps', `Schools where ${meta.groupB} students are growing as fast or faster than ${meta.groupA}.`);
+  addGapTable(s4, pres, summary.bottom, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+
+  // ---- 05 system scan hotspots
+  const s5 = pres.addSlide();
+  s5.addNotes('System Scan extremes. Use these as triage. Hotspots above district are worth studying for transferable practices; cold spots below district are where intervention attention is most needed.');
+  addHeader(s5, '05 · System Scan hotspots', 'Three highest and three lowest school × grade residuals.');
+  const hs = scanHotspots(heat);
+  if (hs) {
+    const cols = [
+      { title: 'Above district average', list: hs.hot,  color: BLUE },
+      { title: 'Below district average', list: hs.cold, color: GOLD },
+    ];
+    cols.forEach((c, i) => {
+      const x = 0.7 + i * 6.2;
+      s5.addText(c.title, { x, y: 2.4, w: 5.5, h: 0.35, fontFace: FONT_FACE, fontSize: 11, bold: true, color: MUTE, charSpacing: 3 });
+      c.list.forEach((cell, j) => {
+        const y = 3.0 + j * 0.85;
+        s5.addText(`${cell.school} · Grade ${cell.grade}`, { x, y, w: 3.5, h: 0.4, fontFace: FONT_FACE, fontSize: 16, bold: true, color: INK });
+        s5.addText(`n = ${cell.n}`, { x, y: y + 0.4, w: 3, h: 0.3, fontFace: FONT_FACE, fontSize: 11, color: MUTE });
+        s5.addText(fmt2(cell.r), { x: x + 3.7, y, w: 1.8, h: 0.55, fontFace: MONO_FACE, fontSize: 28, bold: true, color: c.color, align: 'right' });
+      });
+    });
+  } else {
+    s5.addText('Heatmap data not loaded.', { x: 0.7, y: 3, w: 12, h: 0.5, fontFace: FONT_FACE, fontSize: 14, color: MUTE });
+  }
+
+  // ---- 06 methods
+  const s6 = pres.addSlide();
+  s6.addNotes('Methods slide. Cover the four bullets briefly: shrinkage, threshold, descriptive-not-causal, privacy. Anyone who wants more detail can read the methods note linked from the app.');
+  addHeader(s6, '06 · Methods & caveats', null);
+  const notes = [
+    ['Shrinkage', 'Per-school gap estimates are shrunk toward the district mean using empirical-Bayes weights (B-factor reported in the figure). Small-n schools are pulled harder.'],
+    ['Minimum-n threshold', 'Cells with fewer students than the configured threshold are flagged and called out as “below threshold.” Set to match district student-privacy policy.'],
+    ['Descriptive, not causal', 'These estimates describe where gaps are observed. They do not identify what is causing them. Use this report to ask better questions, not to assign blame.'],
+    ['Privacy', 'All computation runs locally in the user’s browser. No source CSV is uploaded.'],
+  ];
+  notes.forEach(([k, v], i) => {
+    const y = 2.4 + i * 0.95;
+    s6.addText(k, { x: 0.7, y, w: 3.0, h: 0.4, fontFace: FONT_FACE, fontSize: 14, bold: true, color: INK });
+    s6.addText(v, { x: 3.9, y, w: 9, h: 0.8, fontFace: SERIF_FACE, fontSize: 13, color: '3F4147' });
+  });
+
+  // Footer: slice + method + threshold on every non-cover slide, and slide numbers everywhere.
+  const minN = meta.minCellSize ?? 10;
+  const footer = `${sliceText}  ·  shrunken estimates  ·  n ≥ ${minN}`;
+  pres.slides.forEach((sl, idx) => {
+    if (idx > 0) {
+      sl.addText(footer, {
+        x: 0.7, y: 7.05, w: 11.0, h: 0.3, fontFace: MONO_FACE, fontSize: 9, color: MUTE,
+      });
+    }
+    sl.addText(`${String(idx + 1).padStart(2, '0')} / ${pres.slides.length}`, {
+      x: 12.1, y: 7.05, w: 1.0, h: 0.3, fontFace: MONO_FACE, fontSize: 9, color: MUTE, align: 'right',
+    });
+  });
+
+  // Speaker notes for cover slide
+  pres.slides[0].addNotes('Title slide. Set context: this is the district report for the currently selected slice. Mention the methods note linked from the app for anyone who wants the technical detail.');
+
+  const filename = `GrowthLens-${meta.subject}-${meta.demographic || 'subgroup'}-${new Date().toISOString().slice(0,10)}.pptx`;
+  await pres.writeFile({ fileName: filename });
+}
+
+function addHeader(slide, eyebrow, blurb) {
+  slide.addText(eyebrow, { x: 0.7, y: 0.6, w: 12, h: 0.4, fontFace: 'Mulish', fontSize: 11, color: '7B7E85', bold: true, charSpacing: 4 });
+  // eslint-disable-next-line no-unused-expressions
+  slide.addShape('rect', { x: 0.7, y: 1.05, w: 12, h: 0.02, fill: { color: 'EDEDEF' }, line: { color: 'EDEDEF' } });
+  if (blurb) {
+    slide.addText(blurb, { x: 0.7, y: 1.25, w: 12, h: 0.6, fontFace: 'Crimson Pro', fontSize: 16, italic: true, color: '3F4147' });
+  }
+}
+
+function addGapTable(slide, pres, rows, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE) {
+  const head = [
+    { text: 'School',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3 } },
+    { text: 'Gap',        options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: '95% CI',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: 'n',          options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: 'Shrinkage B',options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+  ];
+  const body = rows.map(r => [
+    { text: r.school_id, options: { fontFace: MONO_FACE, fontSize: 14, color: INK } },
+    { text: fmt2(r.shrunk_gap), options: { fontFace: MONO_FACE, fontSize: 14, color: r.shrunk_gap >= 0 ? BLUE : GOLD, bold: true, align: 'right' } },
+    { text: `[${fmt2(r.shrunk_ci95[0])}, ${fmt2(r.shrunk_ci95[1])}]`, options: { fontFace: MONO_FACE, fontSize: 12, color: '3F4147', align: 'right' } },
+    { text: String(r.n_a + r.n_b), options: { fontFace: MONO_FACE, fontSize: 13, color: '3F4147', align: 'right' } },
+    { text: r.shrinkage_factor.toFixed(2), options: { fontFace: MONO_FACE, fontSize: 13, color: MUTE, align: 'right' } },
+  ]);
+  slide.addTable([head, ...body], {
+    x: 0.7, y: 2.4, w: 12,
+    colW: [2.6, 1.8, 3.4, 1.5, 2.7],
+    rowH: 0.46,
+    border: { type: 'solid', color: RULE, pt: 0.5 },
+    fontFace: FONT_FACE,
+  });
+}
+
+window.ExportPage = ExportPage;

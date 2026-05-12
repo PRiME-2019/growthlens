@@ -1,0 +1,206 @@
+<!doctype html>
+<!--
+  GrowthLens - district-facing value-added interpretation tool
+  Copyright (C) 2026 Andrew Camp
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published
+  by the Free Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU Affero General Public License for more details.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GrowthLens — Methods note</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&family=Mulish:wght@400;500;600;700;800&family=Archivo+Narrow:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --blue: #003DA5;
+    --blue-dark: #002A75;
+    --gold: #9A7611;
+    --gold-light: #C8A84A;
+    --ink: #1A1B1F;
+    --ink-2: #3F4147;
+    --mute: #7B7E85;
+    --rule: #D9D9DD;
+    --rule-2: #EDEDEF;
+    --bg: #F7F7F8;
+    --paper: #FDFCFA;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+                font-family: "Mulish", ui-sans-serif, system-ui, sans-serif; }
+  .doc {
+    max-width: 760px; margin: 0 auto; padding: 56px 28px 96px;
+    background: #fff; min-height: 100vh;
+    border-left: 1px solid var(--rule-2); border-right: 1px solid var(--rule-2);
+  }
+  .eyebrow {
+    font-family: "Archivo Narrow", sans-serif; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.6px; color: var(--mute);
+  }
+  h1 {
+    font-family: "Crimson Pro", Georgia, serif; font-weight: 600; font-size: 38px;
+    letter-spacing: -0.6px; line-height: 1.1; margin: 8px 0 6px;
+    color: var(--ink); text-wrap: balance;
+  }
+  .lede {
+    font-family: "Crimson Pro", Georgia, serif; font-size: 19px; line-height: 1.55;
+    color: var(--ink-2); margin: 8px 0 28px; font-style: italic; text-wrap: pretty;
+  }
+  .rule { height: 1px; background: var(--gold); width: 36px; margin: 14px 0 22px; }
+  h2 {
+    font-family: "Mulish", sans-serif; font-size: 13px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.6px; color: var(--blue);
+    margin: 44px 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--rule-2);
+  }
+  h3 {
+    font-family: "Crimson Pro", serif; font-size: 22px; font-weight: 600;
+    letter-spacing: -0.2px; margin: 22px 0 6px; color: var(--ink);
+  }
+  p { font-size: 15px; line-height: 1.65; color: var(--ink-2); margin: 0 0 14px;
+      text-wrap: pretty; }
+  ul { padding-left: 18px; }
+  li { font-size: 15px; line-height: 1.65; color: var(--ink-2); margin: 4px 0; }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace;
+                font-size: 13.5px; color: var(--ink); }
+  .formula {
+    display: block; padding: 14px 18px; margin: 12px 0 14px;
+    background: var(--paper); border-left: 3px solid var(--gold);
+    font-family: "JetBrains Mono", monospace; font-size: 13px;
+    color: var(--ink); white-space: pre; overflow-x: auto;
+  }
+  aside.note {
+    background: rgba(154, 118, 17, 0.06);
+    border: 1px solid rgba(154, 118, 17, 0.22);
+    border-left: 3px solid var(--gold);
+    padding: 14px 16px; margin: 16px 0;
+    font-size: 14px; color: var(--ink-2); line-height: 1.6;
+  }
+  aside.note strong { color: var(--ink); }
+  a { color: var(--blue); text-decoration: none; font-weight: 700; }
+  a:hover { text-decoration: underline; }
+  .meta-row {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-family: "Archivo Narrow", sans-serif; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1.4px; color: var(--mute);
+    font-weight: 700; padding-top: 10px; border-top: 1px solid var(--rule-2);
+    margin-top: 60px;
+  }
+  .back {
+    display: inline-block; margin-bottom: 28px;
+    font-family: "Mulish", sans-serif; font-size: 12.5px;
+    color: var(--mute); text-decoration: none; font-weight: 600;
+  }
+  .back::before { content: "← "; }
+  .back:hover { color: var(--blue); }
+  table.compact {
+    border-collapse: collapse; font-size: 13.5px; margin: 12px 0;
+    width: 100%;
+  }
+  table.compact th, table.compact td {
+    border-bottom: 1px solid var(--rule-2); padding: 7px 8px;
+    text-align: left; vertical-align: top;
+  }
+  table.compact th {
+    font-family: "Archivo Narrow", sans-serif; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1.2px; color: var(--mute);
+    font-weight: 700;
+  }
+  table.compact td.mono { font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <a class="back" href="GrowthLens.html">Back to GrowthLens</a>
+  <div class="eyebrow">PRiME Center · Saint Louis University · Methods Note v0.4</div>
+  <h1>How GrowthLens estimates school performance, gaps, and uncertainty</h1>
+  <p class="lede">A short technical note for district leaders, data analysts, and curious skeptics. Covers what GrowthLens computes, where the numbers come from, and the assumptions that limit how strongly you should read them.</p>
+  <div class="rule"></div>
+
+  <h2>1 · What is being estimated</h2>
+  <h3>The residual</h3>
+  <p>For each student in a given subject, GrowthLens computes a <em>residual</em>: the difference between that student's observed scale score and the score predicted by a district-level model conditional on prior achievement and grade. Residuals are then standardized so one unit equals one student-level standard deviation of the residual distribution. A school × grade × subgroup <em>cell</em> aggregates these standardized residuals.</p>
+
+  <h3>The gap</h3>
+  <p>A <em>gap</em> in GrowthLens is the <em>within-school</em> difference in mean residual between two subgroups (for example, non-FRL minus FRL) at the same school. It is not a difference in raw achievement, and it is not a difference relative to the state — both subgroups in a gap are measured against the same district baseline. This is why the district-wide gap can be small even when raw achievement disparities are large.</p>
+
+  <h3>The district-wide number</h3>
+  <p>The district-wide gap is a <em>random-effects pooled mean</em> over the per-school estimates, weighted by the inverse of each school's combined sampling and between-school variance:</p>
+  <code class="formula">  w_i  =  1 / (SE_i²  +  τ²)
+  μ̂   =  Σ w_i · r_i  /  Σ w_i
+  SE(μ̂) =  1 / √(Σ w_i)
+</code>
+  <p>where <code>r_i</code> is the school's raw gap, <code>SE_i</code> is its within-school standard error, and <code>τ²</code> is the estimated between-school variance component (see <a href="#variance">§3</a>). The 95% confidence interval shown on the overview card is <code>μ̂ ± 1.96 · SE(μ̂)</code>.</p>
+
+  <h2 id="shrinkage">2 · Shrinkage (empirical Bayes)</h2>
+  <p>School-level estimates are <em>shrunken</em> toward the district-wide gap. The shrunken estimate at school <em>i</em> is a precision-weighted average of the school's raw estimate and the district mean:</p>
+  <code class="formula">  B_i  =  τ²  /  (τ²  +  SE_i²)         ← shrinkage factor
+  r̂_i  =  B_i · r_i_raw  +  (1 − B_i) · μ̂
+</code>
+  <p>The shrinkage factor <code>B_i</code> ranges from 0 to 1:</p>
+  <ul>
+    <li><code>B_i = 1</code> &mdash; the school's raw data is fully trusted; the estimate is unchanged from the raw value. Achieved only in the limit of zero within-school sampling error.</li>
+    <li><code>B_i = 0</code> &mdash; the school's data is entirely overridden by the district mean. Approached when the within-school SE is much larger than the between-school SD.</li>
+  </ul>
+  <p>Most schools in a typical district sit between 0.6 and 0.9. The B column on the forest plot reports this directly.</p>
+
+  <aside class="note"><strong>Important and counter-intuitive.</strong> Shrinkage pulls every school toward the district mean — including schools whose raw gap is <em>smaller</em> than the district average. A school with a raw gap of 0.00 SD and a district-wide gap of +0.20 SD will end up with a shrunken estimate that is slightly positive. This is mathematically correct under the model — it reflects that with limited data, our best guess about the school is somewhere between its own (noisy) estimate and the district norm — but it can read as the model "inventing" a gap. Use the Raw / Shrunken toggle in Gap Analysis to compare the two side by side, and rely on the credible interval rather than the point estimate when a school is small.</aside>
+
+  <h2 id="variance">3 · Variance components and τ²</h2>
+  <p>The between-school variance <code>τ²</code> is estimated by REML (restricted maximum likelihood) fit of the random-effects model</p>
+  <code class="formula">  r_i  =  μ  +  u_i  +  e_i
+       u_i ~ N(0, τ²)        ← between-school
+       e_i ~ N(0, SE_i²)     ← within-school sampling
+</code>
+  <p>The <em>between-school SD</em> reported in the Overview card is <code>τ = √τ²</code>. It is the spread of <em>true</em> per-school gaps if the model is correct &mdash; not the spread of the observed point estimates, which is larger (because of sampling error) for raw estimates and smaller (because of shrinkage) for shrunken estimates.</p>
+  <p>If <code>τ²</code> is small relative to the average within-school <code>SE²</code>, schools are mostly indistinguishable from one another: most of the apparent spread is sampling noise. If <code>τ²</code> is large, schools really do differ.</p>
+
+  <h2>4 · Minimum-n threshold</h2>
+  <p>Every cell (school × grade × subgroup) is checked against a configurable minimum sample size, <code>n_min</code> (default <strong>10</strong>). Cells with fewer students are flagged as <em>below threshold</em>. The threshold is intended to track your district's student-privacy and small-cell-suppression policies. Set it to match.</p>
+  <table class="compact">
+    <thead><tr><th>Threshold mode</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">section</td><td>Below-threshold schools are moved to a labeled group at the bottom of the forest plot. Default.</td></tr>
+      <tr><td class="mono">inline</td><td>Below-threshold rows stay in their sorted position but are dimmed and tagged with an <code>n*</code> badge.</td></tr>
+      <tr><td class="mono">hide</td><td>Below-threshold rows are removed from the figure entirely. The district-wide statistics still include them.</td></tr>
+    </tbody>
+  </table>
+  <p>A higher threshold (e.g., <code>n ≥ 30</code>, used by many state report cards for public-facing tables) is appropriate when GrowthLens output will leave the analyst's workstation. The default of 10 is suitable for internal triage but is <em>not</em> a suppression rule.</p>
+
+  <h2>5 · The two figures</h2>
+  <h3>Gap Analysis (forest plot)</h3>
+  <p>One row per school for a single subject and subgroup pair. Point estimate, 95% credible interval, and shrinkage factor are all shown. The district-wide gap is overlaid as a vertical reference line. Use this when you want to see whether a gap concentrates in a few schools or replicates system-wide.</p>
+
+  <h3>System Scan (heatmap)</h3>
+  <p>A school × grade matrix of standardized residuals. Cells are colored on a diverging scale around zero. Use this <em>before</em> drilling into a specific gap — to find schools and grades that are consistently above or below expectation, and to see whether the system shows a coherent pattern (e.g., 4th-grade weakness across the district).</p>
+
+  <h2>6 · What GrowthLens is not</h2>
+  <ul>
+    <li><strong>Not a value-added model.</strong> Residuals are computed conditional on prior score and grade, but no teacher-, classroom-, or program-level effect is estimated. Results should not be used to evaluate individual teachers.</li>
+    <li><strong>Not causal.</strong> Estimates describe where gaps and residuals are observed. They do not identify what is causing them.</li>
+    <li><strong>Not a state report card.</strong> Cell suppression rules differ across states. Cross-check before any public release.</li>
+    <li><strong>Not robust to extreme model misspecification.</strong> If the district's true growth pattern is wildly nonlinear or interacts strongly with covariates we don't include (e.g., mid-year mobility), residuals can be misleading. GrowthLens is a triage tool, not an end-of-line judgment.</li>
+  </ul>
+
+  <h2>7 · Privacy and data handling</h2>
+  <p>All computation runs in the user's browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>. The source CSV is never uploaded to a server. No identifiers, aggregates, or partial results are transmitted off the device. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and uses no cookies or local storage for student records.</p>
+  <p>The published methods, fixtures, and code are at <a href="https://github.com/SLU-PRiME/GrowthLens" target="_blank" rel="noopener">SLU-PRiME/GrowthLens</a> (link placeholder).</p>
+
+  <h2>8 · Recommended citation</h2>
+  <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.4 preview, 2025.</p>
+
+  <div class="meta-row">
+    <span>PRiME Center</span>
+    <span>·</span>
+    <span>Saint Louis University</span>
+    <span>·</span>
+    <span>Methods Note v0.4</span>
+  </div>
+</div>
+</body>
+</html>
