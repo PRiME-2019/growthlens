@@ -65,7 +65,9 @@ function AchievementFigure({ level, ctx }) {
   const unit = ctx.unit || 'z';
   const estimate = ctx.estimate || 'shrunk';
   const yKey = estimate === 'shrunk' ? 'y_shrunk' : 'y_raw';
-  const toUnit = (v) => unit === 'weeks' ? v * 12 : v;
+  // y-axis is residuals pooled across grades, so no per-point grade is passed
+  // and weeksPerSD returns the year × subject average from window.WOL_OPTS.
+  const toUnit = (v) => unit === 'weeks' ? window.zToWeeks(v) : v;
   const unitLabel = unit === 'weeks' ? 'weeks' : 'SD';
 
   const points = data.points;
@@ -122,8 +124,11 @@ function AchievementFigure({ level, ctx }) {
     xTicks.push(+t.toFixed(2));
   }
 
-  // y ticks
-  const yStep = unit === 'weeks' ? 6 : 0.5;
+  // y ticks — half-SD steps in z mode; round-week steps in weeks mode that
+  // scale with the active year × subject conversion factor.
+  const yStep = unit === 'weeks'
+    ? Math.max(5, Math.round(window.zToWeeks(0.5) / 5) * 5)
+    : 0.5;
   const yTickMax = toUnit(yHi);
   const yTicks = [];
   for (let t = -Math.ceil(yTickMax / yStep) * yStep; t <= yTickMax; t += yStep) {

@@ -58,21 +58,63 @@ const fmt2 = (x) => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
 const fmt2plain = (x) => x.toFixed(2);
 const fmtB = (b) => b.toFixed(2);
 
-// Unit conversion: 1 SD ≈ 12 weeks of learning (MAP convention). Used by the
-// forest and heatmap to switch between SD and "weeks of learning" displays.
-const WEEKS_PER_SD = 12;
-function zToWeeks(z) { return z * WEEKS_PER_SD; }
-function fmtVal(z, unit) {
+// Unit conversion: weeks-of-learning depends on year × grade × subject growth
+// effect sizes from reference/conversion_factors.json (loaded into
+// window.CONVERSION_FACTORS at boot). The display uses the magnitude form
+//   weeks = z * (base_weeks / annual_growth_effect_size)
+// which is the difference-form of the methodological identity
+//   weeks_of_learning = base_weeks * (1 + z / es)
+// from the data-prep README — the +1 cancels for gaps and would obscure
+// signed residual displays in the UI.
+//
+// Defaults come from window.WOL_OPTS = { year, subject } (set by app-shell
+// whenever subject changes). Callers can override year / subject / grade
+// per-call via the opts argument. Aggregated displays (school-level gaps,
+// district-pooled box plots) pass no grade and get the year × subject average
+// across grades 3–8.
+
+const FALLBACK_WEEKS_PER_SD = 132; // ≈ 38 / 0.29 — typical MAP convention if factors unavailable
+const DEFAULT_WOL_YEAR = 2025;
+
+function weeksPerSD(opts = {}) {
+  const defaults = window.WOL_OPTS || {};
+  const year = opts.year != null ? opts.year
+             : (defaults.year != null ? defaults.year : DEFAULT_WOL_YEAR);
+  const subject = String(opts.subject != null ? opts.subject
+             : (defaults.subject || 'ela')).toLowerCase();
+  const grade = opts.grade != null ? opts.grade : null;
+
+  const cf = window.CONVERSION_FACTORS;
+  if (!cf || !Array.isArray(cf.factors)) return FALLBACK_WEEKS_PER_SD;
+  const base = typeof cf.base_weeks === 'number' ? cf.base_weeks : 38;
+  const matches = cf.factors.filter(f => f.year === year && f.subject === subject);
+  if (matches.length === 0) return FALLBACK_WEEKS_PER_SD;
+
+  let es = null;
+  if (grade != null) {
+    const exact = matches.find(f => f.grade === grade);
+    if (exact) es = exact.annual_growth_effect_size;
+  }
+  if (es == null) {
+    es = matches.reduce((s, f) => s + f.annual_growth_effect_size, 0) / matches.length;
+  }
+  if (!es || !isFinite(es) || es <= 0) return FALLBACK_WEEKS_PER_SD;
+  return base / es;
+}
+
+function zToWeeks(z, opts) { return z * weeksPerSD(opts); }
+
+function fmtVal(z, unit, opts) {
   if (unit === 'weeks') {
-    const w = zToWeeks(z);
+    const w = zToWeeks(z, opts);
     const r = Math.round(w);
     return `${r >= 0 ? '+' : '−'}${Math.abs(r)} wk`;
   }
   return fmt2(z);
 }
-function fmtCI(ci, unit) {
+function fmtCI(ci, unit, opts) {
   if (unit === 'weeks') {
-    return `[${fmtVal(ci[0], 'weeks')}, ${fmtVal(ci[1], 'weeks')}]`;
+    return `[${fmtVal(ci[0], 'weeks', opts)}, ${fmtVal(ci[1], 'weeks', opts)}]`;
   }
   return `[${fmt2(ci[0])}, ${fmt2(ci[1])}]`;
 }
@@ -189,6 +231,6 @@ function SectionDivider({ label, count }) {
 
 Object.assign(window, {
   SLU, FONT, MONO, LABEL, SERIF, AXIS, xScale,
-  fmt2, fmt2plain, fmtB, WEEKS_PER_SD, zToWeeks, fmtVal, fmtCI,
+  fmt2, fmt2plain, fmtB, weeksPerSD, zToWeeks, fmtVal, fmtCI,
   DotShape, ForestCard, Select, Checkbox, Axis, SectionDivider,
 });

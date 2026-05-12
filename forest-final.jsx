@@ -13,7 +13,9 @@
 // Final forest plot — point + credible interval only, animated toggle between raw and shrunken.
 // HTML divs positioned over an SVG axis so CSS transitions on left/width animate the move.
 //
-// Unit helpers (WEEKS_PER_SD, zToWeeks, fmtVal, fmtCI) live in forest-shared.jsx.
+// Unit helpers (weeksPerSD, zToWeeks, fmtVal, fmtCI) live in forest-shared.jsx;
+// they consult window.WOL_OPTS (year + subject) and the loaded conversion-
+// factors JSON for grade × subject × year-aware weeks-of-learning.
 
 const TRANSITION = '420ms cubic-bezier(0.32, 0.72, 0.24, 1)';
 
@@ -121,7 +123,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
               <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold dashed</span> = district-wide gap (Empirical Bayes prior).</span>
               <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools below the n≥{data.meta.minCellSize} cell threshold.</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = SD × {WEEKS_PER_SD} (approx., district-level convention; see methods).</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))} (year-2025 average across grades 3–8; varies by grade — see methods).</span>
               )}
             </>
           ) : (
@@ -130,7 +132,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
               <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>B</b> = shrinkage factor (0 = fully pooled, 1 = no shrinkage).</span>
               <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools below the n≥{data.meta.minCellSize} cell threshold.</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = SD × {WEEKS_PER_SD}.</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))} (year-2025 average across grades 3–8).</span>
               )}
             </>
           )}

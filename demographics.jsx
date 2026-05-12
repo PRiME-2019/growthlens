@@ -85,7 +85,10 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
   }
 
   const unit = ctx.unit || 'z';
-  const toUnit = (v) => unit === 'weeks' ? v * 12 : v;
+  // No grade context here — student-level residuals are pooled across grades,
+  // so weeksPerSD returns the year × subject average. Subject defaults via
+  // window.WOL_OPTS (set by app-shell).
+  const toUnit = (v) => unit === 'weeks' ? window.zToWeeks(v) : v;
   const unitLabel = unit === 'weeks' ? 'weeks' : 'SD';
   const fmt = (v) => {
     const x = toUnit(v);
@@ -116,8 +119,12 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
   const xToPx = (v) => leftPad + ((toUnit(v) - toUnit(xLo)) / (toUnit(xHi) - toUnit(xLo))) * plotW;
   const meanPx = xToPx(districtMean);
 
-  // x-axis ticks — nice round numbers within the data range
-  const tickStep = unit === 'weeks' ? 6 : 0.5;
+  // x-axis ticks — nice round numbers within the data range. In weeks mode,
+  // the step scales with the active conversion factor so half-SD-equivalent
+  // ticks land on round-week multiples.
+  const tickStep = unit === 'weeks'
+    ? Math.max(5, Math.round(window.zToWeeks(0.5) / 5) * 5)
+    : 0.5;
   const tickStart = Math.ceil(toUnit(xLo) / tickStep) * tickStep;
   const tickEnd = Math.floor(toUnit(xHi) / tickStep) * tickStep;
   const ticks = [];

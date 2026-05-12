@@ -1,0 +1,408 @@
+{
+  "version": "2026-05-12",
+  "source": "Missouri MAP Grade-Level Assessment, synthetic cohort growth",
+  "formula": "weeks_of_learning = base_weeks * (1 + z_residual / annual_growth_effect_size)",
+  "base_weeks": 38,
+  "factors": [
+    {
+      "year": 2019,
+      "grade": 4,
+      "subject": "ela",
+      "annual_growth_raw": 24.66,
+      "baseline_sd": 44.04,
+      "annual_growth_effect_size": 0.56
+    },
+    {
+      "year": 2019,
+      "grade": 5,
+      "subject": "ela",
+      "annual_growth_raw": 14.03,
+      "baseline_sd": 42.36,
+      "annual_growth_effect_size": 0.3312
+    },
+    {
+      "year": 2019,
+      "grade": 6,
+      "subject": "ela",
+      "annual_growth_raw": 8.49,
+      "baseline_sd": 40.62,
+      "annual_growth_effect_size": 0.209
+    },
+    {
+      "year": 2019,
+      "grade": 7,
+      "subject": "ela",
+      "annual_growth_raw": 15.88,
+      "baseline_sd": 36.45,
+      "annual_growth_effect_size": 0.4356
+    },
+    {
+      "year": 2019,
+      "grade": 8,
+      "subject": "ela",
+      "annual_growth_raw": 12.31,
+      "baseline_sd": 39.75,
+      "annual_growth_effect_size": 0.3096
+    },
+    {
+      "year": 2019,
+      "grade": 4,
+      "subject": "math",
+      "annual_growth_raw": 26.03,
+      "baseline_sd": 48.77,
+      "annual_growth_effect_size": 0.5339
+    },
+    {
+      "year": 2019,
+      "grade": 5,
+      "subject": "math",
+      "annual_growth_raw": 21.94,
+      "baseline_sd": 49.12,
+      "annual_growth_effect_size": 0.4466
+    },
+    {
+      "year": 2019,
+      "grade": 6,
+      "subject": "math",
+      "annual_growth_raw": 7.89,
+      "baseline_sd": 39.77,
+      "annual_growth_effect_size": 0.1985
+    },
+    {
+      "year": 2019,
+      "grade": 7,
+      "subject": "math",
+      "annual_growth_raw": 11.54,
+      "baseline_sd": 39.14,
+      "annual_growth_effect_size": 0.2949
+    },
+    {
+      "year": 2019,
+      "grade": 8,
+      "subject": "math",
+      "annual_growth_raw": 21.03,
+      "baseline_sd": 45.77,
+      "annual_growth_effect_size": 0.4596
+    },
+    {
+      "year": 2022,
+      "grade": 4,
+      "subject": "ela",
+      "annual_growth_raw": 26.52,
+      "baseline_sd": 43.68,
+      "annual_growth_effect_size": 0.6072
+    },
+    {
+      "year": 2022,
+      "grade": 5,
+      "subject": "ela",
+      "annual_growth_raw": 9.87,
+      "baseline_sd": 44,
+      "annual_growth_effect_size": 0.2243
+    },
+    {
+      "year": 2022,
+      "grade": 6,
+      "subject": "ela",
+      "annual_growth_raw": 9.9,
+      "baseline_sd": 41.6,
+      "annual_growth_effect_size": 0.238
+    },
+    {
+      "year": 2022,
+      "grade": 7,
+      "subject": "ela",
+      "annual_growth_raw": 14.94,
+      "baseline_sd": 35.24,
+      "annual_growth_effect_size": 0.424
+    },
+    {
+      "year": 2022,
+      "grade": 8,
+      "subject": "ela",
+      "annual_growth_raw": 8.48,
+      "baseline_sd": 38.05,
+      "annual_growth_effect_size": 0.2228
+    },
+    {
+      "year": 2022,
+      "grade": 4,
+      "subject": "math",
+      "annual_growth_raw": 33.76,
+      "baseline_sd": 52.01,
+      "annual_growth_effect_size": 0.6491
+    },
+    {
+      "year": 2022,
+      "grade": 5,
+      "subject": "math",
+      "annual_growth_raw": 23.49,
+      "baseline_sd": 49.13,
+      "annual_growth_effect_size": 0.4781
+    },
+    {
+      "year": 2022,
+      "grade": 6,
+      "subject": "math",
+      "annual_growth_raw": 16.57,
+      "baseline_sd": 42.2,
+      "annual_growth_effect_size": 0.3926
+    },
+    {
+      "year": 2022,
+      "grade": 7,
+      "subject": "math",
+      "annual_growth_raw": 15.53,
+      "baseline_sd": 39.31,
+      "annual_growth_effect_size": 0.395
+    },
+    {
+      "year": 2022,
+      "grade": 8,
+      "subject": "math",
+      "annual_growth_raw": 25.71,
+      "baseline_sd": 45.51,
+      "annual_growth_effect_size": 0.5649
+    },
+    {
+      "year": 2023,
+      "grade": 4,
+      "subject": "ela",
+      "annual_growth_raw": 28.46,
+      "baseline_sd": 44.39,
+      "annual_growth_effect_size": 0.6412
+    },
+    {
+      "year": 2023,
+      "grade": 5,
+      "subject": "ela",
+      "annual_growth_raw": 14.65,
+      "baseline_sd": 43.1,
+      "annual_growth_effect_size": 0.34
+    },
+    {
+      "year": 2023,
+      "grade": 6,
+      "subject": "ela",
+      "annual_growth_raw": 6.41,
+      "baseline_sd": 43.27,
+      "annual_growth_effect_size": 0.1482
+    },
+    {
+      "year": 2023,
+      "grade": 7,
+      "subject": "ela",
+      "annual_growth_raw": 17.69,
+      "baseline_sd": 35.48,
+      "annual_growth_effect_size": 0.4986
+    },
+    {
+      "year": 2023,
+      "grade": 8,
+      "subject": "ela",
+      "annual_growth_raw": 11.82,
+      "baseline_sd": 40.41,
+      "annual_growth_effect_size": 0.2926
+    },
+    {
+      "year": 2023,
+      "grade": 4,
+      "subject": "math",
+      "annual_growth_raw": 31.32,
+      "baseline_sd": 50.07,
+      "annual_growth_effect_size": 0.6255
+    },
+    {
+      "year": 2023,
+      "grade": 5,
+      "subject": "math",
+      "annual_growth_raw": 20.12,
+      "baseline_sd": 46.55,
+      "annual_growth_effect_size": 0.4322
+    },
+    {
+      "year": 2023,
+      "grade": 6,
+      "subject": "math",
+      "annual_growth_raw": 14.86,
+      "baseline_sd": 41.52,
+      "annual_growth_effect_size": 0.3578
+    },
+    {
+      "year": 2023,
+      "grade": 7,
+      "subject": "math",
+      "annual_growth_raw": 13.61,
+      "baseline_sd": 39.48,
+      "annual_growth_effect_size": 0.3447
+    },
+    {
+      "year": 2023,
+      "grade": 8,
+      "subject": "math",
+      "annual_growth_raw": 20.58,
+      "baseline_sd": 45.76,
+      "annual_growth_effect_size": 0.4496
+    },
+    {
+      "year": 2024,
+      "grade": 4,
+      "subject": "ela",
+      "annual_growth_raw": 27.69,
+      "baseline_sd": 44.09,
+      "annual_growth_effect_size": 0.6279
+    },
+    {
+      "year": 2024,
+      "grade": 5,
+      "subject": "ela",
+      "annual_growth_raw": 12.47,
+      "baseline_sd": 43.39,
+      "annual_growth_effect_size": 0.2875
+    },
+    {
+      "year": 2024,
+      "grade": 6,
+      "subject": "ela",
+      "annual_growth_raw": 5.64,
+      "baseline_sd": 43.79,
+      "annual_growth_effect_size": 0.1289
+    },
+    {
+      "year": 2024,
+      "grade": 7,
+      "subject": "ela",
+      "annual_growth_raw": 20.63,
+      "baseline_sd": 36.04,
+      "annual_growth_effect_size": 0.5725
+    },
+    {
+      "year": 2024,
+      "grade": 8,
+      "subject": "ela",
+      "annual_growth_raw": 12.37,
+      "baseline_sd": 41.15,
+      "annual_growth_effect_size": 0.3005
+    },
+    {
+      "year": 2024,
+      "grade": 4,
+      "subject": "math",
+      "annual_growth_raw": 29.65,
+      "baseline_sd": 50.24,
+      "annual_growth_effect_size": 0.5901
+    },
+    {
+      "year": 2024,
+      "grade": 5,
+      "subject": "math",
+      "annual_growth_raw": 18.71,
+      "baseline_sd": 46.92,
+      "annual_growth_effect_size": 0.3989
+    },
+    {
+      "year": 2024,
+      "grade": 6,
+      "subject": "math",
+      "annual_growth_raw": 13.21,
+      "baseline_sd": 42.81,
+      "annual_growth_effect_size": 0.3085
+    },
+    {
+      "year": 2024,
+      "grade": 7,
+      "subject": "math",
+      "annual_growth_raw": 13.04,
+      "baseline_sd": 39.96,
+      "annual_growth_effect_size": 0.3263
+    },
+    {
+      "year": 2024,
+      "grade": 8,
+      "subject": "math",
+      "annual_growth_raw": 19.9,
+      "baseline_sd": 46.8,
+      "annual_growth_effect_size": 0.4253
+    },
+    {
+      "year": 2025,
+      "grade": 4,
+      "subject": "ela",
+      "annual_growth_raw": 26.7,
+      "baseline_sd": 43.98,
+      "annual_growth_effect_size": 0.6072
+    },
+    {
+      "year": 2025,
+      "grade": 5,
+      "subject": "ela",
+      "annual_growth_raw": 14.49,
+      "baseline_sd": 43.24,
+      "annual_growth_effect_size": 0.3352
+    },
+    {
+      "year": 2025,
+      "grade": 6,
+      "subject": "ela",
+      "annual_growth_raw": 8.16,
+      "baseline_sd": 43.37,
+      "annual_growth_effect_size": 0.1881
+    },
+    {
+      "year": 2025,
+      "grade": 7,
+      "subject": "ela",
+      "annual_growth_raw": 20.98,
+      "baseline_sd": 36.69,
+      "annual_growth_effect_size": 0.5718
+    },
+    {
+      "year": 2025,
+      "grade": 8,
+      "subject": "ela",
+      "annual_growth_raw": 11.59,
+      "baseline_sd": 41.29,
+      "annual_growth_effect_size": 0.2808
+    },
+    {
+      "year": 2025,
+      "grade": 4,
+      "subject": "math",
+      "annual_growth_raw": 29.86,
+      "baseline_sd": 50.77,
+      "annual_growth_effect_size": 0.5882
+    },
+    {
+      "year": 2025,
+      "grade": 5,
+      "subject": "math",
+      "annual_growth_raw": 18.12,
+      "baseline_sd": 46.61,
+      "annual_growth_effect_size": 0.3887
+    },
+    {
+      "year": 2025,
+      "grade": 6,
+      "subject": "math",
+      "annual_growth_raw": 13.53,
+      "baseline_sd": 42.38,
+      "annual_growth_effect_size": 0.3193
+    },
+    {
+      "year": 2025,
+      "grade": 7,
+      "subject": "math",
+      "annual_growth_raw": 13.64,
+      "baseline_sd": 40.81,
+      "annual_growth_effect_size": 0.3343
+    },
+    {
+      "year": 2025,
+      "grade": 8,
+      "subject": "math",
+      "annual_growth_raw": 21.52,
+      "baseline_sd": 46.9,
+      "annual_growth_effect_size": 0.4589
+    }
+  ]
+}

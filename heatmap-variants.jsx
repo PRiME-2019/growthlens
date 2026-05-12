@@ -176,7 +176,9 @@ function ScaleLegend() {
 
 // Display transforms:
 //   estimate: 'raw' / 'shrunk' — currently descriptive only (see comment below).
-//   unit:     'z' shows SD units; 'weeks' multiplies by WEEKS_PER_SD.
+//   unit:     'z' shows SD units; 'weeks' converts via grade × subject × year
+//             factors (per-cell grade for the matrix, grade-averaged for the
+//             Overall column).
 // Color scale stays in SD space so the legend remains comparable across units.
 
 // The synthetic heatmap dataset stores one residual per cell. Until raw/
@@ -187,11 +189,11 @@ function transformR(c /* , estimate */) {
   if (!c || !c.ok) return c;
   return { ...c, _rDisplay: c.r };
 }
-function formatUnit(r, unit) {
+function formatUnit(r, unit, opts) {
   if (unit === 'weeks') {
-    const w = r * WEEKS_PER_SD;
+    const w = zToWeeks(r, opts);
     const sign = w > 0 ? '+' : (w < 0 ? '−' : '');
-    return `${sign}${Math.abs(w).toFixed(1)}w`;
+    return `${sign}${Math.abs(w).toFixed(0)}w`;
   }
   return fmt2plain(r);
 }
@@ -255,7 +257,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
                       <span style={{ marginRight: 3, color: c.r >= 0 ? (Math.abs(c.r) > 0.3 ? '#fff' : SLU.pos) : (Math.abs(c.r) > 0.3 ? '#fff' : SLU.neg) }}>
                         {c.r >= 0 ? '▲' : '▼'}
                       </span>
-                      {formatUnit(c.r, unit)}
+                      {formatUnit(c.r, unit, { grade: g })}
                     </span>
                     {showN && (
                       <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9, color: Math.abs(c.r) > 0.3 ? 'rgba(255,255,255,0.85)' : SLU.mute }}>

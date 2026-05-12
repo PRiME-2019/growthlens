@@ -174,6 +174,15 @@ function AppBody() {
   // get re-keyed on `subject` to force figures to re-read the swapped globals.
   ensureMathData();
   activateSubject(subject);
+  // Drive the SD ↔ weeks-of-learning conversion off the active subject so
+  // forest-shared's fmtVal / zToWeeks pick up the right effect-size factor
+  // without each call site having to thread it through props.
+  window.WOL_OPTS = { year: 2025, subject };
+
+  // Scroll to the top whenever the user changes analysis tabs so the new
+  // page reads from its header; pairs with ControlsCard's scroll handler
+  // which re-opens the controls when scrollY is near zero.
+  React.useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
   const ctx = {
     page, setPage, subject, setSubject, demo, setDemo,
@@ -223,26 +232,27 @@ function LeftNav({ page, setPage }) {
       display: 'flex', flexDirection: 'column', position: 'sticky', top: 0,
       height: '100vh', alignSelf: 'flex-start',
     }}>
-      {/* Brand block — serif wordmark with gold rule (V1) + measurement-bar
-          glyph (V8) inline at the end. The glyph echoes the forest's gap + CI
-          vocabulary; the wordmark anchors the app name; PRiME / SLU is
-          attributed beneath the rule. */}
-      <div style={{ padding: '18px 16px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Brand block — measurement-bar glyph (V8) inline before the serif
+          wordmark (V1), with a short gold rule beneath. The glyph echoes the
+          forest's gap + CI vocabulary; the wordmark anchors the app name;
+          PRiME / SLU is attributed beneath the rule. */}
+      <div style={{ padding: '18px 16px 14px', display: 'flex', flexDirection: 'column', gap: 10,
+                     borderBottom: `1px solid ${SLU.rule2}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="42" height="12" viewBox="0 0 40 22" aria-hidden="true"
+               style={{ display: 'block' }}>
+            <rect x="0" y="9" width="40" height="4" fill={SLU.rule} rx="1" />
+            <rect x="12" y="9" width="14" height="4" fill={SLU.gold} rx="1" />
+            <rect x="26" y="9" width="14" height="4" fill={SLU.blue} rx="1" />
+            <line x1="26" y1="3" x2="26" y2="19" stroke={SLU.ink} strokeWidth="1.4" />
+            <line x1="12" y1="6" x2="12" y2="16" stroke={SLU.mute} strokeWidth="1.2" strokeDasharray="2 2" />
+          </svg>
           <div style={{ fontFamily: SERIF, fontWeight: 600, fontSize: 24,
                          color: SLU.ink, letterSpacing: -0.5, lineHeight: 1 }}>
             GrowthLens
           </div>
-          <svg width="42" height="12" viewBox="0 0 40 22" aria-hidden="true"
-               style={{ display: 'block' }}>
-            <rect x="0" y="9" width="40" height="4" fill={SLU.rule} rx="1" />
-            <rect x="0" y="9" width="14" height="4" fill={SLU.blue} rx="1" />
-            <rect x="14" y="9" width="14" height="4" fill={SLU.gold} rx="1" />
-            <line x1="14" y1="3" x2="14" y2="19" stroke={SLU.ink} strokeWidth="1.4" />
-            <line x1="28" y1="6" x2="28" y2="16" stroke={SLU.mute} strokeWidth="1.2" strokeDasharray="2 2" />
-          </svg>
         </div>
-        <div style={{ height: 1, width: 32, background: SLU.gold }} />
+        <div style={{ height: 1, width: '100%', background: SLU.gold }} />
         <div style={{ fontSize: 9.5, color: SLU.mute, fontFamily: LABEL,
                        textTransform: 'uppercase', letterSpacing: 1.4, lineHeight: 1.45 }}>
           PRiME Center
@@ -783,8 +793,18 @@ function ScanPage({ sliceLabel, ctx }) {
 // ---- CARD SHELL -------------------------------------------------------------
 // Auxiliary cards (slice + controls) use a lighter title rule than the figure
 // card. Gold rule stays reserved for the primary figure card.
-function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, headerExtra }) {
-  const [open, setOpen] = React.useState(defaultOpen);
+function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, headerExtra,
+                   open: openProp, onToggle }) {
+  // Supports both uncontrolled (internal state via defaultOpen) and controlled
+  // (open prop + onToggle callback) modes so a parent can drive collapse from
+  // scroll position or other external signals.
+  const isControlled = openProp !== undefined;
+  const [openState, setOpenState] = React.useState(defaultOpen);
+  const open = isControlled ? openProp : openState;
+  const toggle = () => {
+    if (isControlled) { if (onToggle) onToggle(); }
+    else { setOpenState(o => !o); }
+  };
   return (
     <section style={{
       background: '#fff', borderRadius: 8, border: `1px solid ${SLU.rule2}`,
@@ -803,7 +823,7 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
         userSelect: 'none',
         gap: 12,
       }}
-      onClick={collapsible ? () => setOpen(o => !o) : undefined}
+      onClick={collapsible ? toggle : undefined}
       role={collapsible ? 'button' : undefined}
       aria-expanded={collapsible ? open : undefined}
       >
@@ -829,6 +849,32 @@ function ControlsCard({ title, slice, children }) {
   // Sticky to viewport top so controls stay reachable while scrolling long
   // figures (forest / heatmap). The slice strip pinned above keeps subject /
   // subgroup context visible even when the BriefHeader has scrolled away.
+  //
+  // Auto-collapse once when the user first scrolls down past the top, and
+  // re-open as a pair when they return near the top. Manual click overrides
+  // until the next auto-cycle: if the user manually collapsed at the top
+  // (no auto-collapse latched), scrolling away won't re-collapse and coming
+  // back won't force-open. Tab changes scroll to top in AppBody, which fires
+  // this handler and naturally resets the card to its open state.
+  const [open, setOpen] = React.useState(true);
+  const hasAutoCollapsed = React.useRef(false);
+  React.useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || window.pageYOffset || 0;
+      if (y < 8) {
+        if (hasAutoCollapsed.current) {
+          hasAutoCollapsed.current = false;
+          setOpen(true);
+        }
+      } else if (!hasAutoCollapsed.current && y > 80) {
+        hasAutoCollapsed.current = true;
+        setOpen(false);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const headerTitle = slice
     ? <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
         <span>{title}</span>
@@ -845,7 +891,7 @@ function ControlsCard({ title, slice, children }) {
       boxShadow: '0 6px 14px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.04)',
       borderRadius: 8,
     }}>
-      <AuxCard title={headerTitle} collapsible>{children}</AuxCard>
+      <AuxCard title={headerTitle} collapsible open={open} onToggle={() => setOpen(o => !o)}>{children}</AuxCard>
     </div>
   );
 }
@@ -1228,7 +1274,7 @@ const METHOD_OPT_HINTS = {
   shrunk: 'Shrunken: partial pooling. Small-n schools borrow strength from the district; estimates are more stable but less extreme.',
   raw: 'Raw: unpooled per-school estimate. Honest about each school’s data but noisier when n is small.',
 };
-const UNIT_HINT = 'Display units for residuals. SD is z-score vs. district baseline; Weeks converts at ≈12 weeks of learning per SD.';
+const UNIT_HINT = 'Display units for residuals. SD is z-score vs. district baseline; Weeks converts each residual using a year × grade × subject growth factor from Missouri MAP statewide means (defaults to 2025; see methods).';
 
 const SORTS_FALLBACK = {
   gap_desc: 'Gap (largest first)',
