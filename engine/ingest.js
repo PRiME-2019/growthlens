@@ -5,12 +5,14 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  // `col` = raw DESE header (used for validation/provenance); `dbCol` = the boolean column the
+  // canonical t_<subject> table aliases it to (see loadSubjectFile) — compute.js predicates on dbCol.
   const SUBGROUPS = [
-    { key: 'frl', label: 'FRL · economically disadvantaged', a: { col: 'FREE_OR_REDUCED_LUNCH', val: true },  b: { col: 'FREE_OR_REDUCED_LUNCH', val: false }, aLabel: 'FRL', bLabel: 'non-FRL' },
-    { key: 'iep', label: 'IEP · students with disabilities', a: { col: 'IEP_DISABILITY', val: true },          b: { col: 'IEP_DISABILITY', val: false }, aLabel: 'IEP', bLabel: 'non-IEP' },
-    { key: 'el',  label: 'EL · English learners',            a: { col: 'ENGLISH_LANGUAGE_LEARNER', val: true }, b: { col: 'ENGLISH_LANGUAGE_LEARNER', val: false }, aLabel: 'EL', bLabel: 'non-EL' },
-    { key: 'race_bw', label: 'Race · Black vs. White',       a: { col: 'BLACK', val: true },    b: { col: 'WHITE', val: true }, aLabel: 'Black', bLabel: 'White' },
-    { key: 'race_hw', label: 'Race · Hispanic vs. White',    a: { col: 'HISPANIC', val: true }, b: { col: 'WHITE', val: true }, aLabel: 'Hispanic', bLabel: 'White' },
+    { key: 'frl', label: 'FRL · economically disadvantaged', a: { col: 'FREE_OR_REDUCED_LUNCH', dbCol: 'frl', val: true },  b: { col: 'FREE_OR_REDUCED_LUNCH', dbCol: 'frl', val: false }, aLabel: 'FRL', bLabel: 'non-FRL' },
+    { key: 'iep', label: 'IEP · students with disabilities', a: { col: 'IEP_DISABILITY', dbCol: 'iep', val: true },          b: { col: 'IEP_DISABILITY', dbCol: 'iep', val: false }, aLabel: 'IEP', bLabel: 'non-IEP' },
+    { key: 'el',  label: 'EL · English learners',            a: { col: 'ENGLISH_LANGUAGE_LEARNER', dbCol: 'el', val: true }, b: { col: 'ENGLISH_LANGUAGE_LEARNER', dbCol: 'el', val: false }, aLabel: 'EL', bLabel: 'non-EL' },
+    { key: 'race_bw', label: 'Race · Black vs. White',       a: { col: 'BLACK', dbCol: 'black', val: true },    b: { col: 'WHITE', dbCol: 'white', val: true }, aLabel: 'Black', bLabel: 'White' },
+    { key: 'race_hw', label: 'Race · Hispanic vs. White',    a: { col: 'HISPANIC', dbCol: 'hispanic', val: true }, b: { col: 'WHITE', dbCol: 'white', val: true }, aLabel: 'Hispanic', bLabel: 'White' },
   ];
   const PREFIX_TO_SUBJECT = { MATH: 'math', COMM_ARTS: 'ela' };
   const STRUCT_COLS = ['SCHOOL_CODE', 'GRADE', 'GROWTH_YEAR'];
