@@ -16,6 +16,24 @@
 
 ---
 
+## Progress — RESUME HERE
+
+**Status as of 2026-06-08 (branch `feature/real-data-ingestion`):**
+
+- ✅ **Phase 1 — `engine/stats.js`** — DONE. cellSE, gapSE, shrink, dlTau2, pooledMean, remlTau2, summarize, ols. Hardened for empty/degenerate inputs (`summarize([])`→null, `ols` n<2/vertical→null). Reviewed (spec + quality).
+- ✅ **Phase 2 — `engine/ingest.js` pure helpers** — DONE. SUBGROUPS config (focal−reference), detectPrefix, parseFlag, requiredColumns, validate. Reviewed.
+- ✅ **Tests** — 27 Node tests passing: `node --test test/`. REML recovers the model-correct τ²≈0.022 (NOT the fixture's hand-set 0.0309).
+- ⏸️ **Phases 3–10 — NOT STARTED.** Resume at **Phase 3 (vendor DuckDB-WASM)**.
+
+**To resume, you need (these are why it paused — can't be done headlessly):**
+1. A decision on vendoring DuckDB-WASM: plain ~38 MB commit vs git-LFS (Task 8). Network egress works.
+2. **Real DESE Math + ELA CSVs** for the Task 9–12 browser verification goldens.
+3. A browser (static server: `python -m http.server 8000`) to verify Phases 3–7.
+
+**Downstream contract note for Phase 5 (`compute.js`):** `stats.summarize()` and `stats.ols()` now return **`null`** on empty/degenerate input — `compute.js` must skip null subgroup groups and guard null regression lines (default or omit) rather than spreading `null`.
+
+---
+
 ## File structure
 
 **Create:**
