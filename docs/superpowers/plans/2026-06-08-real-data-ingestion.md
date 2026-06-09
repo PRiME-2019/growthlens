@@ -11,7 +11,7 @@
 **Conventions:**
 - No build step. Pure modules use a UMD wrapper so the **browser** gets `window.GL*` globals and **Node tests** can `require()` them.
 - TDD: write the failing test, watch it fail, implement minimally, watch it pass, commit.
-- Run tests with `node --test test/` from the repo root.
+- Run tests with `node --test` from the repo root.
 - Sign convention is **focal − reference** (§2.3 of the spec): a negative gap means the focal group has the lower residual.
 
 ---
@@ -22,7 +22,7 @@
 
 - ✅ **Phase 1 — `engine/stats.js`** — DONE. cellSE, gapSE, shrink, dlTau2, pooledMean, remlTau2, summarize, ols. Hardened for empty/degenerate inputs (`summarize([])`→null, `ols` n<2/vertical→null). Reviewed (spec + quality).
 - ✅ **Phase 2 — `engine/ingest.js` pure helpers** — DONE. SUBGROUPS config (focal−reference), detectPrefix, parseFlag, requiredColumns, validate. Reviewed.
-- ✅ **Tests** — 27 Node tests passing: `node --test test/`. REML recovers the model-correct τ²≈0.022 (NOT the fixture's hand-set 0.0309).
+- ✅ **Tests** — 27 Node tests passing: `node --test`. REML recovers the model-correct τ²≈0.022 (NOT the fixture's hand-set 0.0309).
 - ⏸️ **Phases 3–10 — NOT STARTED.** Resume at **Phase 3 (vendor DuckDB-WASM)**.
 
 **To resume, you need (these are why it paused — can't be done headlessly):**
@@ -90,7 +90,7 @@ test('module loads', () => { assert.equal(typeof S, 'object'); });
 
 - [ ] **Step 3: Run it**
 
-Run: `node --test test/`
+Run: `node --test`
 Expected: 1 test passing.
 
 - [ ] **Step 4: Commit**
@@ -128,7 +128,7 @@ test('cellSE: n=0 → null', () => {
 
 - [ ] **Step 2: Run, verify failure**
 
-Run: `node --test test/`
+Run: `node --test`
 Expected: FAIL — `S.cellSE is not a function`.
 
 - [ ] **Step 3: Implement** (inside the `return {}` object of `engine/stats.js`)
@@ -143,7 +143,7 @@ cellSE: function ({ s2, ms2, n }) {
 
 - [ ] **Step 4: Run, verify pass**
 
-Run: `node --test test/`
+Run: `node --test`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -180,7 +180,7 @@ test('shrink: B→1 when rawSe→0 (no shrinkage)', () => {
 
 - [ ] **Step 2: Run, verify failure**
 
-Run: `node --test test/`
+Run: `node --test`
 Expected: FAIL — functions undefined.
 
 - [ ] **Step 3: Implement**
@@ -193,7 +193,7 @@ shrink: function ({ rawGap, rawSe, tau2, mu }) {
 },
 ```
 
-- [ ] **Step 4: Run, verify pass** — `node --test test/` → PASS.
+- [ ] **Step 4: Run, verify pass** — `node --test` → PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -227,7 +227,7 @@ test('dlTau2: positive when spread exceeds sampling error', () => {
 });
 ```
 
-- [ ] **Step 2: Run, verify failure** — `node --test test/` → FAIL.
+- [ ] **Step 2: Run, verify failure** — `node --test` → FAIL.
 
 - [ ] **Step 3: Implement**
 
@@ -251,7 +251,7 @@ dlTau2: function (rows) {
 },
 ```
 
-- [ ] **Step 4: Run, verify pass** — `node --test test/` → PASS.
+- [ ] **Step 4: Run, verify pass** — `node --test` → PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -326,7 +326,7 @@ remlTau2: function (rows) {
 },
 ```
 
-- [ ] **Step 4: Run, verify pass** — `node --test test/` → PASS.
+- [ ] **Step 4: Run, verify pass** — `node --test` → PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -501,7 +501,7 @@ test('validate: full header set passes', () => {
 });
 ```
 
-- [ ] **Step 4: Run, verify pass** — `node --test test/` → PASS.
+- [ ] **Step 4: Run, verify pass** — `node --test` → PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -1149,7 +1149,7 @@ git commit -m "docs(methods): ingested-residual rewrite, cell-SE formula, focal-
 
 ## Final verification
 
-- [ ] **Run the full test suite** — `node --test test/` → all green.
+- [ ] **Run the full test suite** — `node --test` → all green.
 - [ ] **End-to-end browser pass** — serve (`python -m http.server 8000`), upload a real Math + a real ELA file; verify every page (Overview, Upload, System Scan, Gap Analysis, Status & Growth, Demographics, Export) renders real values; subject toggle switches ELA↔Math; subgroup selector works; PPTX export generates; devtools Network shows only same-origin requests during analysis.
 - [ ] **Commit any final fixes**, then this branch (`feature/real-data-ingestion`) is ready for PR/merge.
 
