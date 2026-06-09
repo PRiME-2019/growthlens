@@ -77,3 +77,19 @@ test('ols: perfect line y=2x+1', () => {
   assert.ok(Math.abs(r.intercept - 1) < 1e-9);
   assert.ok(Math.abs(r.r2 - 1) < 1e-9);
 });
+
+test('summarize: empty/null input → null', () => {
+  assert.equal(S.summarize([]), null);
+  assert.equal(S.summarize(null), null);
+});
+test('ols: n<2 → null', () => {
+  assert.equal(S.ols([], 'x', 'y'), null);
+  assert.equal(S.ols([{ x: 1, y: 1 }], 'x', 'y'), null);
+});
+test('ols: vertical (all same x) → null', () => {
+  assert.equal(S.ols([{ x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 3 }], 'x', 'y'), null);
+});
+test('ols: horizontal line → r2 = 1 (not NaN)', () => {
+  const r = S.ols([{ x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }], 'x', 'y');
+  assert.equal(r.r2, 1);
+});
