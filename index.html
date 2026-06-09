@@ -64,6 +64,15 @@
 <script src="data.js"></script>
 <script src="heatmap-data.js"></script>
 <script src="demo-data.js"></script>
+<!-- Real ingestion engine. The import map resolves DuckDB-WASM's apache-arrow peer dependency
+     same-origin (there is no build step). The loader module attaches window.GL lazily — importing it
+     only parses ~236 KB of JS; the 34 MB WASM + worker don't load until the first upload. -->
+<script type="importmap">
+{ "imports": { "apache-arrow": "./vendor/duckdb/apache-arrow.mjs" } }
+</script>
+<script src="engine/stats.js"></script>
+<script src="engine/ingest.js"></script>
+<script type="module" src="engine/duckdb-loader.mjs"></script>
 <script type="text/babel" src="forest-shared.jsx"></script>
 <script type="text/babel" src="heatmap-variants.jsx"></script>
 <script type="text/babel" src="forest-final.jsx"></script>

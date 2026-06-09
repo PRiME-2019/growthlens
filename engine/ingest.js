@@ -43,5 +43,67 @@
     return { ok: missing.length === 0, missing, subject: det.subject, prefix: det.prefix };
   }
 
-  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, parseFlag, requiredColumns, validate };
+  // Browser-only: read a File, register it in DuckDB, validate, filter to latest GROWTH_YEAR.
+  // Returns { ok, table, meta } or { ok:false, error, ... }. `conn` is a DuckDB connection.
+  async function loadSubjectFile(file, conn, dropzoneSubject) {
+    let text = await file.text();
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // strip a leading BOM (Windows/Excel CSV exports) so the header sniff and DuckDB see clean column names
+    const headerLine = text.slice(0, text.indexOf('\n')).replace(/\r$/, '');
+    const headers = headerLine.split(',');
+    const v = validate(headers);
+    if (!v.ok) return { ok: false, error: v.error || 'missing_columns', missing: v.missing };
+    if (dropzoneSubject && v.subject !== dropzoneSubject)
+      return { ok: false, error: 'subject_mismatch', detected: v.subject, expected: dropzoneSubject };
+
+    const table = `t_${v.subject}`;
+    await conn.query(`DROP TABLE IF EXISTS ${table}`);
+    await conn.query(`DROP TABLE IF EXISTS ${table}_all`);
+    // DuckDB reads registered buffers; register the file text and read_csv_auto it.
+    const db = await window.GL.getDB();
+    await db.registerFileText(`${v.subject}.csv`, text);
+    await conn.query(`CREATE TABLE ${table}_all AS SELECT * FROM read_csv_auto('${v.subject}.csv', header=true, all_varchar=true)`);
+
+    const P = v.prefix;
+    const yrRow = (await conn.query(`SELECT max(CAST("GROWTH_YEAR" AS INTEGER)) AS y FROM ${table}_all`)).toArray()[0];
+    const latestYear = yrRow && yrRow.y != null ? Number(yrRow.y) : null;
+    if (latestYear == null) return { ok: false, error: 'no_year' };
+
+    // Canonical, typed, latest-year-only table. Flags normalized to booleans.
+    await conn.query(`
+      CREATE TABLE ${table} AS
+      SELECT
+        "SCHOOL_CODE"::VARCHAR AS school_id,
+        CAST("GRADE" AS INTEGER) AS grade,
+        CAST("${P}_Z_RESIDUAL" AS DOUBLE) AS residual,
+        TRY_CAST("${P}_Z_RESIDUAL_SE" AS DOUBLE) AS residual_se,
+        TRY_CAST("${P}_Z_T" AS DOUBLE) AS status,
+        lower(trim("FREE_OR_REDUCED_LUNCH")) IN ('y','1','t','true','yes') AS frl,
+        lower(trim("IEP_DISABILITY")) IN ('y','1','t','true','yes') AS iep,
+        lower(trim("ENGLISH_LANGUAGE_LEARNER")) IN ('y','1','t','true','yes') AS el,
+        lower(trim("BLACK")) IN ('y','1','t','true','yes') AS black,
+        lower(trim("WHITE")) IN ('y','1','t','true','yes') AS white,
+        lower(trim("HISPANIC")) IN ('y','1','t','true','yes') AS hispanic
+      FROM ${table}_all
+      WHERE CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
+        AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
+    `);
+
+    const stat = (await conn.query(`
+      SELECT count(*) AS n, count(DISTINCT school_id) AS schools FROM ${table}
+    `)).toArray()[0];
+    const nRowsLatest = Number(stat.n);
+    if (nRowsLatest === 0) return { ok: false, error: 'no_rows_latest', latestYear };
+    const totalAll = Number((await conn.query(`SELECT count(*) AS n FROM ${table}_all`)).toArray()[0].n);
+
+    return {
+      ok: true, table,
+      meta: {
+        subject: v.subject, prefix: P, latestYear,
+        nSchools: Number(stat.schools), nRowsLatest, nDropped: totalAll - nRowsLatest,
+        districtCode: null,
+      },
+    };
+  }
+
+  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, parseFlag, requiredColumns, validate, loadSubjectFile };
 });
