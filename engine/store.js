@@ -12,6 +12,7 @@
         GAPS_DATA_BY_DEMO: { frl: window.GAPS_DATA },   // demo only ships FRL; others fall back to it
         HEATMAP_DATA: window.HEATMAP_DATA, DEMO_DATA: window.DEMO_DATA,
         DEMO_DATA_BY_SCHOOL: window.DEMO_DATA_BY_SCHOOL, ACH_DATA: window.ACH_DATA,
+        DEMO_SPECS: window.DEMO_SPECS,                   // demo's rich variable specs; uploads derive theirs
       },
     };
   }
@@ -32,6 +33,12 @@
     window.DEMO_DATA = sh.DEMO_DATA;
     window.DEMO_DATA_BY_SCHOOL = sh.DEMO_DATA_BY_SCHOOL;
     window.ACH_DATA = sh.ACH_DATA;
+    // Keep the Demographics "Variable" dropdown in sync with the active dataset: the demo
+    // carries its rich specs; an uploaded subject derives them from its computed DEMO_DATA (the
+    // engine's 5 comparisons) so stale demo keys (race/ell/gifted/...) don't render "No data".
+    window.DEMO_SPECS = sh.DEMO_SPECS || Object.fromEntries(
+      Object.entries(sh.DEMO_DATA || {}).map(([k, v]) => [k, { label: (v && v.label) || k }])
+    );
   }
 
   const store = {

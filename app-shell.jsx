@@ -860,9 +860,11 @@ function OverviewCardGap() {
   if (!data) return null;
   const { meta, schools } = data;
   const tauSD = Math.sqrt(Math.max(0, meta.tauSquared));
+  const ds = window.GLStore && window.GLStore.getActiveMeta();
+  const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
 
   return (
-    <AuxCard collapsible title={`Overview · ${meta.subject.toUpperCase()} · ${meta.groupA} − ${meta.groupB} · 2024–25`}>
+    <AuxCard collapsible title={`Overview · ${meta.subject.toUpperCase()} · ${meta.groupA} − ${meta.groupB} · ${yr}`}>
       <div style={{
         display: 'flex', flexWrap: 'wrap',
         gap: '20px 32px', alignItems: 'flex-start',
@@ -1021,9 +1023,11 @@ function OverviewCardScan() {
 
   const totalN = byGrade.reduce((a, b) => a + b.n, 0);
   const totalSchools = data.schools.length;
+  const ds = window.GLStore && window.GLStore.getActiveMeta();
+  const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
 
   return (
-    <AuxCard collapsible title={`Overview · ${data.meta.subject.toUpperCase()} · district grade-level trends · 2024–25`}>
+    <AuxCard collapsible title={`Overview · ${data.meta.subject.toUpperCase()} · district grade-level trends · ${yr}`}>
       <div style={{
         display: 'flex', flexWrap: 'wrap',
         gap: '20px 36px', alignItems: 'flex-start',
@@ -1039,7 +1043,7 @@ function OverviewCardScan() {
             <span style={{ fontSize: 13, color: SLU.mute }}>schools</span>
           </div>
           <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, fontFamily: MONO, lineHeight: 1.5 }}>
-            {totalN.toLocaleString()} students<br/>grades 3–8 · ELA MAP
+            {totalN.toLocaleString()} students<br/>grades 3–8 · {data.meta.subject.toUpperCase()} MAP
           </div>
         </div>
 
