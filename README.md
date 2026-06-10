@@ -86,7 +86,7 @@ The data layer is **real**: a district drops its own DESE files and every page r
 - **Settings / configurable min-n** — the threshold stays at the default (10); the Settings page remains a placeholder.
 - **Expanded subgroups** — the subgroup config is data-driven; v1 ships the five DESE comparisons.
 - **Shrunken-heatmap / shrunken-demographics variants.**
-- **Regenerating the bundled demo through the engine** — the demo fixtures are illustrative (hand-authored, not strictly model-consistent) and re-signed to focal − reference.
+- **Regenerating the bundled demo through the engine** — the forest and heatmap fixtures are now generated from one synthetic student dataset through the engine's stats module (`tools/build-demo.js`); the demographics and achievement fixtures (`demo-data.js`) are still procedurally sampled.
 
 **Roadmap:**
 - Production build (Vite + bundled production React) to replace in-browser Babel.
@@ -107,13 +107,14 @@ achievement.jsx         Status & Growth — achievement vs. growth scatter
 export.jsx              Export page — PPTX generation via PptxGenJS
 
 engine/                 real ingestion + computation engine (see Architecture)
+tools/build-demo.js     regenerates data.js + heatmap-data.js from synthetic students via engine/stats.js
 vendor/duckdb/          vendored DuckDB-WASM + Apache Arrow, same-origin (has its own README)
 test/                   node --test specs (stats, ingest helpers, store)
 
-data.js                 bundled Math demo: 30 schools with raw/shrunken gaps, CIs, n, B
-                        (focal − reference signs; illustrative, not engine-generated)
-heatmap-data.js         demo school × grade residual cells with meets_min_cell flags
-demo-data.js            demo student-level residuals by demographic category
+data.js                 bundled Math demo (generated): 7 grade-banded schools, FRL gaps/CIs/B,
+                        engine-computed district gap + τ² (focal − reference signs)
+heatmap-data.js         demo school × grade residual cells (3–5 elementary, 6–8 middle) + ok flags
+demo-data.js            demo demographics box-plots + achievement scatter (procedurally sampled)
 
 methods.html            stand-alone methods note (linked from sidebar)
 prime-logo.png          asset; not currently referenced (final lockup is text-only)

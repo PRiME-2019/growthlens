@@ -47,10 +47,16 @@ const N_MODES = {
   off:    { label: 'Off' },
 };
 
-// Diverging interpolator: residual ∈ [-0.5, 0.5] → blue / white / rust.
+// Diverging color scale. SCALE_MAX is where the color saturates — the residuals
+// are tight first-stage VAM residuals, so ±0.3 SD makes the school pattern pop;
+// SCALE_DARK is where a cell reads as a dark fill and wants a white glyph/number.
+const SCALE_MAX = 0.3;
+const SCALE_DARK = 0.18;
+
+// Diverging interpolator: residual ∈ [-SCALE_MAX, SCALE_MAX] → blue / white / rust.
 // Pair with shape (▲/▼) elsewhere so we never encode by color alone.
 function divColor(r) {
-  const t = Math.max(-1, Math.min(1, r / 0.5));
+  const t = Math.max(-1, Math.min(1, r / SCALE_MAX));
   if (t >= 0) {
     // white → SLU blue
     const k = t;
@@ -159,7 +165,7 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
 }
 
 function ScaleLegend() {
-  const stops = [-0.5, -0.25, 0, 0.25, 0.5];
+  const stops = [-SCALE_MAX, -SCALE_MAX / 2, 0, SCALE_MAX / 2, SCALE_MAX];
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, color: SLU.ink2, fontFamily: MONO }}>
       <span style={{ color: SLU.mute, fontFamily: FONT }}>below the district average</span>
@@ -169,7 +175,7 @@ function ScaleLegend() {
         ))}
       </span>
       <span style={{ color: SLU.mute, fontFamily: FONT }}>above the district average</span>
-      <span style={{ marginLeft: 12 }}>−0.5 ··· 0 ··· +0.5 SD</span>
+      <span style={{ marginLeft: 12 }}>−{SCALE_MAX} ··· 0 ··· +{SCALE_MAX} SD</span>
     </div>
   );
 }
@@ -249,18 +255,18 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
                               borderBottom: '1px solid rgba(255,255,255,0.6)',
                               backgroundImage: c.ok ? 'none' : `repeating-linear-gradient(45deg, ${SLU.rule} 0 1px, transparent 1px 6px)`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontFamily: MONO, fontSize: 11, color: Math.abs(c.r) > 0.3 ? '#fff' : SLU.ink,
+                              fontFamily: MONO, fontSize: 11, color: Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.ink,
                             }}>
                 {c.ok ? (
                   <>
                     <span style={{ position: 'relative' }}>
-                      <span style={{ marginRight: 3, color: c.r >= 0 ? (Math.abs(c.r) > 0.3 ? '#fff' : SLU.pos) : (Math.abs(c.r) > 0.3 ? '#fff' : SLU.neg) }}>
+                      <span style={{ marginRight: 3, color: c.r >= 0 ? (Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.pos) : (Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.neg) }}>
                         {c.r >= 0 ? '▲' : '▼'}
                       </span>
                       {formatUnit(c.r, unit, { grade: g })}
                     </span>
                     {showN && (
-                      <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9, color: Math.abs(c.r) > 0.3 ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
+                      <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9, color: Math.abs(c.r) > SCALE_DARK ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
                         n={c.n}
                       </span>
                     )}
@@ -284,7 +290,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
                   return a + r * c.n;
                 }, 0) / totalN
               : 0;
-            const dark = Math.abs(overall) > 0.3;
+            const dark = Math.abs(overall) > SCALE_DARK;
             const above = overall >= 0;
             return (
               <div onMouseEnter={() => setHover(`${s.school_id}-overall`)}
@@ -333,3 +339,4 @@ function SuppressedSwatch() {
 
 window.HeatmapH1 = HeatmapH1;
 window.divColor = divColor;
+window.HEATMAP_SCALE_DARK = SCALE_DARK;

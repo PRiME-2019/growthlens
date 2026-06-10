@@ -123,7 +123,8 @@ function AppBody() {
       <LeftNav page={page} setPage={setPage} />
       <main style={{ minWidth: 0, padding: '22px 28px 40px', display: 'flex',
                      flexDirection: 'column', gap: 20 }}>
-        {(page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement') && <DatasetStrip />}
+        {(page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'upload' || page === 'exportpg') && <DatasetStrip />}
+        {page === 'landing'      && <DatasetStrip placeholder />}
         {page === 'landing'      && <LandingPage ctx={ctx} />}
         {page === 'upload'       && <UploadPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
@@ -259,7 +260,16 @@ function NavItem({ label, href, external, pdf, placeholder, soon }) {
 }
 
 // ---- DATASET STRIP ----------------------------------------------------------
-function DatasetStrip() {
+function DatasetStrip({ placeholder }) {
+  // Landing renders this in placeholder mode — an invisible spacer that reserves
+  // the strip's height so the page header lines up with every other page.
+  if (placeholder) {
+    return (
+      <div aria-hidden="true" style={{ fontSize: 11.5, fontFamily: MONO, visibility: 'hidden' }}>
+        &nbsp;
+      </div>
+    );
+  }
   const m = (window.GLStore && window.GLStore.getActiveMeta()) || null;
   const yr = m && (m.latestYear || m.year);
   const label = m
@@ -273,9 +283,6 @@ function DatasetStrip() {
                   flexWrap: 'wrap' }}>
       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {label}
-      </span>
-      <span style={{ display: 'inline-flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
-        <span><span style={{ color: '#1F8A5B' }}>●</span> Private — runs in your browser</span>
       </span>
     </div>
   );
@@ -1056,8 +1063,8 @@ function OverviewCardScan() {
               const above = mean >= 0;
               // Same glyph-color rule as HeatmapH1: invert to white when the
               // diverging fill is dark enough that the brand pos/neg ink loses
-              // contrast (|r| > 0.3).
-              const glyphColor = Math.abs(mean) > 0.3
+              // contrast (past the heatmap's SCALE_DARK threshold).
+              const glyphColor = Math.abs(mean) > (window.HEATMAP_SCALE_DARK || 0.18)
                 ? '#fff'
                 : (above ? SLU.pos : SLU.neg);
               return (

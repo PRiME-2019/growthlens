@@ -36,6 +36,10 @@ function ExportPage({ ctx }) {
   const subjectLabel = (meta.subject || 'ela').toUpperCase();
   const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · 2024–25`;
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  // The page header shows only the school year (no subject or group comparison);
+  // the deck itself still carries the full slice via sliceText.
+  const ds = window.GLStore && window.GLStore.getActiveMeta();
+  const yearLabel = (ds && (ds.latestYear || ds.year)) || '2024–25';
 
   const slides = [
     {
@@ -87,7 +91,7 @@ function ExportPage({ ctx }) {
 
   return (
     <>
-      <BriefHeader eyebrow="Export" slice={sliceText}
+      <BriefHeader eyebrow="Export" slice={String(yearLabel)}
         title="Download a board-ready deck"
         blurb={'Six slides covering the headline numbers, the schools at each end of the gap, the standout spots from System Scan, and a short methods recap. It’s real, editable PowerPoint — text, tables, and shapes, not flattened screenshots.'} />
 
