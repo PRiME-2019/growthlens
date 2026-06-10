@@ -22,9 +22,12 @@ const DEMO_PAGE_MONO = window.MONO;
 const DEMO_PAGE_LABEL = window.LABEL;
 
 function DemographicsPage({ sliceLabel, ctx }) {
-  const demoVar = ctx.demoVar || 'frl';
+  // Clamp to a demographic that exists in the active dataset (uploads expose only the engine's
+  // 5 comparisons; a stale demo key like 'race' would otherwise render "No data").
+  const dd = window.DEMO_DATA || {};
+  const demoVar = dd[ctx.demoVar] ? ctx.demoVar : (dd.frl ? 'frl' : Object.keys(dd)[0]);
 
-  const districtData = window.DEMO_DATA && window.DEMO_DATA[demoVar];
+  const districtData = dd[demoVar];
   const groups = districtData ? districtData.groups : [];
   const label = districtData ? districtData.label : '';
   const districtMean = districtData ? districtData.districtMean : 0;
@@ -48,19 +51,16 @@ function DemographicsControls({ ctx }) {
   return (
     <window.ControlsGrid>
       <window.CGroup title="Slice">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" />
+        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
         <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Subgroup pair" />
       </window.CGroup>
-      <window.CGroup title="Estimate">
-        <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                    options={window.METHOD_OPTS} label="Method"
-                    hint={window.METHOD_HINT} optionHints={window.METHOD_OPT_HINTS} />
+      <window.CGroup title="Units">
         <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={window.UNIT_HINT} />
       </window.CGroup>
       <window.CGroup title="Demographic">
-        <window.CSelect value={ctx.demoVar || 'frl'} onChange={ctx.setDemoVar}
+        <window.CSelect value={demoOptions[ctx.demoVar] ? ctx.demoVar : (demoOptions.frl ? 'frl' : Object.keys(demoOptions)[0])} onChange={ctx.setDemoVar}
                  options={demoOptions} label="Variable" />
       </window.CGroup>
     </window.ControlsGrid>

@@ -33,12 +33,14 @@ function AchievementControls({ ctx }) {
   return (
     <window.ControlsGrid>
       <window.CGroup title="Slice">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" />
+        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
       </window.CGroup>
       <window.CGroup title="Estimate">
-        <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
+        {(ctx.achLevel || 'school') === 'school' && (
+          <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
                     options={window.METHOD_OPTS} label="Method"
                     hint={window.METHOD_HINT} optionHints={window.METHOD_OPT_HINTS} />
+        )}
         <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={window.UNIT_HINT} />
@@ -64,7 +66,8 @@ function AchievementFigure({ level, ctx }) {
   }
   const unit = ctx.unit || 'z';
   const estimate = ctx.estimate || 'shrunk';
-  const yKey = estimate === 'shrunk' ? 'y_shrunk' : 'y_raw';
+  // Student level has no shrinkage (y_shrunk is undefined on student points), so force raw there.
+  const yKey = level === 'student' ? 'y_raw' : (estimate === 'shrunk' ? 'y_shrunk' : 'y_raw');
   // y-axis is residuals pooled across grades, so no per-point grade is passed
   // and weeksPerSD returns the year × subject average from window.WOL_OPTS.
   const toUnit = (v) => unit === 'weeks' ? window.zToWeeks(v) : v;

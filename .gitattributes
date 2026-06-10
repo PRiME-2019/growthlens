@@ -1,0 +1,5 @@
+# Vendored third-party DuckDB-WASM + Apache Arrow bundles: commit verbatim.
+# `binary` = no EOL conversion and no (useless) minified-text diffs. README.md stays normal text.
+vendor/duckdb/*.mjs   binary
+vendor/duckdb/*.js    binary
+vendor/duckdb/*.wasm  binary

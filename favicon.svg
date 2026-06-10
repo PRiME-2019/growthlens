@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -9 40 40" width="40" height="40">
+  <!-- GrowthLens measurement-bar mark — matches the sidebar brand glyph (app-shell LeftNav). -->
+  <rect x="0" y="9" width="40" height="4" rx="1" fill="#D9D9DD"/>
+  <rect x="12" y="9" width="14" height="4" rx="1" fill="#C8A84A"/>
+  <rect x="26" y="9" width="14" height="4" rx="1" fill="#003DA5"/>
+  <line x1="26" y1="3" x2="26" y2="19" stroke="#1A1B1F" stroke-width="1.4"/>
+  <line x1="12" y1="6" x2="12" y2="16" stroke="#7B7E85" stroke-width="1.2" stroke-dasharray="2 2"/>
+</svg>

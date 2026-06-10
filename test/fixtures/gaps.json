@@ -1,0 +1,152 @@
+[
+  {
+    "gap": 0.7314,
+    "se": 0.2277,
+    "meets": true
+  },
+  {
+    "gap": 0.3558,
+    "se": 0.1083,
+    "meets": true
+  },
+  {
+    "gap": 0.5908,
+    "se": 0.2828,
+    "meets": true
+  },
+  {
+    "gap": 0.3312,
+    "se": 0.1011,
+    "meets": true
+  },
+  {
+    "gap": 0.3246,
+    "se": 0.1163,
+    "meets": true
+  },
+  {
+    "gap": 0.2764,
+    "se": 0.087,
+    "meets": true
+  },
+  {
+    "gap": 0.2808,
+    "se": 0.0989,
+    "meets": true
+  },
+  {
+    "gap": 0.2638,
+    "se": 0.1003,
+    "meets": true
+  },
+  {
+    "gap": 0.2453,
+    "se": 0.0954,
+    "meets": true
+  },
+  {
+    "gap": 0.2384,
+    "se": 0.0802,
+    "meets": true
+  },
+  {
+    "gap": 0.2427,
+    "se": 0.0984,
+    "meets": true
+  },
+  {
+    "gap": 0.2343,
+    "se": 0.0857,
+    "meets": true
+  },
+  {
+    "gap": 0.2323,
+    "se": 0.108,
+    "meets": true
+  },
+  {
+    "gap": 0.382,
+    "se": 0.4172,
+    "meets": false
+  },
+  {
+    "gap": 0.2024,
+    "se": 0.1142,
+    "meets": true
+  },
+  {
+    "gap": 0.1851,
+    "se": 0.082,
+    "meets": true
+  },
+  {
+    "gap": 0.1769,
+    "se": 0.0863,
+    "meets": true
+  },
+  {
+    "gap": 0.1485,
+    "se": 0.1247,
+    "meets": true
+  },
+  {
+    "gap": 0.1226,
+    "se": 0.1897,
+    "meets": true
+  },
+  {
+    "gap": 0.0245,
+    "se": 0.2125,
+    "meets": true
+  },
+  {
+    "gap": 0.076,
+    "se": 0.097,
+    "meets": true
+  },
+  {
+    "gap": 0.0772,
+    "se": 0.091,
+    "meets": true
+  },
+  {
+    "gap": 0.0481,
+    "se": 0.0807,
+    "meets": true
+  },
+  {
+    "gap": -0.0087,
+    "se": 0.1323,
+    "meets": true
+  },
+  {
+    "gap": -0.0442,
+    "se": 0.1343,
+    "meets": true
+  },
+  {
+    "gap": -0.1021,
+    "se": 0.1543,
+    "meets": true
+  },
+  {
+    "gap": -0.0404,
+    "se": 0.0781,
+    "meets": true
+  },
+  {
+    "gap": -0.1111,
+    "se": 0.0914,
+    "meets": true
+  },
+  {
+    "gap": -0.2301,
+    "se": 0.1467,
+    "meets": true
+  },
+  {
+    "gap": -0.296,
+    "se": 0.0809,
+    "meets": true
+  }
+]

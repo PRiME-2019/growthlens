@@ -116,7 +116,7 @@
 </head>
 <body>
 <div class="doc">
-  <a class="back" href="GrowthLens.html">Back to GrowthLens</a>
+  <a class="back" href="index.html">Back to GrowthLens</a>
   <div class="eyebrow">PRiME Center · Saint Louis University · Methods Note v0.4</div>
   <h1>How GrowthLens estimates school performance, gaps, and uncertainty</h1>
   <p class="lede">A short technical note for district leaders, data analysts, and curious skeptics. Covers what GrowthLens computes, where the numbers come from, and the assumptions that limit how strongly you should read them.</p>
@@ -124,10 +124,10 @@
 
   <h2>1 · What is being estimated</h2>
   <h3>The residual</h3>
-  <p>For each student in a given subject, GrowthLens computes a <em>residual</em>: the difference between that student's observed scale score and the score predicted by a district-level model conditional on prior achievement and grade. Residuals are then standardized so one unit equals one student-level standard deviation of the residual distribution. A school × grade × subgroup <em>cell</em> aggregates these standardized residuals.</p>
+  <p>For each student in a given subject, GrowthLens <em>ingests</em> a standardized growth <em>residual</em> that is pre-computed upstream by the Missouri DESE / MOSIS growth model — the difference between the student's observed score and the score the state model predicts from prior achievement and grade, already expressed in standard-deviation units (the state's <code>Z_RESIDUAL</code>). GrowthLens does <em>not</em> fit this residual model; it aggregates and shrinks the residuals the state supplies. A school × grade × subgroup <em>cell</em> aggregates these standardized residuals.</p>
 
   <h3>The gap</h3>
-  <p>A <em>gap</em> in GrowthLens is the <em>within-school</em> difference in mean residual between two subgroups (for example, non-FRL minus FRL) at the same school. It is not a difference in raw achievement, and it is not a difference relative to the state — both subgroups in a gap are measured against the same district baseline. This is why the district-wide gap can be small even when raw achievement disparities are large.</p>
+  <p>A <em>gap</em> in GrowthLens is the <em>within-school</em> difference in mean residual between two subgroups at the same school, signed <em>focal − reference</em> — for example FRL minus non-FRL, so a <em>negative</em> gap means the focal group (FRL students) has the lower mean residual. It is not a difference in raw achievement, and it is not a difference relative to the state — both subgroups in a gap are measured against the same district baseline. This is why the district-wide gap can be small even when raw achievement disparities are large.</p>
 
   <h3>The district-wide number</h3>
   <p>The district-wide gap is a <em>random-effects pooled mean</em> over the per-school estimates, weighted by the inverse of each school's combined sampling and between-school variance:</p>
@@ -149,9 +149,19 @@
   </ul>
   <p>Most schools in a typical district sit between 0.6 and 0.9. The B column on the forest plot reports this directly.</p>
 
-  <aside class="note"><strong>Important and counter-intuitive.</strong> Shrinkage pulls every school toward the district mean — including schools whose raw gap is <em>smaller</em> than the district average. A school with a raw gap of 0.00 SD and a district-wide gap of +0.20 SD will end up with a shrunken estimate that is slightly positive. This is mathematically correct under the model — it reflects that with limited data, our best guess about the school is somewhere between its own (noisy) estimate and the district norm — but it can read as the model "inventing" a gap. Use the Raw / Shrunken toggle in Gap Analysis to compare the two side by side, and rely on the credible interval rather than the point estimate when a school is small.</aside>
+  <p>The shrunken estimate's standard error is <code>SE(r̂_i) = √(B_i) · SE_i</code> — the posterior SD treating the district mean <code>μ̂</code> as <em>known</em>. The full empirical-Bayes SD that also accounts for the uncertainty in <code>μ̂</code> is about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
+
+  <aside class="note"><strong>Important and counter-intuitive.</strong> Shrinkage pulls every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD and a district-wide gap of −0.20 SD will end up with a shrunken estimate that is slightly negative. This is mathematically correct under the model — it reflects that with limited data, our best guess about the school is somewhere between its own (noisy) estimate and the district norm — but it can read as the model "inventing" a gap. Use the Raw / Shrunken toggle in Gap Analysis to compare the two side by side, and rely on the credible interval rather than the point estimate when a school is small.</aside>
 
   <h2 id="variance">3 · Variance components and τ²</h2>
+
+  <h3>The within-school cell standard error</h3>
+  <p>The state supplies a per-student measurement SE <code>s_i</code> for each residual, which most pipelines lack. GrowthLens uses it as a <em>precision floor</em> without double-counting. For a cell of <code>n</code> students with sample variance <code>S²</code> and mean measurement variance <code>ms² = (1/n) Σ s_i²</code>, the cell standard error is</p>
+  <code class="formula">  SE_cell  =  √( max(S², ms²) / n )
+</code>
+  <p>When there is real between-student heterogeneity (<code>S² ≥ ms²</code>, the common case) this reduces to the classic <code>√(S²/n)</code>; when a small or homogeneous cell's sample variance understates the true noise, the state's measurement variance acts as a floor, so we never claim more precision than the measurements support — and we never double-count measurement error, since it is already embedded in <code>S²</code>. A gap combines its two cells in quadrature: <code>SE_gap = √(SE_A² + SE_B²)</code>.</p>
+
+  <h3>Between-school variance τ²</h3>
   <p>The between-school variance <code>τ²</code> is estimated by REML (restricted maximum likelihood) fit of the random-effects model</p>
   <code class="formula">  r_i  =  μ  +  u_i  +  e_i
        u_i ~ N(0, τ²)        ← between-school
@@ -159,9 +169,10 @@
 </code>
   <p>The <em>between-school SD</em> reported in the Overview card is <code>τ = √τ²</code>. It is the spread of <em>true</em> per-school gaps if the model is correct &mdash; not the spread of the observed point estimates, which is larger (because of sampling error) for raw estimates and smaller (because of shrinkage) for shrunken estimates.</p>
   <p>If <code>τ²</code> is small relative to the average within-school <code>SE²</code>, schools are mostly indistinguishable from one another: most of the apparent spread is sampling noise. If <code>τ²</code> is large, schools really do differ.</p>
+  <p><code>τ²</code> is found by a bounded one-dimensional maximization of the REML profile log-likelihood over <code>τ² ≥ 0</code> (a golden-section search, anchored by the closed-form DerSimonian–Laird estimate). Schools whose cells fall below the minimum-n threshold (§4) are <em>excluded</em> from the <code>τ²</code> fit and the pooled mean — their gaps are too noisy to inform the variance component — but they still appear in the figures, shrunk toward <code>μ̂</code>. Excluding the high-SE tail can bias <code>τ²</code> slightly low; this is a known, documented limitation.</p>
 
   <h2>4 · Minimum-n threshold</h2>
-  <p>Every cell (school × grade × subgroup) is checked against a configurable minimum sample size, <code>n_min</code> (default <strong>10</strong>). Cells with fewer students are flagged as <em>below threshold</em>. The threshold is intended to track your district's student-privacy and small-cell-suppression policies. Set it to match.</p>
+  <p>Every cell (school × grade × subgroup) is checked against a minimum sample size, <code>n_min</code>, which defaults to <strong>10</strong> in this build (a configurable threshold is planned for a future release). Cells with fewer students are flagged as <em>below threshold</em>. The threshold is intended to track your district's student-privacy and small-cell-suppression policies.</p>
   <table class="compact">
     <thead><tr><th>Threshold mode</th><th>What it does</th></tr></thead>
     <tbody>
@@ -181,14 +192,14 @@
 
   <h2>6 · What GrowthLens is not</h2>
   <ul>
-    <li><strong>Not a value-added model.</strong> Residuals are computed conditional on prior score and grade, but no teacher-, classroom-, or program-level effect is estimated. Results should not be used to evaluate individual teachers.</li>
+    <li><strong>Not a value-added model.</strong> The state's residuals condition on prior score and grade, but no teacher-, classroom-, or program-level effect is estimated. Results should not be used to evaluate individual teachers.</li>
     <li><strong>Not causal.</strong> Estimates describe where gaps and residuals are observed. They do not identify what is causing them.</li>
     <li><strong>Not a state report card.</strong> Cell suppression rules differ across states. Cross-check before any public release.</li>
     <li><strong>Not robust to extreme model misspecification.</strong> If the district's true growth pattern is wildly nonlinear or interacts strongly with covariates we don't include (e.g., mid-year mobility), residuals can be misleading. GrowthLens is a triage tool, not an end-of-line judgment.</li>
   </ul>
 
   <h2>7 · Privacy and data handling</h2>
-  <p>All computation runs in the user's browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>. The source CSV is never uploaded to a server. No identifiers, aggregates, or partial results are transmitted off the device. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and uses no cookies or local storage for student records.</p>
+  <p>All computation runs in the user's browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — no third-party or CDN request is made when you load a file, and the analysis works fully offline. The source CSV is parsed and queried entirely in the tab; it is never uploaded to a server, and no identifier, aggregate, or partial result is transmitted off the device. You can verify this in your browser's developer tools: the Network panel shows no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and uses no cookies or local storage for student records.</p>
   <p>The published methods, fixtures, and code are at <a href="https://github.com/SLU-PRiME/GrowthLens" target="_blank" rel="noopener">SLU-PRiME/GrowthLens</a> (link placeholder).</p>
 
   <h2>8 · Recommended citation</h2>
