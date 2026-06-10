@@ -35,8 +35,8 @@ function DemographicsPage({ sliceLabel, ctx }) {
   return (
     <>
       <window.BriefHeader eyebrow="Demographics" slice={sliceLabel}
-                   title="How does the residual distribution vary by subgroup?"
-                   blurb={'For each group within the selected demographic, the box shows the inter-quartile range of student residuals against the district baseline; whiskers extend to 1.5 × IQR, with outlier students plotted individually. Compare medians, spread, and tails to see whether differences are concentrated in the middle of the distribution or in the tails.'} />
+                   title="How growth varies from group to group"
+                   blurb={'For each group, the box shows the middle of the pack and the line shows the typical student; the whiskers and dots show the full spread. Compare the typical student and the spread across groups to see whether differences sit in the middle or out in the tails.'} />
       <window.ControlsCard title="Controls"><DemographicsControls ctx={ctx} /></window.ControlsCard>
       <DemographicsFigure label={label} groups={groups} districtMean={districtMean} ctx={ctx} />
     </>
@@ -50,18 +50,18 @@ function DemographicsControls({ ctx }) {
   }
   return (
     <window.ControlsGrid>
-      <window.CGroup title="Slice">
+      <window.CGroup title="Show">
         <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Subgroup pair" />
+        <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Groups to compare" />
       </window.CGroup>
       <window.CGroup title="Units">
         <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={window.UNIT_HINT} />
       </window.CGroup>
-      <window.CGroup title="Demographic">
+      <window.CGroup title="Group">
         <window.CSelect value={demoOptions[ctx.demoVar] ? ctx.demoVar : (demoOptions.frl ? 'frl' : Object.keys(demoOptions)[0])} onChange={ctx.setDemoVar}
-                 options={demoOptions} label="Variable" />
+                 options={demoOptions} label="Group" />
       </window.CGroup>
     </window.ControlsGrid>
   );
@@ -81,7 +81,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
   const [hover, setHover] = React.useState(null); // {gKey, oi, px, py, record, boxStroke}
   if (!groups || groups.length === 0) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
-                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data.</div>;
+                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data to show yet.</div>;
   }
 
   const unit = ctx.unit || 'z';
@@ -143,17 +143,17 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
                      gap: 12, marginBottom: 4 }}>
         <div>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-            Student residuals by {label}
+            Growth by {label}
           </div>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-            District-wide · all schools pooled
+            Across the whole district
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            box = IQR, whisker = 1.5 × IQR, dots = outliers, vertical line = group median
+            box = the middle half of students, line = the typical student, dots = individual outliers
           </div>
         </div>
         <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
                         textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-          x: residual ({unitLabel})
+          x: growth vs. expected ({unitLabel})
         </span>
       </div>
 
@@ -167,7 +167,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
             <text x={meanPx} y={topPad - 12} fontSize={10} fontFamily={DEMO_PAGE_LABEL}
                   fill={SLU.ink2} textAnchor="middle" fontWeight={700}
                   style={{ ...DEMO_TRANSITION, textTransform: 'uppercase', letterSpacing: 1.0 }}>
-              District mean {(toUnit(districtMean) >= 0 ? '+' : '−') + Math.abs(toUnit(districtMean)).toFixed(2)}
+              District average {(toUnit(districtMean) >= 0 ? '+' : '−') + Math.abs(toUnit(districtMean)).toFixed(2)}
             </text>
           </g>
         )}

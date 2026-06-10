@@ -23,13 +23,13 @@ const SORTS_FINAL = {
   gap_desc:  { label: 'Gap (largest →)', fn: (a, b) => b.shrunk_gap - a.shrunk_gap },
   gap_abs:   { label: '|Gap| (largest →)', fn: (a, b) => Math.abs(b.shrunk_gap) - Math.abs(a.shrunk_gap) },
   alpha:     { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
-  shrink:    { label: 'Shrinkage B (most → least)', fn: (a, b) => a.shrinkage_factor - b.shrinkage_factor },
-  n:         { label: 'Total n (largest →)', fn: (a, b) => (b.n_a + b.n_b) - (a.n_a + a.n_b) },
+  shrink:    { label: 'Nudged the most → least', fn: (a, b) => a.shrinkage_factor - b.shrinkage_factor },
+  n:         { label: 'Total students (largest →)', fn: (a, b) => (b.n_a + b.n_b) - (a.n_a + a.n_b) },
 };
 
 const THRESHOLD_MODES = {
-  inline: { label: 'Show inline (grayed)' },
-  section: { label: 'Section below' },
+  inline: { label: 'Mark in place (dimmed)' },
+  section: { label: 'Group at the bottom' },
   hide:   { label: 'Hide' },
 };
 
@@ -69,10 +69,10 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
                       flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 14 }}>
           <div style={{ flex: '1 1 280px', minWidth: 0 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-              ELA gap by school · {data.meta.groupA} − {data.meta.groupB}
+              {data.meta.subject.toUpperCase()} gap by school · {data.meta.groupA} − {data.meta.groupB}
             </div>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-              Point estimate with 95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval.
+              Each school’s gap, with the range it most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
               <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
               district gap {fmtVal(data.meta.districtGap, unit)} · {data.meta.nMeetingThreshold}/{data.meta.nSchools} schools meet n≥{data.meta.minCellSize}
             </div>
@@ -100,7 +100,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
                 {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
                 {below.length > 0 && (
                   <>
-                    <SectionDivider label="Below cell-size threshold — interpret with caution" count={below.length} />
+                    <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
                     {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
                   </>
                 )}
@@ -120,19 +120,19 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
           {view === 'chart' ? (
             <>
               <LegendSwatch />
-              <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold dashed</span> = district-wide gap (Empirical Bayes prior).</span>
-              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools below the n≥{data.meta.minCellSize} cell threshold.</span>
+              <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold dashed line</span> = the district-wide average.</span>
+              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))} (year-2025 average across grades 3–8; varies by grade — see methods).</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about how many weeks of learning each step on the scale stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, 2025 average across grades 3–8; varies by grade — see methods).</span>
               )}
             </>
           ) : (
             <>
-              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>Gap</b> in {unit === 'weeks' ? 'weeks of learning' : 'SD'}, positive favors {data.meta.groupA}.</span>
-              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>B</b> = shrinkage factor (0 = fully pooled, 1 = no shrinkage).</span>
-              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools below the n≥{data.meta.minCellSize} cell threshold.</span>
+              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>Gap</b> in {unit === 'weeks' ? 'weeks of learning' : 'SD'}; a positive number leans toward {data.meta.groupA}.</span>
+              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>B</b> = how far this school was nudged toward the district average (0 = pulled all the way, 1 = left as measured).</span>
+              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))} (year-2025 average across grades 3–8).</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = about how many weeks of learning each step stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, 2025 average across grades 3–8).</span>
               )}
             </>
           )}
@@ -214,7 +214,7 @@ function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap
                       color: SLU.mute, textTransform: 'uppercase', letterSpacing: 1.0,
                       fontWeight: 700, borderTop: `1px dashed ${SLU.rule}`,
                     }}>
-                      Below cell-size threshold — interpret with caution · {below.length}
+                      Too few students to read reliably — handle with care · {below.length}
                     </td>
                   </tr>
                 )}
@@ -323,7 +323,7 @@ function UnitAxis({ width, groupA, groupB, unit }) {
       <text x={xScale(0, width) - 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end">◀ favors {groupB}</text>
       <text x={xScale(0, width) + 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="start">favors {groupA} ▶</text>
       <text x={width} y={12} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end" fontStyle="italic">
-        {unit === 'weeks' ? 'weeks of learning' : 'SD (z-score)'}
+        {unit === 'weeks' ? 'weeks of learning' : 'standard scale (SD)'}
       </text>
     </svg>
   );
