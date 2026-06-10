@@ -51,10 +51,7 @@ function DemographicsControls({ ctx }) {
         <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
         <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Subgroup pair" />
       </window.CGroup>
-      <window.CGroup title="Estimate">
-        <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                    options={window.METHOD_OPTS} label="Method"
-                    hint={window.METHOD_HINT} optionHints={window.METHOD_OPT_HINTS} />
+      <window.CGroup title="Units">
         <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={window.UNIT_HINT} />

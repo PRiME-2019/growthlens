@@ -1287,10 +1287,7 @@ function ScanControls({ ctx }) {
       <CGroup title="Slice">
         <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
       </CGroup>
-      <CGroup title="Estimate">
-        <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                    options={METHOD_OPTS} label="Method"
-                    hint={METHOD_HINT} optionHints={METHOD_OPT_HINTS} />
+      <CGroup title="Units">
         <CSegmented value={ctx.unit} onChange={ctx.setUnit}
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={UNIT_HINT} />
