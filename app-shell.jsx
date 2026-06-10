@@ -567,10 +567,6 @@ function UploadPage({ ctx }) {
       </div>
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: SLU.mute, flexWrap: 'wrap' }}>
-        <a href="#" style={{ color: SLU.blue, fontWeight: 700, textDecoration: 'none' }}>↓ Sample ELA CSV (8 KB)</a>
-        <span>·</span>
-        <a href="#" style={{ color: SLU.blue, fontWeight: 700, textDecoration: 'none' }}>↓ Sample Math CSV (8 KB)</a>
-        <span>·</span>
         <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('scan'); }}
            style={{ color: SLU.mute, textDecoration: 'underline' }}>
           Skip and use the bundled Math demo
