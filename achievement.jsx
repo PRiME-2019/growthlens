@@ -59,6 +59,9 @@ function AchievementControls({ ctx }) {
 function AchievementFigure({ level, ctx }) {
   const SLU = window.SLU;
   const [hover, setHover] = React.useState(null); // school-level tooltip
+  // Drop any open tooltip when the view re-plots under it — a stale hover
+  // would otherwise pin a phantom tooltip from the previous slice.
+  React.useEffect(() => { setHover(null); }, [level, ctx.subject, ctx.estimate, ctx.unit]);
   const data = window.ACH_DATA && window.ACH_DATA[level];
   if (!data) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -120,21 +123,25 @@ function AchievementFigure({ level, ctx }) {
   const xMean = wSum ? xwSum / wSum : 0;
   const yMean = wSum ? ywSum / wSum : 0;
 
-  // x ticks — half-SD steps on the z scale
+  // x ticks — half-SD steps on the z scale, clamped to the plot domain so no
+  // stray tick draws left of the y-axis.
   const xTicks = [];
   const xStep = 0.5;
-  for (let t = -Math.ceil(xExtreme / xStep) * xStep; t <= xExtreme + 1e-9; t += xStep) {
+  for (let t = Math.ceil(-xExtreme / xStep) * xStep; t <= xExtreme + 1e-9; t += xStep) {
     xTicks.push(+t.toFixed(2));
   }
 
-  // y ticks — half-SD steps in z mode; round-week steps in weeks mode that
-  // scale with the active year × subject conversion factor.
+  // y ticks — step adapts to the data span (the school view's range can be well
+  // under 0.5 SD, which used to leave a single lonely '0' tick); weeks mode
+  // scales the same step through the active year × subject conversion factor.
+  const ySpanZ = 2 * yExtreme;
+  const zStep = ySpanZ > 2 ? 0.5 : ySpanZ > 0.9 ? 0.25 : ySpanZ > 0.35 ? 0.1 : 0.05;
   const yStep = unit === 'weeks'
-    ? Math.max(5, Math.round(window.zToWeeks(0.5) / 5) * 5)
-    : 0.5;
+    ? Math.max(5, Math.round(window.zToWeeks(zStep) / 5) * 5)
+    : zStep;
   const yTickMax = toUnit(yHi);
   const yTicks = [];
-  for (let t = -Math.ceil(yTickMax / yStep) * yStep; t <= yTickMax; t += yStep) {
+  for (let t = Math.ceil(-yTickMax / yStep) * yStep; t <= yTickMax + 1e-9; t += yStep) {
     yTicks.push(t);
   }
 
@@ -189,11 +196,9 @@ function AchievementFigure({ level, ctx }) {
         {ctx.achShowMeans !== false && (
           <g>
             <line x1={xToPx(xMean)} x2={xToPx(xMean)} y1={padT} y2={padT + plotH}
-                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95}
-                  style={{ transition: 'x1 700ms cubic-bezier(.4,0,.2,1), x2 700ms cubic-bezier(.4,0,.2,1)' }} />
+                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
             <line x1={padL} x2={padL + plotW} y1={yToPx(yMean)} y2={yToPx(yMean)}
-                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95}
-                  style={{ transition: 'y1 700ms cubic-bezier(.4,0,.2,1), y2 700ms cubic-bezier(.4,0,.2,1)' }} />
+                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
             <g transform={`translate(${padL + plotW + 6} ${yToPx(yMean)})`}>
               <text x={0} y={3} fontSize={9.5} fontFamily={window.LABEL} fill={SLU.gold}
                     fontWeight={700}
@@ -279,9 +284,13 @@ function AchievementFigure({ level, ctx }) {
                     fontWeight={700} fill={SLU.ink}>
                 {p.school_name || p.school_id}
               </text>
-              <text x={tx + 10} y={ty + 32} fontSize={10.5} fontFamily={window.MONO} fill={SLU.mute}>
-                {p.school_id}
-              </text>
+              {/* Skip the code line when it would just repeat the title (uploads
+                  have no school names, so school_name === school_id). */}
+              {p.school_name && p.school_name !== p.school_id && (
+                <text x={tx + 10} y={ty + 32} fontSize={10.5} fontFamily={window.MONO} fill={SLU.mute}>
+                  {p.school_id}
+                </text>
+              )}
               <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 40} y2={ty + 40}
                     stroke={SLU.rule2} strokeWidth={1} />
               <text x={tx + 10} y={ty + 56} fontSize={11} fontFamily={window.MONO} fill={SLU.ink2}>

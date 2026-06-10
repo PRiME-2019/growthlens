@@ -82,7 +82,7 @@ node --test
 The data layer is **real**: a district drops its own DESE files and every page renders computed values, with the "nothing leaves the browser" promise verifiable in DevTools (only same-origin requests during analysis). The bundled Math demo remains for stakeholder review without a file.
 
 **Deliberately deferred** (the seams are in place):
-- **Multi-year UI** — the compute unit is `computeSlice(year, subject)`; v1 renders each subject's latest year only.
+- **Multi-year UI** — the compute unit is `computeSlice(subject)`, which pins each subject to its latest year; a year parameter is the planned seam.
 - **Settings / configurable min-n** — the threshold stays at the default (10); the Settings page remains a placeholder.
 - **Expanded subgroups** — the subgroup config is data-driven; v1 ships the five DESE comparisons.
 - **Shrunken-heatmap / shrunken-demographics variants.**
@@ -99,7 +99,7 @@ The data layer is **real**: a district drops its own DESE files and every page r
 index.html              entry — import map + engine scripts + React/Babel/pptxgenjs (CDN)
 favicon.svg             SLU measurement-bar brand glyph
 app-shell.jsx           LeftNav, Controls/Overview cards, page router, ctx state, Upload wiring
-forest-shared.jsx       SLU colors, fonts, scales, unit helpers (WEEKS_PER_SD, fmtVal, fmtCI)
+forest-shared.jsx       SLU colors, fonts, scales, unit helpers (weeksPerSD, fmtVal, fmtCI)
 forest-final.jsx        Gap Analysis — animated forest plot
 heatmap-variants.jsx    System Scan — H1 diverging heatmap (sortable columns)
 demographics.jsx        Demographics — box-and-whisker by subgroup

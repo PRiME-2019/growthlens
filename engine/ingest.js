@@ -50,7 +50,8 @@
   async function loadSubjectFile(file, conn, dropzoneSubject) {
     let text = await file.text();
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // strip a leading BOM (Windows/Excel CSV exports) so the header sniff and DuckDB see clean column names
-    const headerLine = text.slice(0, text.indexOf('\n')).replace(/\r$/, '');
+    const nl = text.indexOf('\n');
+    const headerLine = (nl === -1 ? text : text.slice(0, nl)).replace(/\r$/, '');
     const headers = headerLine.split(',');
     const v = validate(headers);
     if (!v.ok) return { ok: false, error: v.error || 'missing_columns', missing: v.missing };
@@ -66,16 +67,18 @@
     await conn.query(`CREATE TABLE ${table}_all AS SELECT * FROM read_csv_auto('${v.subject}.csv', header=true, all_varchar=true)`);
 
     const P = v.prefix;
-    const yrRow = (await conn.query(`SELECT max(CAST("GROWTH_YEAR" AS INTEGER)) AS y FROM ${table}_all`)).toArray()[0];
+    const yrRow = (await conn.query(`SELECT max(TRY_CAST("GROWTH_YEAR" AS INTEGER)) AS y FROM ${table}_all`)).toArray()[0];
     const latestYear = yrRow && yrRow.y != null ? Number(yrRow.y) : null;
     if (latestYear == null) return { ok: false, error: 'no_year' };
 
     // Canonical, typed, latest-year-only table. Flags normalized to booleans.
+    // TRY_CAST throughout: one malformed GRADE/GROWTH_YEAR value should drop
+    // that row, not surface as a raw DuckDB exception.
     await conn.query(`
       CREATE TABLE ${table} AS
       SELECT
         "SCHOOL_CODE"::VARCHAR AS school_id,
-        CAST("GRADE" AS INTEGER) AS grade,
+        TRY_CAST("GRADE" AS INTEGER) AS grade,
         CAST("${P}_Z_RESIDUAL" AS DOUBLE) AS residual,
         TRY_CAST("${P}_Z_RESIDUAL_SE" AS DOUBLE) AS residual_se,
         TRY_CAST("${P}_Z_T" AS DOUBLE) AS status,
@@ -86,7 +89,7 @@
         lower(trim("WHITE")) IN ('y','1','t','true','yes') AS white,
         lower(trim("HISPANIC")) IN ('y','1','t','true','yes') AS hispanic
       FROM ${table}_all
-      WHERE CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
+      WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
         AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
     `);
 

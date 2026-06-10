@@ -82,7 +82,7 @@
 <script type="text/babel" src="app-shell.jsx"></script>
 <script type="text/babel" src="demographics.jsx"></script>
 <script type="text/babel" src="achievement.jsx"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" integrity="sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ" crossorigin="anonymous"></script>
 <script type="text/babel" src="export.jsx"></script>
 </head>
 <body>
@@ -111,14 +111,24 @@
 // constant if the fetch fails so the app still renders sensibly.
 (async function bootstrap() {
   try {
-    const res = await fetch('reference/20260512_conversion_factors.json', { cache: 'no-store' });
+    const res = await fetch('reference/conversion_factors.json', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     window.CONVERSION_FACTORS = await res.json();
   } catch (e) {
     console.warn('Conversion factors load failed, using fallback:', e);
     window.CONVERSION_FACTORS = null;
   }
-  ReactDOM.createRoot(document.getElementById('root')).render(<window.AppBody />);
+  try {
+    if (!window.AppBody) throw new Error('app scripts failed to compile or load');
+    ReactDOM.createRoot(document.getElementById('root')).render(<window.AppBody />);
+  } catch (e) {
+    // Don't strand the user on the pulsing "Loading" loader forever.
+    console.error('GrowthLens failed to start:', e);
+    const label = document.querySelector('.gl-loader-label');
+    if (label) label.textContent = 'Something went wrong while loading — please reload the page';
+    const rule = document.querySelector('.gl-loader-rule');
+    if (rule) rule.style.animation = 'none';
+  }
 })();
 </script>
 </body>

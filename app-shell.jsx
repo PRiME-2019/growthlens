@@ -85,10 +85,15 @@ function AppBody() {
   // Only allow switching to a subject the store actually has (demo is Math-only;
   // ELA becomes available once an ELA file is uploaded). Guards the no-op toggle.
   const setSubject = (s) => { if (!window.GLStore || window.GLStore.available(s)) setSubjectState(s); };
-  // Drive the SD ↔ weeks-of-learning conversion off the active subject so
-  // forest-shared's fmtVal / zToWeeks pick up the right effect-size factor
-  // without each call site having to thread it through props.
-  window.WOL_OPTS = { year: 2025, subject };
+  // Drive the SD ↔ weeks-of-learning conversion off the active subject — and the
+  // active dataset's growth year once a real file is loaded — so forest-shared's
+  // fmtVal / zToWeeks pick up the right effect-size factor without each call
+  // site having to thread it through props.
+  const activeMeta = window.GLStore && window.GLStore.getActiveMeta();
+  window.WOL_OPTS = {
+    year: activeMeta && typeof activeMeta.latestYear === 'number' ? activeMeta.latestYear : 2025,
+    subject,
+  };
 
   // Scroll to the top whenever the user changes analysis tabs so the new
   // page reads from its header; pairs with ControlsCard's scroll handler
@@ -214,7 +219,7 @@ function LeftNav({ page, setPage }) {
   );
 }
 
-function NavItem({ label, href, external, pdf, placeholder, soon }) {
+function NavItem({ label, href, external, placeholder, soon }) {
   if (placeholder) {
     return (
       <span style={{
@@ -243,13 +248,6 @@ function NavItem({ label, href, external, pdf, placeholder, soon }) {
           color: SLU.ink, textDecoration: 'none', borderRadius: 6,
         }}>
       <span style={{ flex: 1 }}>{label}</span>
-      {pdf && (
-        <span style={{
-          fontSize: 9.5, fontFamily: LABEL, letterSpacing: 0.8, textTransform: 'uppercase',
-          color: SLU.mute, fontWeight: 700,
-          padding: '1px 5px', border: `1px solid ${SLU.rule}`, borderRadius: 3,
-        }}>PDF</span>
-      )}
       {external && (
         <svg width="11" height="11" viewBox="0 0 11 11" style={{ color: SLU.mute }}>
           <path d="M4 2 H9 V7 M9 2 L4 7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
@@ -348,7 +346,7 @@ function LandingPage({ ctx }) {
         <LandingCard
           eyebrow="01 · Bring data"
           title="Upload your file"
-          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist and a sample file waiting on the upload page."
+          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist waiting on the upload page."
           cta="Go to upload →"
           onClick={() => ctx.setPage('upload')}
           accent={SLU.blue}
@@ -427,27 +425,42 @@ function UploadPage({ ctx }) {
   const [files, setFiles] = React.useState({ ela: null, math: null });
   const [stages, setStages] = React.useState({ ela: 'idle', math: 'idle' });
   const [errors, setErrors] = React.useState({ ela: null, math: null });
+  // Ignore a second file dropped on a slot while its first is still parsing —
+  // two computeSlice runs racing on the same t_<subject> table would interleave.
+  const inFlight = React.useRef({ ela: false, math: false });
   // Real pipeline: read+validate the file in DuckDB-WASM, compute the figure
   // shapes, and register them in the store. Nothing leaves the browser.
   const onFile = async (key, file) => {
-    setFiles((f) => ({ ...f, [key]: file.name }));
-    setStages((s) => ({ ...s, [key]: 'parsing' }));
-    setErrors((e) => ({ ...e, [key]: null }));
-    if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
-      setStages((s) => ({ ...s, [key]: 'idle' }));
-      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
-      return;
-    }
+    if (inFlight.current[key]) return;
+    inFlight.current[key] = true;
     try {
-      const conn = await window.GL.getConnection();
-      const res = await window.GLIngest.loadSubjectFile(file, conn, key);
-      if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
-      const shapes = await window.GLCompute.computeSlice(key);
-      window.GLStore.putUploaded(key, shapes, res.meta);
-      setStages((s) => ({ ...s, [key]: 'ready' }));
-    } catch (err) {
-      setStages((s) => ({ ...s, [key]: 'idle' }));
-      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+      setFiles((f) => ({ ...f, [key]: file.name }));
+      setErrors((e) => ({ ...e, [key]: null }));
+      if (file.size > 50 * 1024 * 1024) {
+        // Matches the FAQ's promised "up to about 50 MB" limit.
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'too_large', message: 'That file is over the 50 MB limit. Most district exports land between 5 and 20 MB — double-check this is one subject for one district.' } }));
+        return;
+      }
+      setStages((s) => ({ ...s, [key]: 'parsing' }));
+      if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
+        return;
+      }
+      try {
+        const conn = await window.GL.getConnection();
+        const res = await window.GLIngest.loadSubjectFile(file, conn, key);
+        if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
+        const shapes = await window.GLCompute.computeSlice(key);
+        window.GLStore.putUploaded(key, shapes, res.meta);
+        setStages((s) => ({ ...s, [key]: 'ready' }));
+      } catch (err) {
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+      }
+    } finally {
+      inFlight.current[key] = false;
     }
   };
   const setStage = (key, v) => setStages((s) => ({ ...s, [key]: v }));
@@ -588,11 +601,15 @@ function UploadPage({ ctx }) {
 }
 
 function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, error, placeholder }) {
+  // Remember the last non-dragover stage so a drag that passes over (or misses)
+  // a loaded zone restores "ready" instead of clobbering it back to idle.
+  const lastStable = React.useRef('idle');
+  if (stage !== 'dragover') lastStable.current = stage;
   const onDrop = (e) => {
     e.preventDefault();
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) onFile(subjectKey, f);
-    else setStage('idle');
+    else setStage(lastStable.current);
   };
   const ready = stage === 'ready';
   const errMsg = !error ? null
@@ -600,12 +617,12 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
     : error.error === 'missing_columns' ? 'This file is missing a few columns we need: ' + (error.missing || []).join(', ') + '. Check the “What your file should include” list and try again.'
     : error.error === 'no_prefix' ? 'We couldn’t find a growth column (one ending in *_Z_RESIDUAL). This usually means it isn’t a DESE growth file — double-check the export.'
     : error.error === 'no_rows_latest' ? `We didn’t find any students for the most recent year (${error.latestYear ?? '—'}). Make sure that year’s data is included.`
-    : error.error === 'no_year' ? 'We couldn’t find a GROWTH_YEAR column, so we can’t tell which school year this is. Please add it and try again.'
+    : error.error === 'no_year' ? 'We couldn’t read any year values from the GROWTH_YEAR column, so we can’t tell which school year this is. Check that column’s values and try again.'
     : (error.message || 'We couldn’t read this file. Please double-check it’s the right export and try again.');
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setStage('dragover'); }}
-      onDragLeave={() => setStage(stage === 'dragover' ? 'idle' : stage)}
+      onDragOver={(e) => { e.preventDefault(); if (stage !== 'dragover') setStage('dragover'); }}
+      onDragLeave={() => { if (stage === 'dragover') setStage(lastStable.current); }}
       onDrop={onDrop}
       style={{
         background: stage === 'dragover' ? 'rgba(0, 61, 165, 0.04)'
@@ -652,7 +669,12 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
           fontSize: 12, fontWeight: 700, cursor: 'pointer',
         }}>
           {ready ? 'Replace' : 'Choose file'}
-          <input type="file" accept=".csv,text/csv" style={{ display: 'none' }}
+          {/* Visually hidden (not display:none) so keyboard users can Tab to it
+              and press Enter to open the file picker. */}
+          <input type="file" accept=".csv,text/csv"
+                 aria-label={`Choose ${subjectLabel} file`}
+                 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+                          overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}
                  onChange={(e) => {
                    const f = e.target.files && e.target.files[0];
                    if (f) onFile(subjectKey, f);
@@ -727,7 +749,6 @@ function ColumnTable({ rows }) {
 }
 
 function GapPage({ sliceLabel, ctx }) {
-  // Subject is fixed to ELA while only ELA data exists — see SUBJECTS comment above.
   return (
     <>
       <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
@@ -989,7 +1010,7 @@ function DistributionStrip({ schools, districtGap, tauSD }) {
       ))}
       <text x={x(districtGap)} y={y - 14} fontSize={9} fontFamily={FONT} fill={SLU.gold}
             textAnchor="middle" fontWeight={600}>
-        district +{districtGap.toFixed(2)}
+        district {(districtGap >= 0 ? '+' : '−') + Math.abs(districtGap).toFixed(2)}
       </text>
       {schools.map(s => {
         const cx = Math.max(3, Math.min(width - 3, x(s.shrunk_gap)));
@@ -1058,7 +1079,8 @@ function OverviewCardScan() {
         <div style={{ flex: '1 1 520px', minWidth: 380 }}>
           <StatLabel>Average growth by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— compared with the district average (SD)</span></StatLabel>
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
-            {byGrade.map(({ g, n, schoolCount, mean }) => {
+            {/* Grades absent from the data would render misleading "▲0.00 · n=0" boxes. */}
+            {byGrade.filter((b) => b.n > 0).map(({ g, n, schoolCount, mean }) => {
               const abs = Math.abs(mean).toFixed(2);
               const above = mean >= 0;
               // Same glyph-color rule as HeatmapH1: invert to white when the
@@ -1230,7 +1252,7 @@ function CSelect({ value, onChange, options, label }) {
 // Controls cards lay out their groups in a horizontal grid. Each group keeps
 // its label + a vertical stack of its individual controls. Wraps at narrow
 // widths so groups never crush into one another.
-function ControlsGrid({ children, columns = 3 }) {
+function ControlsGrid({ children }) {
   return (
     <div style={{
       display: 'grid',
@@ -1248,11 +1270,15 @@ const METHOD_OPT_HINTS = {
 };
 const UNIT_HINT = 'How to show the numbers. SD is a standard scale compared with the district average. Weeks converts that into about how many weeks of learning it represents, using Missouri MAP growth norms.';
 
+// Mirrors SORTS_FINAL in forest-final.jsx (the live source of options); only
+// used if that file failed to load. Keys must stay in sync — an unknown key
+// would crash the forest's sort lookup.
 const SORTS_FALLBACK = {
-  gap_desc: 'Gap (largest first)',
-  gap_asc:  'Gap (smallest first)',
-  alpha:    'School (A–Z)',
-  n_desc:   'Sample size',
+  gap_desc: 'Gap (largest →)',
+  gap_abs:  '|Gap| (largest →)',
+  alpha:    'School ID',
+  shrink:   'Nudged the most → least',
+  n:        'Total students (largest →)',
 };
 const THRESH_FALLBACK = {
   inline:  'Mark in place (dimmed)',

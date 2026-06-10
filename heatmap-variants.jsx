@@ -17,26 +17,29 @@
 const GRADES = [3, 4, 5, 6, 7, 8];
 
 function getResidual(s, g) { return s.grades[g]; }
+// n-weighted, so sorting by Overall matches the n-weighted Overall column the
+// user sees (an unweighted mean can rank rows differently than the displayed value).
 function rowMean(s) {
-  const xs = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok).map(c => c.r);
-  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const cells = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok);
+  const n = cells.reduce((a, c) => a + c.n, 0);
+  return n ? cells.reduce((a, c) => a + c.r * c.n, 0) / n : 0;
 }
-function rowVar(s) {
-  const xs = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok).map(c => c.r);
-  if (xs.length < 2) return 0;
-  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
-  return xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1);
+// Suppressed (ok:false) cells sort as missing — their hidden residuals shouldn't rank rows.
+function cellR(s, g, missing) {
+  const c = s.grades[g];
+  return c && c.ok ? c.r : missing;
 }
 
+// Every key here must be reachable by clicking a column header (ColumnHeader
+// cycles desc ↔ asc per column); there is no separate sort dropdown.
 const ROW_SORTS = {
   alpha: { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
   alpha_rev: { label: 'School ID (Z → A)', fn: (a, b) => b.school_id.localeCompare(a.school_id) },
   mean_desc: { label: 'Overall (strongest first)', fn: (a, b) => rowMean(b) - rowMean(a) },
   mean_asc:  { label: 'Overall (weakest first)', fn: (a, b) => rowMean(a) - rowMean(b) },
-  var_desc:  { label: 'Most uneven across grades', fn: (a, b) => rowVar(b) - rowVar(a) },
   ...Object.fromEntries(GRADES.flatMap(g => [
-    [`g${g}_desc`, { label: `Grade ${g} (strongest first)`, fn: (a, b) => (b.grades[g]?.r ?? -Infinity) - (a.grades[g]?.r ?? -Infinity) }],
-    [`g${g}_asc`,  { label: `Grade ${g} (weakest first)`, fn: (a, b) => (a.grades[g]?.r ??  Infinity) - (b.grades[g]?.r ??  Infinity) }],
+    [`g${g}_desc`, { label: `Grade ${g} (strongest first)`, fn: (a, b) => cellR(b, g, -Infinity) - cellR(a, g, -Infinity) }],
+    [`g${g}_asc`,  { label: `Grade ${g} (weakest first)`, fn: (a, b) => cellR(a, g, Infinity) - cellR(b, g, Infinity) }],
   ])),
 };
 const MIN_N = 10;
@@ -155,7 +158,7 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
                   borderBottom: `1px solid ${SLU.rule}`, paddingBottom: 4, marginBottom: 2 }}>
       <HCell width={idW} align="left" uppercase descKey="alpha" ascKey="alpha_rev">School</HCell>
       {GRADES.map(g => (
-        <HCell key={g} width={cellW} grow={stretch} descKey={`g${g}_desc`} ascKey={`g${g}_asc`}>Grade {g}</HCell>
+        <HCell key={g} width={cellW} grow={stretch} descKey={`g${g}_desc`} ascKey={`g${g}_asc`}>{`Grade ${g}`}</HCell>
       ))}
       {showOverall && (
         <HCell width={cellW} grow={stretch} descKey="mean_desc" ascKey="mean_asc">Overall</HCell>
@@ -181,19 +184,17 @@ function ScaleLegend() {
 }
 
 // Display transforms:
-//   estimate: 'raw' / 'shrunk' — currently descriptive only (see comment below).
+//   estimate: 'raw' / 'shrunk' — reserved seam, no effect yet. The dataset
+//             stores one (raw) residual per cell; until raw/shrunken pairs are
+//             available end-to-end (see GAPS_DATA for the forest's real
+//             implementation), the figure renders the stored value and the
+//             subtitle describes exactly that.
 //   unit:     'z' shows SD units; 'weeks' converts via grade × subject × year
 //             factors (per-cell grade for the matrix, grade-averaged for the
 //             Overall column).
 // Color scale stays in SD space so the legend remains comparable across units.
-
-// The synthetic heatmap dataset stores one residual per cell. Until raw/
-// shrunken pairs are available end-to-end (see GAPS_DATA for the forest's
-// real implementation), the toggle is descriptive only — we render the stored
-// value and let the subtitle indicate which estimator it represents.
 function transformR(c /* , estimate */) {
-  if (!c || !c.ok) return c;
-  return { ...c, _rDisplay: c.r };
+  return c;
 }
 function formatUnit(r, unit, opts) {
   if (unit === 'weeks') {
@@ -201,7 +202,10 @@ function formatUnit(r, unit, opts) {
     const sign = w > 0 ? '+' : (w < 0 ? '−' : '');
     return `${sign}${Math.abs(w).toFixed(0)}w`;
   }
-  return fmt2plain(r);
+  // Explicit sign both ways, matching weeks mode — toFixed alone would render
+  // "▼ -0.08" next to an unsigned "▲ 0.06".
+  const sign = r > 0 ? '+' : (r < 0 ? '−' : '');
+  return `${sign}${Math.abs(r).toFixed(2)}`;
 }
 
 function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}) {
@@ -218,7 +222,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
   return (
     <HeatmapShell
       title="How each grade is doing, school by school"
-      subtitle={`${estimate === 'raw' ? 'Each school’s own results' : 'Shrunken results (nudged toward the district average so a few students can’t swing the result)'} vs. the district average. Blue = faster than expected, rust = slower · ${unit === 'weeks' ? 'weeks of learning vs. district' : 'SD vs. district average'}.`}
+      subtitle={`Each school’s own results vs. the district average. Blue = faster than expected, rust = slower · ${unit === 'weeks' ? 'weeks of learning vs. district' : 'SD vs. district average'}.`}
       controls={<CommonControls nMode={nMode} setNMode={setNMode} />}
       footer={
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -226,6 +230,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <SuppressedSwatch /> too few students to read reliably (fewer than {MIN_N})
           </span>
+          <span style={{ color: SLU.mute }}>Blank cell = grade not served at that school.</span>
           <span style={{ color: SLU.mute }}>Click any column heading to sort.</span>
         </div>
       }

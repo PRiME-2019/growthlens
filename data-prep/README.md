@@ -4,7 +4,7 @@ Build pipeline for GrowthLens reference data. Not part of the deployed app — t
 
 ## Layout
 
-- `inputs/` — raw data (CSV). Committed to source control; this is the source of truth.
+- `inputs/` — raw data (DESE `.xls`/`.xlsx` statewide-assessment workbooks). Committed to source control; this is the source of truth.
 - `scripts/` — R scripts that transform inputs into outputs.
 - `outputs/` — generated JSON. Gitignored; regenerable from `inputs/` + `scripts/`.
 - `notes/` — methodology documentation.

@@ -28,6 +28,14 @@
   // predicate on the canonical boolean column (dbCol), not the raw DESE header (col).
   function predicate(side) { return `${side.dbCol} = ${side.val ? 'TRUE' : 'FALSE'}`; }
 
+  // Down-sample outliers evenly across the sorted list so both tails survive —
+  // a plain slice(0, k) of the ascending list keeps only the most-negative end.
+  function sampleOutliers(outliers, k = 8) {
+    if (!outliers || outliers.length <= k) return outliers || [];
+    const step = Math.ceil(outliers.length / k);
+    return outliers.filter((_, i) => i % step === 0);
+  }
+
   async function buildGaps(conn, table, subject) {
     const byDemo = {};
     for (const sg of I.SUBGROUPS) {
@@ -76,6 +84,10 @@
 
   async function buildDemo(conn, table) {
     // District-wide + per-school residual distributions for each subgroup side.
+    // districtMean is the dashed reference line on the Demographics figure —
+    // one mean residual over the whole table (≈0 for state-standardized residuals).
+    const dRow = (await conn.query(`SELECT avg(residual) AS m FROM ${table}`)).toArray()[0];
+    const districtMean = dRow && dRow.m != null ? Number(dRow.m) : 0;
     const demoData = {}, bySchool = {};
     for (const sg of I.SUBGROUPS) {
       const groups = [];
@@ -86,16 +98,16 @@
         const all = rows.map(r => Number(r.residual));
         const stat = S.summarize(all);
         if (!stat) continue; // empty subgroup side (no students) — skip rather than spread null
-        groups.push({ key, label, ...stat, outliers: stat.outliers.slice(0, 8) });
+        groups.push({ key, label, ...stat, outliers: sampleOutliers(stat.outliers) });
         const bySch = {};
         for (const r of rows) { (bySch[r.school_id] = bySch[r.school_id] || []).push(Number(r.residual)); }
         for (const [sid, vals] of Object.entries(bySch)) {
           const st = S.summarize(vals);
           if (!st) continue; // skip empty per-school side
-          (perSchool[sid] = perSchool[sid] || []).push({ key, label, ...st, outliers: st.outliers.slice(0, 8) });
+          (perSchool[sid] = perSchool[sid] || []).push({ key, label, ...st, outliers: sampleOutliers(st.outliers) });
         }
       }
-      demoData[sg.key] = { label: sg.label, short: sg.key.toUpperCase(), groups };
+      demoData[sg.key] = { label: sg.label, short: sg.key.toUpperCase(), groups, districtMean };
       bySchool[sg.key] = {};
       for (const [sid, gs] of Object.entries(perSchool)) bySchool[sg.key][sid] = { groups: gs };
     }
@@ -104,7 +116,8 @@
 
   async function buildAchievement(conn, table) {
     // Student points (raw only) + school points (status vs overall residual, raw + shrunk overall).
-    const students = (await conn.query(`SELECT school_id, status AS x, residual AS y FROM ${table}`)).toArray()
+    // Rows with no status score would otherwise plot at x=0 (Number(null) === 0).
+    const students = (await conn.query(`SELECT school_id, status AS x, residual AS y FROM ${table} WHERE status IS NOT NULL`)).toArray()
       .map((r, i) => ({ school_id: r.school_id, school_idx: 0, hue: 0, x: Number(r.x), y_raw: Number(r.y) }));
     const schoolAgg = await (async () => {
       const c = await cellsOverall(conn, table);

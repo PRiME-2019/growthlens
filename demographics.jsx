@@ -30,7 +30,9 @@ function DemographicsPage({ sliceLabel, ctx }) {
   const districtData = dd[demoVar];
   const groups = districtData ? districtData.groups : [];
   const label = districtData ? districtData.label : '';
-  const districtMean = districtData ? districtData.districtMean : 0;
+  // Default to 0 (the residual scale's natural center) if the dataset doesn't
+  // carry a districtMean, so the reference line never silently disappears.
+  const districtMean = (districtData && districtData.districtMean != null) ? districtData.districtMean : 0;
 
   return (
     <>
@@ -92,7 +94,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
   const unitLabel = unit === 'weeks' ? 'weeks' : 'SD';
   const fmt = (v) => {
     const x = toUnit(v);
-    return (x >= 0 ? '+' : '') + x.toFixed(2);
+    return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
   };
 
   // x scale tracks actual residual values — not forced symmetric around 0.
@@ -101,7 +103,14 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
     xMin = Math.min(xMin, g.whiskerLo, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
     xMax = Math.max(xMax, g.whiskerHi, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
   });
-  const span = xMax - xMin;
+  let span = xMax - xMin;
+  if (!(span > 0) || !isFinite(span)) {
+    // Degenerate domain (all values identical, or no whisker data at all) —
+    // widen it rather than divide by zero into NaN coordinates.
+    xMin = (isFinite(xMin) ? xMin : 0) - 0.5;
+    xMax = (isFinite(xMax) ? xMax : 0) + 0.5;
+    span = xMax - xMin;
+  }
   const pad = span * 0.06;
   xMin -= pad;
   xMax += pad;
@@ -148,7 +157,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
             Across the whole district
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            box = the middle half of students, line = the typical student, dots = individual outliers
+            box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
           </div>
         </div>
         <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,

@@ -53,6 +53,31 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
   const below = all.filter(s => !s.meets_min_cell);
   const visible = threshold === 'hide' ? meets : all;
 
+  // Axis domain — auto-ranged from this dataset rather than a fixed constant,
+  // so the re-signed demo (all-negative gaps) and real uploads both fill the
+  // plot instead of huddling at one edge. The domain covers BOTH raw and
+  // shrunken CIs, plus 0 and the district line, so toggling Method tweens
+  // positions on a stable scale instead of rescaling the whole plot.
+  const axis = React.useMemo(() => {
+    const lows = [], highs = [];
+    for (const s of data.schools) {
+      lows.push(s.raw_ci95[0], s.shrunk_ci95[0]);
+      highs.push(s.raw_ci95[1], s.shrunk_ci95[1]);
+    }
+    const lo = Math.min(0, data.meta.districtGap, ...lows);
+    const hi = Math.max(0, data.meta.districtGap, ...highs);
+    const pad = Math.max(0.04, (hi - lo) * 0.06);
+    const min = Math.floor((lo - pad) * 20) / 20;
+    const max = Math.ceil((hi + pad) * 20) / 20;
+    const span = max - min;
+    const step = span > 2 ? 0.5 : span > 0.9 ? 0.25 : span > 0.35 ? 0.1 : 0.05;
+    const ticks = [];
+    for (let t = Math.ceil(min / step) * step; t <= max + 1e-9; t += step) {
+      ticks.push(Math.round(t * 100) / 100);
+    }
+    return { min, max, ticks };
+  }, [data]);
+
   const PLOT_W = 560;
   const ROW_H = 26;
 
@@ -85,7 +110,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
 
         {/* Header row */}
         {view === 'chart' && (
-          <HeaderRow plotW={PLOT_W} mode={mode} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} districtGap={data.meta.districtGap} />
+          <HeaderRow plotW={PLOT_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
         )}
 
         {/* Body */}
@@ -97,17 +122,17 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
           <div>
             {threshold === 'section' ? (
               <>
-                {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
+                {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
                 {below.length > 0 && (
                   <>
                     <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
-                    {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
+                    {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
                   </>
                 )}
               </>
             ) : (
               visible.map((s, i) => (
-                <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} plotW={PLOT_W} rowH={ROW_H}
+                <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H}
                             stripe={i % 2 === 1} dimmed={threshold === 'inline' && !s.meets_min_cell} />
               ))
             )}
@@ -119,11 +144,11 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
                       display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 11.5, color: SLU.mute, lineHeight: 1.5 }}>
           {view === 'chart' ? (
             <>
-              <LegendSwatch />
+              <LegendSwatch groupA={data.meta.groupA} groupB={data.meta.groupB} />
               <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold dashed line</span> = the district-wide average.</span>
               <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about how many weeks of learning each step on the scale stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, 2025 average across grades 3–8; varies by grade — see methods).</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about how many weeks of learning each step on the scale stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, {(() => { const fy = wolFactorYear({ subject: data.meta.subject }); return fy ? `${fy} grade 4–8 average` : 'typical MAP average'; })()}; varies by grade — see methods).</span>
               )}
             </>
           ) : (
@@ -132,7 +157,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
               <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>B</b> = how far this school was nudged toward the district average (0 = pulled all the way, 1 = left as measured).</span>
               <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
               {unit === 'weeks' && (
-                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = about how many weeks of learning each step stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, 2025 average across grades 3–8).</span>
+                <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = about how many weeks of learning each step stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, {(() => { const fy = wolFactorYear({ subject: data.meta.subject }); return fy ? `${fy} grade 4–8 average` : 'typical MAP average'; })()}).</span>
               )}
             </>
           )}
@@ -275,7 +300,7 @@ function TD({ children, align = 'right', mono, bold, mute, color }) {
   );
 }
 
-function HeaderRow({ plotW, mode, unit, groupA, groupB, districtGap }) {
+function HeaderRow({ plotW, unit, groupA, groupB, axis }) {
   const colHead = (label, w, align = 'right') => (
     <div style={{ width: w, padding: '0 10px', textAlign: align,
                   fontSize: 10.5, fontFamily: LABEL, color: SLU.mute, textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
@@ -289,7 +314,7 @@ function HeaderRow({ plotW, mode, unit, groupA, groupB, districtGap }) {
         {colHead(`n ${groupA}`, 60)}
         {colHead(`n ${groupB}`, 60)}
         <div style={{ width: plotW, padding: '0 8px' }}>
-          <UnitAxis width={plotW - 16} groupA={groupA} groupB={groupB} unit={unit} />
+          <UnitAxis width={plotW - 16} groupA={groupA} groupB={groupB} unit={unit} axis={axis} />
         </div>
       </div>
     </div>
@@ -298,9 +323,9 @@ function HeaderRow({ plotW, mode, unit, groupA, groupB, districtGap }) {
 
 // Custom axis that re-labels ticks based on unit. Tick positions are still in z-domain;
 // only the rendered text changes, since z↔weeks is a linear scale.
-function UnitAxis({ width, groupA, groupB, unit }) {
-  // Same tick positions in z; only labels change since weeks ≈ 12·z is linear.
-  const ticks = AXIS.ticks;
+function UnitAxis({ width, groupA, groupB, unit, axis }) {
+  const ax = axis || AXIS;
+  const xs = (x) => ((x - ax.min) / (ax.max - ax.min)) * width;
   const fmtTick = (t) => {
     if (unit === 'weeks') {
       const w = Math.round(zToWeeks(t));
@@ -311,17 +336,17 @@ function UnitAxis({ width, groupA, groupB, unit }) {
   const height = 28;
   return (
     <svg width={width} height={height} style={{ display: 'block' }}>
-      <line x1={xScale(0, width)} x2={xScale(0, width)} y1={height - 6} y2={height} stroke={SLU.ink} strokeWidth={1} />
-      {ticks.map(t => (
+      <line x1={xs(0)} x2={xs(0)} y1={height - 6} y2={height} stroke={SLU.ink} strokeWidth={1} />
+      {ax.ticks.map(t => (
         <g key={t}>
-          <line x1={xScale(t, width)} x2={xScale(t, width)} y1={height - 4} y2={height} stroke={SLU.mute} strokeWidth={1} />
-          <text x={xScale(t, width)} y={height - 8} fontSize={10} fontFamily={MONO} fill={SLU.ink2} textAnchor="middle">
+          <line x1={xs(t)} x2={xs(t)} y1={height - 4} y2={height} stroke={SLU.mute} strokeWidth={1} />
+          <text x={xs(t)} y={height - 8} fontSize={10} fontFamily={MONO} fill={SLU.ink2} textAnchor="middle">
             {fmtTick(t)}
           </text>
         </g>
       ))}
-      <text x={xScale(0, width) - 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end">◀ favors {groupB}</text>
-      <text x={xScale(0, width) + 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="start">favors {groupA} ▶</text>
+      <text x={xs(0) - 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end">◀ favors {groupB}</text>
+      <text x={xs(0) + 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="start">favors {groupA} ▶</text>
       <text x={width} y={12} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end" fontStyle="italic">
         {unit === 'weeks' ? 'weeks of learning' : 'standard scale (SD)'}
       </text>
@@ -331,18 +356,19 @@ function UnitAxis({ width, groupA, groupB, unit }) {
 
 // (UnitToggle removed — units live in the shared Controls card.)
 
-function ForestRow({ s, mode, unit, plotW, rowH, stripe, dimmed }) {
+function ForestRow({ s, mode, unit, axis, plotW, rowH, stripe, dimmed }) {
   const [hover, setHover] = React.useState(false);
+  const ax = axis || AXIS;
   const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
   const ci = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
   const innerW = plotW - 16;
-  const xPct = (x) => `${((x - AXIS.min) / (AXIS.max - AXIS.min)) * 100}%`;
+  const xPct = (x) => `${((x - ax.min) / (ax.max - ax.min)) * 100}%`;
   const left = xPct(ci[0]);
   const right = xPct(ci[1]);
   const dotX = xPct(gap);
   const opacity = dimmed ? 0.42 : 1;
   const isNeg = gap < 0;
-  const dotXNum = ((gap - AXIS.min) / (AXIS.max - AXIS.min)) * innerW;
+  const dotXNum = ((gap - ax.min) / (ax.max - ax.min)) * innerW;
   const tipOnLeft = dotXNum > innerW * 0.55;
 
   return (
@@ -365,7 +391,7 @@ function ForestRow({ s, mode, unit, plotW, rowH, stripe, dimmed }) {
            onFocus={() => setHover(true)} onBlur={() => setHover(false)}
            tabIndex={0}
            role="img"
-           aria-label={`${s.school_id}: gap ${fmtVal(gap, unit)} ${unit === 'weeks' ? 'weeks' : 'SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
+           aria-label={`${s.school_id}: gap ${fmtVal(gap, unit)}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
            style={{ width: plotW, padding: '0 8px', position: 'relative', height: rowH,
                     background: hover ? 'rgba(0, 61, 165, 0.04)' : 'transparent',
                     cursor: 'crosshair', outline: 'none',
@@ -443,34 +469,15 @@ function Dot({ leftPct, gap, opacity }) {
   );
 }
 
-function NumCell({ w, value, dim, mute, bold, color, animated }) {
-  const c = color || (mute ? SLU.mute : SLU.ink2);
+function NumCell({ w, value, dim, mute }) {
   return (
     <div style={{
       width: w, padding: '0 10px', textAlign: 'right',
-      fontFamily: MONO, fontSize: 11.5, fontWeight: bold ? 600 : 400,
-      color: dim ? SLU.mute : c,
-      transition: animated ? `color ${TRANSITION}` : 'none',
+      fontFamily: MONO, fontSize: 11.5,
+      color: dim ? SLU.mute : (mute ? SLU.mute : SLU.ink2),
     }}>
-      {animated ? <AnimatedNum value={value} /> : value}
+      {value}
     </div>
-  );
-}
-
-// Crossfades old → new so the digit change reads as part of the same motion as the bars.
-function AnimatedNum({ value }) {
-  const [shown, setShown] = React.useState(value);
-  const [opacity, setOpacity] = React.useState(1);
-  React.useEffect(() => {
-    if (value === shown) return;
-    setOpacity(0);
-    const t = setTimeout(() => { setShown(value); setOpacity(1); }, 180);
-    return () => clearTimeout(t);
-  }, [value]);
-  return (
-    <span style={{ display: 'inline-block', transition: 'opacity 180ms ease-out', opacity }}>
-      {shown}
-    </span>
   );
 }
 
@@ -525,15 +532,17 @@ function Tooltip({ schoolId, gap, ci, unit, mode, n_a, n_b, B, anchorLeftPct, ti
   );
 }
 
-function LegendSwatch() {
+// Positive gap (circle) = the focal group (A) has the higher mean residual;
+// negative (triangle) = the reference group (B) does. Matches the axis guides.
+function LegendSwatch({ groupA, groupB }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <svg width="11" height="11" viewBox="-5.5 -5.5 11 11"><circle r="4" fill={SLU.pos} stroke="#fff" strokeWidth="1" /></svg>
-      <span>● gap favors non-FRL</span>
+      <span>● gap favors {groupA}</span>
       <svg width="11" height="11" viewBox="-5.5 -5.5 11 11" style={{ marginLeft: 8 }}>
         <polygon points="0,4 -4,-3 4,-3" fill={SLU.neg} stroke="#fff" strokeWidth="1" />
       </svg>
-      <span>▼ gap favors FRL</span>
+      <span>▼ gap favors {groupB}</span>
     </span>
   );
 }

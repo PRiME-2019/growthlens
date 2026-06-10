@@ -277,7 +277,9 @@
     const rng = seeded(15000 + si * 19);
     const schoolMean = computeSchoolMean(s);
     const baseAch = 50 + schoolMean * 6 + gauss(rng) * 4;
-    const totalN = Object.values(s.grades || {}).filter(c => c && c.ok).reduce((a, c) => a + c.n, 0);
+    // Count ALL cells, not just ok ones — the small school's dot showed 'n=0'
+    // (and fell back to a fake radius) when every grade was below threshold.
+    const totalN = Object.values(s.grades || {}).filter(c => c).reduce((a, c) => a + c.n, 0);
     const root = SCHOOL_NAME_ROOTS[si % SCHOOL_NAME_ROOTS.length];
     const gradeKeys = Object.keys(s.grades || {});
     const type = (gradeKeys.includes('6') || gradeKeys.includes('7') || gradeKeys.includes('8')) ? 'Middle' : 'Elementary';

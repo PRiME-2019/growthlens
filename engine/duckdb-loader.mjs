@@ -24,9 +24,18 @@ export function getDB() {
   }
   return _dbPromise;
 }
-export async function getConnection() {
-  const db = await getDB();
-  return db.connect();
+let _connPromise = null;
+
+export function getConnection() {
+  // One shared connection — callers issue sequential queries, and opening a
+  // fresh connection per call leaked them (nothing ever closed one).
+  if (!_connPromise) {
+    _connPromise = getDB().then((db) => db.connect()).catch((err) => {
+      _connPromise = null; // same retry semantics as getDB
+      return Promise.reject(err);
+    });
+  }
+  return _connPromise;
 }
 
 window.GL = window.GL || {};

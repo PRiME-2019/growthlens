@@ -11,7 +11,7 @@
 // GNU Affero General Public License for more details.
 
 // Export page — builds a PPTX deck of key GrowthLens results from window data.
-// Uses PptxGenJS (loaded from CDN in GrowthLens.html) to generate native
+// Uses PptxGenJS (loaded from CDN in index.html) to generate native
 // PowerPoint shapes/text — fully editable downstream.
 //
 // The page itself shows preview cards approximating each slide so a user can
@@ -20,8 +20,8 @@
 function ExportPage({ ctx }) {
   const data = window.GAPS_DATA;
   const heat = window.HEATMAP_DATA;
-  if (!data) return null;
-  const { meta, schools } = data;
+  // Hooks must run unconditionally — keep them all above the no-data return.
+  const schools = data ? data.schools : [];
 
   // Slice + summary stats reused on multiple slides.
   const summary = React.useMemo(() => {
@@ -32,14 +32,21 @@ function ExportPage({ ctx }) {
     const meetingThreshold = eligible.length;
     return { sorted, top, bottom, meetingThreshold };
   }, [schools]);
+  const [busy, setBusy] = React.useState(false);
+
+  if (!data) return null;
+  const { meta } = data;
 
   const subjectLabel = (meta.subject || 'ela').toUpperCase();
-  const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · 2024–25`;
-  const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   // The page header shows only the school year (no subject or group comparison);
-  // the deck itself still carries the full slice via sliceText.
+  // the deck carries the full slice via sliceText, stamped with the active
+  // dataset's year rather than a hardcoded one.
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yearLabel = (ds && (ds.latestYear || ds.year)) || '2024–25';
+  // Stamp sample-data decks so a demo deck can't pass for district results.
+  const isDemo = !ds || ds.source !== 'uploaded';
+  const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · ${yearLabel}${isDemo ? ' · sample data' : ''}`;
+  const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
   const slides = [
     {
@@ -78,12 +85,16 @@ function ExportPage({ ctx }) {
     },
   ];
 
-  const [busy, setBusy] = React.useState(false);
   const exportPPTX = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await buildPPTX({ slides, meta, schools, summary, heat, today });
+      await buildPPTX({ slides, meta, schools, summary, heat, today, sliceText });
+    } catch (err) {
+      // Without this, a failed build only logged an unhandled rejection while
+      // the button quietly returned to its idle label.
+      console.error('PPTX export failed:', err);
+      alert('Something went wrong while building the deck. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -108,7 +119,7 @@ function ExportPage({ ctx }) {
               {slides.length} slides · {sliceText}
             </div>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-              Built right here in your browser — nothing is uploaded. It uses the same student-count and unit settings you’ve set elsewhere in GrowthLens.
+              Built right here in your browser — nothing is uploaded. The deck shows shrunken estimates on the standard (SD) scale.
             </div>
           </div>
           <button onClick={exportPPTX} disabled={busy} style={{
@@ -275,7 +286,7 @@ function Empty() {
 }
 
 // ---- PPTX generation -------------------------------------------------------
-async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
+async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceText }) {
   if (typeof window.PptxGenJS !== 'function') {
     alert('PptxGenJS not loaded.');
     return;
@@ -290,8 +301,6 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
   const FONT_FACE = 'Mulish';
   const SERIF_FACE = 'Crimson Pro';
   const MONO_FACE = 'JetBrains Mono';
-  const subjectLabel = (meta.subject || 'ela').toUpperCase();
-  const sliceText = `${subjectLabel} · ${meta.groupA} − ${meta.groupB} · 2024–25`;
 
   // ---- 01 cover
   const s1 = pres.addSlide();
@@ -385,7 +394,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
   addHeader(s6, '06 · How to read this · a few cautions', null);
   const notes = [
     ['Steadier for small schools', 'Each school’s gap is nudged toward the district average (we call this shrinkage), so a handful of students can’t swing the result. Schools with fewer students are nudged more.'],
-    ['Too few students', 'Groups with fewer students than your chosen minimum are flagged as too few to read reliably. Set that minimum to match your district’s student-privacy policy.'],
+    ['Too few students', `Groups with fewer than ${meta.minCellSize ?? 10} students are flagged as too few to read reliably. (A configurable minimum is planned for a future release.)`],
     ['Describes what, not why', 'These numbers show where gaps show up. They don’t explain what’s causing them. Use this report to ask sharper questions, not to assign blame.'],
     ['Private by design', 'Everything is figured right here in the browser. No student file is ever uploaded.'],
   ];

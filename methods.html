@@ -16,6 +16,7 @@
 <head>
 <meta charset="utf-8" />
 <title>GrowthLens — Methods note</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&family=Mulish:wght@400;500;600;700;800&family=Archivo+Narrow:wght@500;700&display=swap" rel="stylesheet" />
 <style>
@@ -148,7 +149,7 @@
     <li><code>B_i = 1</code> &mdash; the school's raw data is fully trusted; the estimate stays exactly at the raw value. This happens only in the limit of zero within-school sampling error.</li>
     <li><code>B_i = 0</code> &mdash; the school's data is set aside entirely in favor of the district mean. You approach this when the within-school SE is much larger than the between-school SD.</li>
   </ul>
-  <p>Most schools in a typical district land between 0.6 and 0.9. The B column on the forest plot shows this for each school directly.</p>
+  <p>Most schools in a typical district land between 0.6 and 0.9. In Gap Analysis, the hover tooltip shows each school's B on the chart, and the Table view includes it as a column.</p>
 
   <p>The shrunken estimate's standard error is <code>SE(r̂_i) = √(B_i) · SE_i</code> — the spread that remains once we treat the district mean <code>μ̂</code> as <em>known</em>. The fuller empirical-Bayes version, which also folds in the uncertainty about <code>μ̂</code> itself, runs about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
 
@@ -174,16 +175,16 @@
   <p>Under the hood, <code>τ²</code> is found by a bounded one-dimensional maximization of the REML profile log-likelihood over <code>τ² ≥ 0</code> (a golden-section search, anchored by the closed-form DerSimonian–Laird estimate — a fast, classic formula for this same quantity). Schools whose cells fall below the minimum-n threshold (§4) are <em>left out</em> of the <code>τ²</code> fit and the pooled mean — their gaps are too noisy to inform the variance component — but they still show up in the figures, shrunk toward <code>μ̂</code>. Dropping that high-SE tail can pull <code>τ²</code> slightly low; this is a known, documented limitation.</p>
 
   <h2>4 · Minimum-n threshold</h2>
-  <p>Some groups simply have too few students to read reliably, and we flag those rather than letting them mislead you. Every cell (school × grade × subgroup) is checked against a minimum sample size, <code>n_min</code>, which defaults to <strong>10</strong> in this build (a configurable threshold is planned for a future release). Cells with fewer students are marked as <em>below threshold</em>. You can set this to match your district's student-privacy and small-cell-suppression policies.</p>
+  <p>Some groups simply have too few students to read reliably, and we flag those rather than letting them mislead you. Every cell (a school × subgroup cell in Gap Analysis, a school × grade cell in System Scan) is checked against a minimum sample size, <code>n_min</code>, which is fixed at <strong>10</strong> in this build. A configurable threshold is planned for a future release, so you'll be able to match it to your district's student-privacy and small-cell-suppression policies.</p>
   <table class="compact">
     <thead><tr><th>Threshold mode</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td class="mono">section</td><td>Below-threshold schools move to a labeled group at the bottom of the forest plot. This is the default.</td></tr>
       <tr><td class="mono">inline</td><td>Below-threshold rows keep their sorted position but are dimmed and tagged with an <code>n*</code> badge.</td></tr>
-      <tr><td class="mono">hide</td><td>Below-threshold rows drop out of the figure entirely. The district-wide statistics still count them.</td></tr>
+      <tr><td class="mono">hide</td><td>Below-threshold rows drop out of the figure entirely. (In every mode, the district-wide statistics are fit only to schools that meet the threshold — see §3.)</td></tr>
     </tbody>
   </table>
-  <p>If GrowthLens output is going to leave the analyst's workstation, raise the threshold — many state report cards use <code>n ≥ 30</code> for public-facing tables. The default of 10 is fine for internal triage but is <em>not</em> a suppression rule.</p>
+  <p>If GrowthLens output is going to leave the analyst's workstation, apply a stricter standard before publishing — many state report cards use <code>n ≥ 30</code> for public-facing tables. The default of 10 is fine for internal triage but is <em>not</em> a suppression rule.</p>
 
   <h2>5 · The two figures</h2>
   <p>GrowthLens gives you two main views: one to drill into a single gap school by school, and one to scan the whole district at a glance. Here's how to read each.</p>
@@ -203,12 +204,12 @@
   </ul>
 
   <h2>7 · Privacy and data handling</h2>
-  <p>The short version: your data never leaves your browser tab, and you can check that yourself. All computation runs right in your browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — so loading a file makes no third-party or CDN request, and the analysis works fully offline. Your CSV is parsed and queried entirely in the tab; it's never uploaded to a server, and no identifier, aggregate, or partial result is sent off the device. Want to confirm it? Open your browser's developer tools and watch the Network panel — you'll see no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and stores no student records in cookies or local storage.</p>
+  <p>The short version: your data never leaves your browser tab, and you can check that yourself. All computation runs right in your browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — so loading a data file makes no third-party or CDN request, and once the page itself has opened, the analysis needs no further network access. (The app shell — React and fonts — does load from CDNs when the page first opens; your data is never part of any request.) Your CSV is parsed and queried entirely in the tab; it's never uploaded to a server, and no identifier, aggregate, or partial result is sent off the device. Want to confirm it? Open your browser's developer tools and watch the Network panel — you'll see no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and stores no student records in cookies or local storage.</p>
   <p>The published methods, fixtures, and code are at <a href="https://github.com/SLU-PRiME/GrowthLens" target="_blank" rel="noopener">SLU-PRiME/GrowthLens</a> (link placeholder).</p>
 
   <h2>8 · Recommended citation</h2>
   <p>If you cite GrowthLens in a report or presentation, here's the form we suggest:</p>
-  <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.4 preview, 2025.</p>
+  <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.4 preview, 2026.</p>
 
   <div class="meta-row">
     <span>PRiME Center</span>
