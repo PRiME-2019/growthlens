@@ -573,7 +573,7 @@ function UploadPage({ ctx }) {
         <span>·</span>
         <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('scan'); }}
            style={{ color: SLU.mute, textDecoration: 'underline' }}>
-          Skip and use bundled demo data (Riverside USD)
+          Skip and use the bundled Math demo
         </a>
       </div>
     </>
