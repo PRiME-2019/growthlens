@@ -522,20 +522,22 @@ function UploadPage({ ctx }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <AuxCard title="Expected columns (per file)" collapsible defaultOpen>
           <p style={{ margin: '0 0 10px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
-            Same schema for both files. Each file contains rows for one subject only —
-            no <code style={{ fontFamily: MONO }}>subject</code> column needed.
+            Standard Missouri DESE / MOSIS growth export — one file per subject. The subject is
+            detected from the residual-column prefix (<code style={{ fontFamily: MONO }}>{'{P}'}</code> is{' '}
+            <code style={{ fontFamily: MONO }}>MATH</code> or <code style={{ fontFamily: MONO }}>COMM_ARTS</code>),
+            so no separate subject column is needed. Names are matched case-insensitively.
           </p>
           <ColumnTable rows={[
-            ['student_id',  'string', 'Stable, de-identifiable. Hash if needed.'],
-            ['school_id',   'string', 'Matches your district directory.'],
-            ['grade',       'int',    '3–8 supported in this build.'],
-            ['year',        'int',    'School year ending, e.g. 2025.'],
-            ['scale_score', 'float',  'Vertical scale score from MAP / iReady / similar.'],
-            ['frl',         'bool',   'Free/reduced lunch indicator (0/1).'],
-            ['ell',         'bool',   'English learner indicator (0/1).'],
-            ['iep',         'bool',   'IEP indicator (0/1).'],
-            ['race',        'enum',   'OMB categories or your district’s codes.'],
-            ['gender',      'enum',   'Optional.'],
+            ['{P}_Z_RESIDUAL',           'float',  'Standardized growth residual, state-computed (SD units).'],
+            ['{P}_Z_RESIDUAL_SE',        'float',  'Per-student standard error of that residual.'],
+            ['{P}_Z_T',                  'float',  'Standardized current-year score — the status axis.'],
+            ['SCHOOL_CODE',              'string', 'School identity (single district per upload).'],
+            ['GRADE',                    'int',    '3–8 supported in this build.'],
+            ['GROWTH_YEAR',              'int',    'The latest year present is selected automatically.'],
+            ['FREE_OR_REDUCED_LUNCH',    'flag',   'Economically disadvantaged (Y/N or 1/0).'],
+            ['IEP_DISABILITY',           'flag',   'Students with disabilities (Y/N or 1/0).'],
+            ['ENGLISH_LANGUAGE_LEARNER', 'flag',   'English learners (Y/N or 1/0).'],
+            ['BLACK, WHITE, HISPANIC',   'flag',   'Race one-hots for the Black- and Hispanic-vs-White gaps.'],
           ]} />
         </AuxCard>
         <AuxCard title="Frequently asked" collapsible defaultOpen>
@@ -554,7 +556,7 @@ function UploadPage({ ctx }) {
             },
             {
               q: 'What if my district uses a different minimum-cell-size rule?',
-              a: <>The minimum-n threshold is configurable from the Controls card on every analytical page. Set it to match your district’s student-privacy or small-cell-suppression policy; cells below the threshold are flagged consistently across the app.</>,
+              a: <>The minimum-n threshold defaults to 10 in this build and is applied consistently across the app; cells below it are flagged everywhere they appear. A control to set it to match your district’s student-privacy or small-cell-suppression policy is planned for a future release.</>,
             },
             {
               q: 'What about statistical methods?',
