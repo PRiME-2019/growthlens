@@ -20,8 +20,8 @@ function AchievementPage({ sliceLabel, ctx }) {
   return (
     <>
       <window.BriefHeader eyebrow="Status & Growth" slice={sliceLabel}
-        title="Where each school sits on both dimensions"
-        blurb={'Two-axis view of the system: prior achievement on the x-axis (standardized z-score from the state assessment) and growth residual on the y-axis. Dashed lines mark the district mean on each axis and split the plot into four quadrants — high-achievement / high-growth, etc.'} />
+        title="Where each school sits on both fronts"
+        blurb={'Two views at once: where students started (prior achievement) along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that start lower but grow faster.'} />
       <window.ControlsCard title="Controls"><AchievementControls ctx={ctx} /></window.ControlsCard>
       <AchievementFigure level={level} ctx={ctx} />
     </>
@@ -62,7 +62,7 @@ function AchievementFigure({ level, ctx }) {
   const data = window.ACH_DATA && window.ACH_DATA[level];
   if (!data) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
-                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data.</div>;
+                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data to show yet.</div>;
   }
   const unit = ctx.unit || 'z';
   const estimate = ctx.estimate || 'shrunk';
@@ -159,18 +159,18 @@ function AchievementFigure({ level, ctx }) {
                      gap: 12, marginBottom: 4 }}>
         <div>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-            Achievement × Growth — {level === 'school' ? 'school-level' : 'student-level'}
+            Where students started vs. how they grew — {level === 'school' ? 'school view' : 'student view'}
           </div>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-            x: prior achievement (standardized z)
+            x: where students started
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            y: residual ({unitLabel}) ·
+            y: growth vs. expected ({unitLabel}) ·
             <span style={{ marginLeft: 4 }}>{points.length.toLocaleString()} points</span>
           </div>
         </div>
         <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
                         textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-          quadrant split at district mean
+          four corners split at the district average
         </span>
       </div>
 
@@ -203,14 +203,14 @@ function AchievementFigure({ level, ctx }) {
               <text x={0} y={14} fontSize={9.5} fontFamily={window.LABEL} fill={SLU.gold}
                     fontWeight={700}
                     style={{ textTransform: 'uppercase', letterSpacing: 0.9 }}>
-                mean
+                average
               </text>
             </g>
             <text x={xToPx(xMean)} y={padT - 8} fontSize={9.5}
                   fontFamily={window.LABEL} fill={SLU.gold} textAnchor="middle"
                   fontWeight={700}
                   style={{ textTransform: 'uppercase', letterSpacing: 0.9 }}>
-              District mean
+              District average
             </text>
           </g>
         )}
@@ -219,16 +219,16 @@ function AchievementFigure({ level, ctx }) {
             district-mean cross stays the only gold mark in the plot. */}
         <QuadrantLabel x={padL + 12}              y={padT + 22}
                        align="start"
-                       title="Low Ach · High Growth" sub={`n=${q.lh}`} accent={SLU.ink2} />
+                       title="Lower start · faster growth" sub={`n=${q.lh}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + 22}
                        align="end"
-                       title="High Ach · High Growth" sub={`n=${q.hh}`} accent={SLU.ink2} />
+                       title="Higher start · faster growth" sub={`n=${q.hh}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + 12}              y={padT + plotH - 12}
                        align="start" anchorBottom
-                       title="Low Ach · Low Growth" sub={`n=${q.ll}`} accent={SLU.ink2} />
+                       title="Lower start · slower growth" sub={`n=${q.ll}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + plotH - 12}
                        align="end" anchorBottom
-                       title="High Ach · Low Growth" sub={`n=${q.hl}`} accent={SLU.ink2} />
+                       title="Higher start · slower growth" sub={`n=${q.hl}`} accent={SLU.ink2} />
 
         {/* points — circles get a CSS transition on cx/cy so subject toggles
             tween between positions instead of jumping. We key school-level
@@ -285,10 +285,10 @@ function AchievementFigure({ level, ctx }) {
               <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 40} y2={ty + 40}
                     stroke={SLU.rule2} strokeWidth={1} />
               <text x={tx + 10} y={ty + 56} fontSize={11} fontFamily={window.MONO} fill={SLU.ink2}>
-                Achievement {(toZ(p.x) >= 0 ? '+' : '−') + Math.abs(toZ(p.x)).toFixed(2)} z
+                Started {(toZ(p.x) >= 0 ? '+' : '−') + Math.abs(toZ(p.x)).toFixed(2)} SD
               </text>
               <text x={tx + 10} y={ty + 70} fontSize={11} fontFamily={window.MONO} fill={SLU.ink2}>
-                Residual <tspan fill={hover.color} fontWeight={700}>{yVal} {unitLabel}</tspan>
+                Grew <tspan fill={hover.color} fontWeight={700}>{yVal} {unitLabel}</tspan>
                 <tspan dx={6} fill={SLU.mute}>· n={p.n}</tspan>
               </text>
             </g>
@@ -315,7 +315,7 @@ function AchievementFigure({ level, ctx }) {
         <text x={padL + plotW / 2} y={height - 14} fontSize={11}
               fontFamily={window.LABEL} fill={SLU.ink2} textAnchor="middle"
               fontWeight={700} style={{ textTransform: 'uppercase', letterSpacing: 1.0 }}>
-          Prior achievement (z-score)
+          Where students started (prior achievement)
         </text>
 
         {/* y ticks */}
@@ -336,7 +336,7 @@ function AchievementFigure({ level, ctx }) {
               fontWeight={700}
               transform={`rotate(-90 16 ${padT + plotH / 2})`}
               style={{ textTransform: 'uppercase', letterSpacing: 1.0 }}>
-          Growth residual ({unitLabel})
+          Growth vs. expected ({unitLabel})
         </text>
       </svg>
     </section>

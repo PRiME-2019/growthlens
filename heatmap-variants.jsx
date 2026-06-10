@@ -31,18 +31,18 @@ function rowVar(s) {
 const ROW_SORTS = {
   alpha: { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
   alpha_rev: { label: 'School ID (Z → A)', fn: (a, b) => b.school_id.localeCompare(a.school_id) },
-  mean_desc: { label: 'Overall mean (high → low)', fn: (a, b) => rowMean(b) - rowMean(a) },
-  mean_asc:  { label: 'Overall mean (low → high)', fn: (a, b) => rowMean(a) - rowMean(b) },
-  var_desc:  { label: 'Variance across grades (high → low)', fn: (a, b) => rowVar(b) - rowVar(a) },
+  mean_desc: { label: 'Overall (strongest first)', fn: (a, b) => rowMean(b) - rowMean(a) },
+  mean_asc:  { label: 'Overall (weakest first)', fn: (a, b) => rowMean(a) - rowMean(b) },
+  var_desc:  { label: 'Most uneven across grades', fn: (a, b) => rowVar(b) - rowVar(a) },
   ...Object.fromEntries(GRADES.flatMap(g => [
-    [`g${g}_desc`, { label: `Grade ${g} (high → low)`, fn: (a, b) => (b.grades[g]?.r ?? -Infinity) - (a.grades[g]?.r ?? -Infinity) }],
-    [`g${g}_asc`,  { label: `Grade ${g} (low → high)`, fn: (a, b) => (a.grades[g]?.r ??  Infinity) - (b.grades[g]?.r ??  Infinity) }],
+    [`g${g}_desc`, { label: `Grade ${g} (strongest first)`, fn: (a, b) => (b.grades[g]?.r ?? -Infinity) - (a.grades[g]?.r ?? -Infinity) }],
+    [`g${g}_asc`,  { label: `Grade ${g} (weakest first)`, fn: (a, b) => (a.grades[g]?.r ??  Infinity) - (b.grades[g]?.r ??  Infinity) }],
   ])),
 };
 const MIN_N = 10;
 
 const N_MODES = {
-  inline: { label: 'Inline' },
+  inline: { label: 'Always' },
   hover:  { label: 'On hover' },
   off:    { label: 'Off' },
 };
@@ -91,7 +91,7 @@ function HeatmapShell({ children, title, subtitle, controls, footer }) {
 function CommonControls({ nMode, setNMode, extra }) {
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-      <Select value={nMode} onChange={setNMode} options={N_MODES} label="Show n" />
+      <Select value={nMode} onChange={setNMode} options={N_MODES} label="Student counts" />
       {extra}
     </div>
   );
@@ -162,13 +162,13 @@ function ScaleLegend() {
   const stops = [-0.5, -0.25, 0, 0.25, 0.5];
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, color: SLU.ink2, fontFamily: MONO }}>
-      <span style={{ color: SLU.mute, fontFamily: FONT }}>below avg</span>
+      <span style={{ color: SLU.mute, fontFamily: FONT }}>below the district average</span>
       <span style={{ display: 'inline-flex' }}>
         {stops.map((t, i) => (
           <span key={i} style={{ width: 22, height: 12, background: divColor(t), borderRight: i < stops.length - 1 ? '1px solid #fff' : 'none' }} />
         ))}
       </span>
-      <span style={{ color: SLU.mute, fontFamily: FONT }}>above avg</span>
+      <span style={{ color: SLU.mute, fontFamily: FONT }}>above the district average</span>
       <span style={{ marginLeft: 12 }}>−0.5 ··· 0 ··· +0.5 SD</span>
     </div>
   );
@@ -211,16 +211,16 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
 
   return (
     <HeatmapShell
-      title="System Scan · ELA mean residual by school × grade"
-      subtitle={`${estimate === 'raw' ? 'Raw' : 'Shrunken'} estimates · ${unit === 'weeks' ? 'weeks of learning vs. district' : 'SD vs. district average'} · diverging color scale.`}
+      title="How each grade is doing, school by school"
+      subtitle={`${estimate === 'raw' ? 'Each school’s own results' : 'Shrunken results (nudged toward the district average so a few students can’t swing the result)'} vs. the district average. Blue = faster than expected, rust = slower · ${unit === 'weeks' ? 'weeks of learning vs. district' : 'SD vs. district average'}.`}
       controls={<CommonControls nMode={nMode} setNMode={setNMode} />}
       footer={
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
           <ScaleLegend />
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <SuppressedSwatch /> below cell-size threshold (n &lt; {MIN_N})
+            <SuppressedSwatch /> too few students to read reliably (fewer than {MIN_N})
           </span>
-          <span style={{ color: SLU.mute }}>Click any column header to sort.</span>
+          <span style={{ color: SLU.mute }}>Click any column heading to sort.</span>
         </div>
       }
     >
@@ -267,7 +267,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
                   </>
                 ) : (
                   <span style={{ fontFamily: FONT, fontSize: 9.5, padding: '1px 4px', borderRadius: 3,
-                                  background: SLU.gold, color: '#fff', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>n &lt; {MIN_N}</span>
+                                  background: SLU.gold, color: '#fff', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>too few</span>
                 )}
               </div>
             );

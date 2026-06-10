@@ -46,31 +46,31 @@ function ExportPage({ ctx }) {
     },
     {
       n: '02', kind: 'headline',
-      title: 'Headline',
+      title: 'The headline numbers',
       bullets: [
         ['District gap',     fmt2(meta.districtGap) + ' SD'],
-        ['Between-school τ', Math.sqrt(Math.max(0, meta.tauSquared)).toFixed(2) + ' SD'],
-        ['Schools meeting threshold', `${summary.meetingThreshold} / ${schools.length}`],
+        ['How much schools differ', Math.sqrt(Math.max(0, meta.tauSquared)).toFixed(2) + ' SD'],
+        ['Schools with enough students', `${summary.meetingThreshold} / ${schools.length}`],
       ],
     },
     {
       n: '03', kind: 'top-gaps',
-      title: 'Top schools by gap',
+      title: 'Schools with the widest gaps',
       rows: summary.top,
     },
     {
       n: '04', kind: 'negative-gaps',
-      title: `Reversed gaps (${meta.groupB} ahead of ${meta.groupA})`,
+      title: `Where ${meta.groupB} is ahead of ${meta.groupA}`,
       rows: summary.bottom,
     },
     {
       n: '05', kind: 'hotspots',
-      title: 'System Scan · hotspots',
+      title: 'System Scan · standout spots',
       hot: scanHotspots(heat),
     },
     {
       n: '06', kind: 'methods',
-      title: 'Methods & caveats',
+      title: 'How to read this · a few cautions',
     },
   ];
 
@@ -89,7 +89,7 @@ function ExportPage({ ctx }) {
     <>
       <BriefHeader eyebrow="Export" slice={sliceText}
         title="Download a board-ready deck"
-        blurb={'Six slides covering the headline, the schools at the extremes of the gap, system-scan hotspots, and a methods note. Editable native PowerPoint — text, tables, and shapes, no flattened screenshots.'} />
+        blurb={'Six slides covering the headline numbers, the schools at each end of the gap, the standout spots from System Scan, and a short methods recap. It’s real, editable PowerPoint — text, tables, and shapes, not flattened screenshots.'} />
 
       <section style={{
         background: '#fff', borderRadius: 8, border: `1px solid ${SLU.rule2}`,
@@ -104,7 +104,7 @@ function ExportPage({ ctx }) {
               {slides.length} slides · {sliceText}
             </div>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-              Generated locally in your browser. The same threshold and unit settings used elsewhere in GrowthLens apply.
+              Built right here in your browser — nothing is uploaded. It uses the same student-count and unit settings you’ve set elsewhere in GrowthLens.
             </div>
           </div>
           <button onClick={exportPPTX} disabled={busy} style={{
@@ -255,9 +255,9 @@ function SlideBody({ slide, meta, sliceText, today, summary }) {
         <div style={{ height: 1, background: SLU.rule2, marginTop: 4 }} />
         <ul style={{ margin: 6, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3,
                       fontFamily: SERIF, fontSize: 8, color: SLU.ink2, lineHeight: 1.4 }}>
-          <li>— Empirical-Bayes shrinkage toward the district mean</li>
-          <li>— Cells below n threshold flagged</li>
-          <li>— Descriptive, not causal — use to ask questions</li>
+          <li>— Numbers nudged toward the district average (shrinkage), so a few students can’t swing a school</li>
+          <li>— Groups with too few students to read reliably are flagged</li>
+          <li>— Describes what’s happening, not why — use it to ask sharper questions</li>
         </ul>
       </div>
     );
@@ -302,16 +302,16 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
 
   // ---- 02 headline
   const s2 = pres.addSlide();
-  s2.addNotes(`The headline. District-wide gap is the random-effects pooled mean of per-school gaps with its 95% CI. Tau is the between-school SD of true gaps under the model. Threshold count tells the audience how many schools were included.`);
-  addHeader(s2, '02 · Headline', `District gap, between-school variation, and coverage at the current threshold.`);
+  s2.addNotes(`The headline numbers. The district gap is a district-wide average that gives steadier schools more weight, shown with the range the real number most likely falls in (its 95% interval). The second number says how much schools really differ from one another. The last number tells the audience how many schools had enough students to include.`);
+  addHeader(s2, '02 · The headline numbers', `The district gap, how much schools differ from one another, and how many schools had enough students to include.`);
   const tau = Math.sqrt(Math.max(0, meta.tauSquared)).toFixed(2);
   const re = (window.districtMeanRE && window.districtMeanRE(schools, meta.tauSquared)) || null;
   const muStr = re ? (re.mu >= 0 ? '+' : '−') + Math.abs(re.mu).toFixed(2) : fmt2(meta.districtGap);
   const ciStr = re ? `[${(re.ciLo>=0?'+':'−')}${Math.abs(re.ciLo).toFixed(2)}, ${(re.ciHi>=0?'+':'−')}${Math.abs(re.ciHi).toFixed(2)}]` : '';
   const stats = [
-    { k: 'District gap',          v: muStr + ' SD',                            note: ciStr ? `95% CI ${ciStr}` : `${meta.groupA} − ${meta.groupB}` },
-    { k: 'Between-school τ',      v: tau + ' SD',                               note: `True-gap spread, τ² = ${meta.tauSquared.toFixed(3)}` },
-    { k: 'Schools meeting threshold', v: `${summary.meetingThreshold} / ${schools.length}`, note: 'Cell-size ≥ minimum-n' },
+    { k: 'District gap',          v: muStr + ' SD',                            note: ciStr ? `Likely range ${ciStr}` : `${meta.groupA} − ${meta.groupB}` },
+    { k: 'How much schools differ',      v: tau + ' SD',                               note: `On a standard scale — bigger means schools vary more` },
+    { k: 'Schools with enough students', v: `${summary.meetingThreshold} / ${schools.length}`, note: 'at least the minimum number of students' },
   ];
   stats.forEach((s, i) => {
     const x = 0.7 + i * 4.2, y = 2.4;
@@ -335,26 +335,26 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
   const dx = stripX(meta.districtGap);
   s2.addShape('line', { x: dx, y: 4.85, w: 0, h: 0.7, line: { color: GOLD, width: 1.5, dashType: 'dash' } });
   s2.addText(`District: ${muStr}`, { x: dx + 0.05, y: 4.78, w: 1.8, h: 0.3, fontFace: MONO_FACE, fontSize: 9, color: GOLD });
-  s2.addText('Each dot = one school (shrunken gap). Dashed line = district-wide pooled mean.', {
+  s2.addText('Each dot is one school’s gap, nudged toward the district average (shrunken). The dashed line is the district-wide average.', {
     x: 0.7, y: 5.7, w: 12, h: 0.3, fontFace: FONT_FACE, fontSize: 10, color: MUTE, italic: true,
   });
 
   // ---- 03 top gaps
   const s3 = pres.addSlide();
-  s3.addNotes(`The five schools with the largest shrunken gap, ${meta.groupA} above ${meta.groupB}. CIs that don't cross zero indicate the gap is unlikely to be sampling noise. Below-threshold schools are excluded.`);
-  addHeader(s3, '03 · Top schools by gap', 'Five widest gaps (shrunken estimate, 95% credible interval). Below-threshold cells excluded.');
+  s3.addNotes(`The five schools with the widest gap, ${meta.groupA} ahead of ${meta.groupB}. When the likely range doesn’t cross zero, the gap is probably real and not just a quirk of a small sample. Schools with too few students to read reliably aren’t shown here.`);
+  addHeader(s3, '03 · Schools with the widest gaps', 'The five widest gaps, with each number nudged toward the district average and the range it most likely falls in. Schools with too few students to read reliably aren’t shown.');
   addGapTable(s3, pres, summary.top, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
 
   // ---- 04 reversed gaps
   const s4 = pres.addSlide();
-  s4.addNotes(`The three schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA} — the rare cases worth understanding for whatever they're doing right.`);
-  addHeader(s4, '04 · Reversed gaps', `Schools where ${meta.groupB} students are growing as fast or faster than ${meta.groupA}.`);
+  s4.addNotes(`The three schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA} — the rare bright spots worth studying for whatever they’re doing well.`);
+  addHeader(s4, `04 · Where ${meta.groupB} is ahead of ${meta.groupA}`, `Schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA}.`);
   addGapTable(s4, pres, summary.bottom, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
 
   // ---- 05 system scan hotspots
   const s5 = pres.addSlide();
-  s5.addNotes('System Scan extremes. Use these as triage. Hotspots above district are worth studying for transferable practices; cold spots below district are where intervention attention is most needed.');
-  addHeader(s5, '05 · System Scan hotspots', 'Three highest and three lowest school × grade residuals.');
+  s5.addNotes('The standout spots from System Scan — a good place to start. The ones above the district average are worth studying for practices you could share; the ones below are where extra support is most needed.');
+  addHeader(s5, '05 · System Scan standout spots', 'The three school-and-grade cells growing fastest, and the three growing slowest, compared with the district average.');
   const hs = scanHotspots(heat);
   if (hs) {
     const cols = [
@@ -372,18 +372,18 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
       });
     });
   } else {
-    s5.addText('Heatmap data not loaded.', { x: 0.7, y: 3, w: 12, h: 0.5, fontFace: FONT_FACE, fontSize: 14, color: MUTE });
+    s5.addText('System Scan data isn’t loaded yet.', { x: 0.7, y: 3, w: 12, h: 0.5, fontFace: FONT_FACE, fontSize: 14, color: MUTE });
   }
 
   // ---- 06 methods
   const s6 = pres.addSlide();
-  s6.addNotes('Methods slide. Cover the four bullets briefly: shrinkage, threshold, descriptive-not-causal, privacy. Anyone who wants more detail can read the methods note linked from the app.');
-  addHeader(s6, '06 · Methods & caveats', null);
+  s6.addNotes('How to read this slide. Walk through the four points briefly: how the numbers are steadied for small schools, how groups with too few students are flagged, that this describes what’s happening rather than why, and that everything runs privately in the browser. Anyone who wants the full detail can read the methods note linked from the app.');
+  addHeader(s6, '06 · How to read this · a few cautions', null);
   const notes = [
-    ['Shrinkage', 'Per-school gap estimates are shrunk toward the district mean using empirical-Bayes weights (B-factor reported in the figure). Small-n schools are pulled harder.'],
-    ['Minimum-n threshold', 'Cells with fewer students than the configured threshold are flagged and called out as “below threshold.” Set to match district student-privacy policy.'],
-    ['Descriptive, not causal', 'These estimates describe where gaps are observed. They do not identify what is causing them. Use this report to ask better questions, not to assign blame.'],
-    ['Privacy', 'All computation runs locally in the user’s browser. No source CSV is uploaded.'],
+    ['Steadier for small schools', 'Each school’s gap is nudged toward the district average (we call this shrinkage), so a handful of students can’t swing the result. Schools with fewer students are nudged more.'],
+    ['Too few students', 'Groups with fewer students than your chosen minimum are flagged as too few to read reliably. Set that minimum to match your district’s student-privacy policy.'],
+    ['Describes what, not why', 'These numbers show where gaps show up. They don’t explain what’s causing them. Use this report to ask sharper questions, not to assign blame.'],
+    ['Private by design', 'Everything is figured right here in the browser. No student file is ever uploaded.'],
   ];
   notes.forEach(([k, v], i) => {
     const y = 2.4 + i * 0.95;
@@ -393,7 +393,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
 
   // Footer: slice + method + threshold on every non-cover slide, and slide numbers everywhere.
   const minN = meta.minCellSize ?? 10;
-  const footer = `${sliceText}  ·  shrunken estimates  ·  n ≥ ${minN}`;
+  const footer = `${sliceText}  ·  shrunken estimates (nudged toward the district average)  ·  n ≥ ${minN}`;
   pres.slides.forEach((sl, idx) => {
     if (idx > 0) {
       sl.addText(footer, {
@@ -406,7 +406,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today }) {
   });
 
   // Speaker notes for cover slide
-  pres.slides[0].addNotes('Title slide. Set context: this is the district report for the currently selected slice. Mention the methods note linked from the app for anyone who wants the technical detail.');
+  pres.slides[0].addNotes('Title slide. Set the scene: this is the district report for the subject and the two groups you’re looking at. Point anyone who wants the technical detail to the methods note linked from the app.');
 
   const filename = `GrowthLens-${meta.subject}-${meta.demographic || 'subgroup'}-${new Date().toISOString().slice(0,10)}.pptx`;
   await pres.writeFile({ fileName: filename });
@@ -425,9 +425,9 @@ function addGapTable(slide, pres, rows, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, 
   const head = [
     { text: 'School',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3 } },
     { text: 'Gap',        options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
-    { text: '95% CI',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
-    { text: 'n',          options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
-    { text: 'Shrinkage B',options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: 'Likely range',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: 'Students',          options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
+    { text: 'Nudge (0–1)',options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
   ];
   const body = rows.map(r => [
     { text: r.school_id, options: { fontFace: MONO_FACE, fontSize: 14, color: INK } },

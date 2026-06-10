@@ -54,11 +54,11 @@ const DEMOS = {
 };
 const PAGES = {
   landing:      { label: 'Overview',             hint: 'Start here' },
-  upload:       { label: 'Upload data',          hint: 'Bring your district file' },
+  upload:       { label: 'Upload data',          hint: 'Add your data file' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
-  gap:          { label: 'Gap Analysis',         hint: 'Where the gap lives'  },
-  achievement:  { label: 'Status & Growth',      hint: 'Two-axis view' },
-  demographics: { label: 'Demographics',         hint: 'Subgroup distributions' },
+  gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
+  achievement:  { label: 'Status & Growth',      hint: 'Start vs. growth' },
+  demographics: { label: 'Demographics',         hint: 'Growth by group' },
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
 };
 
@@ -264,9 +264,9 @@ function DatasetStrip() {
   const yr = m && (m.latestYear || m.year);
   const label = m
     ? `${m.districtCode ? m.districtCode + ' · ' : ''}`
-      + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload' : 'bundled demo data'}`
+      + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload' : 'sample data'}`
       + ` · ${m.nSchools} schools${yr ? ' · ' + yr : ''}`
-    : 'No dataset loaded';
+    : 'No data loaded yet';
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   gap: 12, fontSize: 11.5, color: SLU.mute, fontFamily: MONO,
@@ -275,7 +275,7 @@ function DatasetStrip() {
         {label}
       </span>
       <span style={{ display: 'inline-flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
-        <span><span style={{ color: '#1F8A5B' }}>●</span> private — runs in browser</span>
+        <span><span style={{ color: '#1F8A5B' }}>●</span> Private — runs in your browser</span>
       </span>
     </div>
   );
@@ -323,16 +323,16 @@ function LandingPage({ ctx }) {
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: SLU.ink,
                      letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance',
                      maxWidth: 760 }}>
-          A private, in-browser lens for district achievement data.
+          See where your students are growing — privately, in your browser.
         </h1>
         <p style={{ margin: '2px 0 0', maxWidth: 720,
                     fontSize: 14.5, lineHeight: 1.55, color: SLU.ink2,
                     textWrap: 'pretty' }}>
-          Bring a single export from your assessment system. GrowthLens computes
-          school-level residuals and subgroup gaps with empirical-Bayes shrinkage,
-          flags small-n cells against your district’s minimum-n policy, and shows
-          you where the system as a whole is over- or under-performing — without
-          any of your students’ data ever leaving the browser tab.
+          Upload one file from your assessment system and GrowthLens turns it
+          into a clear picture of how each school and student group is doing —
+          where growth is strong, where groups are falling behind, and which
+          results rest on too few students to lean on. Not one student record
+          ever leaves your browser tab.
         </p>
       </header>
 
@@ -340,8 +340,8 @@ function LandingPage({ ctx }) {
                         gap: 16 }}>
         <LandingCard
           eyebrow="01 · Bring data"
-          title="Upload a CSV"
-          body="One row per student × grade × subject × year. We expect ~12 columns; a sample file and column dictionary are on the upload page."
+          title="Upload your file"
+          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist and a sample file waiting on the upload page."
           cta="Go to upload →"
           onClick={() => ctx.setPage('upload')}
           accent={SLU.blue}
@@ -349,7 +349,7 @@ function LandingPage({ ctx }) {
         <LandingCard
           eyebrow="02 · Triage"
           title="System Scan"
-          body="A district-wide heatmap of grade × school residuals. Surface where the system is consistently above or below expectation before you drill in."
+          body="A district-wide heat map of how each grade is doing at each school. Spot where growth is consistently strong or soft before you dig into any one group."
           cta="Open System Scan →"
           onClick={() => ctx.setPage('scan')}
           accent={SLU.gold}
@@ -357,7 +357,7 @@ function LandingPage({ ctx }) {
         <LandingCard
           eyebrow="03 · Drill in"
           title="Gap Analysis"
-          body="For one subject and one subgroup pair, see the within-school gap at every school — ranked, with district average and below-threshold cells called out."
+          body="Pick a subject and two student groups, and see the gap between them at every school — ranked, with the district average for context and small-sample schools clearly flagged."
           cta="Open Gap Analysis →"
           onClick={() => ctx.setPage('gap')}
           accent={SLU.blue}
@@ -370,25 +370,26 @@ function LandingPage({ ctx }) {
           textTransform: 'uppercase', letterSpacing: 1.4, color: SLU.ink2,
           margin: '0 0 10px', paddingBottom: 6,
           borderBottom: `1px solid ${SLU.rule2}`,
-        }}>What GrowthLens is (and isn’t)</h2>
+        }}>What GrowthLens is — and isn’t</h2>
         <FAQ items={[
           {
             q: 'What it does',
-            a: <>Computes per-school residuals against the district baseline; applies
-                empirical-Bayes shrinkage so small-n schools don’t dominate the picture;
-                estimates subgroup gaps and ranks schools by gap size.</>,
+            a: <>Shows how each school is doing compared with the district as a whole,
+                steadies the numbers for smaller schools so a few students can’t swing
+                the picture, and measures the gap between student groups school by school.</>,
           },
           {
             q: 'How it stays private',
-            a: <>All computation runs locally in your browser via DuckDB-WASM. Your
-                CSV is never uploaded to a server, and the methods used are documented
-                in the linked methods note.</>,
+            a: <>Everything is figured right here in your browser. Your file is never
+                uploaded to a server, and the methods note spells out exactly how the
+                numbers are made.</>,
           },
           {
             q: 'What it isn’t',
-            a: <>A teacher- or student-level evaluation tool. Cells below your minimum-n
-                threshold are flagged. Estimates are descriptive, not causal — use them
-                to ask better questions, not to assign blame.</>,
+            a: <>It isn’t a way to evaluate individual teachers or students. Groups too
+                small to read reliably are flagged so you don’t over-interpret them. And
+                the numbers describe what’s happening, not why — use them to ask sharper
+                questions, not to assign blame.</>,
           },
         ]} />
       </section>
@@ -427,7 +428,7 @@ function UploadPage({ ctx }) {
     setErrors((e) => ({ ...e, [key]: null }));
     if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
       setStages((s) => ({ ...s, [key]: 'idle' }));
-      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'Engine not loaded — check your connection and reload.' } }));
+      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
       return;
     }
     try {
@@ -458,13 +459,14 @@ function UploadPage({ ctx }) {
         }}>Upload data</span>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: SLU.ink,
                      letterSpacing: -0.3, lineHeight: 1.15, textWrap: 'balance' }}>
-          Bring one CSV per subject from your assessment system
+          Bring one file per subject from your assessment system
         </h1>
         <p style={{ margin: '4px 0 0', maxWidth: 720,
                     fontSize: 13.5, lineHeight: 1.55, color: SLU.ink2, textWrap: 'pretty' }}>
-          GrowthLens expects two files — one for ELA and one for Math. Both are
-          parsed in this browser tab, nothing is uploaded. You can analyze a
-          subject as soon as its file loads cleanly; the other can follow later.
+          GrowthLens works with two files — one for reading (ELA) and one for
+          math. Both are read right here in your browser; nothing is uploaded.
+          You can start exploring a subject the moment its file loads cleanly,
+          and add the other whenever you’re ready.
         </p>
       </header>
 
@@ -478,7 +480,7 @@ function UploadPage({ ctx }) {
           filename={files.ela}
           onFile={onFile}
           error={errors.ela}
-          placeholder="ELA Student Growth Residuals"
+          placeholder="ELA growth file"
         />
         <SubjectDropZone
           subjectKey="math"
@@ -489,7 +491,7 @@ function UploadPage({ ctx }) {
           filename={files.math}
           onFile={onFile}
           error={errors.math}
-          placeholder="Math Student Growth Residuals"
+          placeholder="Math growth file"
         />
       </div>
 
@@ -500,8 +502,8 @@ function UploadPage({ ctx }) {
                       border: `1px solid ${bothReady ? 'rgba(31, 138, 91, 0.25)' : 'rgba(154, 118, 17, 0.25)'}` }}>
           <span style={{ fontSize: 13.5, color: SLU.ink2, flex: 1 }}>
             {bothReady
-              ? 'Both subjects loaded. You’re ready to open System Scan or jump straight to a Gap Analysis.'
-              : `${stages.ela === 'ready' ? 'ELA' : 'Math'} loaded — you can analyze that subject now, or add the other file before continuing.`}
+              ? 'Both subjects are loaded. You’re ready to open System Scan or jump straight to a Gap Analysis.'
+              : `${stages.ela === 'ready' ? 'ELA' : 'Math'} is loaded — you can start exploring that subject now, or add the other file before continuing.`}
           </span>
           <button onClick={() => {
             // If only one subject is loaded, jump straight to that one rather
@@ -520,47 +522,49 @@ function UploadPage({ ctx }) {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <AuxCard title="Expected columns (per file)" collapsible defaultOpen>
+        <AuxCard title="What your file should include" collapsible defaultOpen>
           <p style={{ margin: '0 0 10px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
-            Standard Missouri DESE / MOSIS growth export — one file per subject. The subject is
-            detected from the residual-column prefix (<code style={{ fontFamily: MONO }}>{'{P}'}</code> is{' '}
+            This is the standard Missouri DESE / MOSIS growth export — one file per subject, and
+            most assessment systems can produce it. GrowthLens figures out the subject from the
+            growth column’s prefix (<code style={{ fontFamily: MONO }}>{'{P}'}</code> is{' '}
             <code style={{ fontFamily: MONO }}>MATH</code> or <code style={{ fontFamily: MONO }}>COMM_ARTS</code>),
-            so no separate subject column is needed. Names are matched case-insensitively.
+            so you don’t need a separate subject column. Column names don’t have to match upper- or
+            lower-case exactly.
           </p>
           <ColumnTable rows={[
-            ['{P}_Z_RESIDUAL',           'float',  'Standardized growth residual, state-computed (SD units).'],
-            ['{P}_Z_RESIDUAL_SE',        'float',  'Per-student standard error of that residual.'],
-            ['{P}_Z_T',                  'float',  'Standardized current-year score — the status axis.'],
-            ['SCHOOL_CODE',              'string', 'School identity (single district per upload).'],
-            ['GRADE',                    'int',    '3–8 supported in this build.'],
-            ['GROWTH_YEAR',              'int',    'The latest year present is selected automatically.'],
-            ['FREE_OR_REDUCED_LUNCH',    'flag',   'Economically disadvantaged (Y/N or 1/0).'],
-            ['IEP_DISABILITY',           'flag',   'Students with disabilities (Y/N or 1/0).'],
-            ['ENGLISH_LANGUAGE_LEARNER', 'flag',   'English learners (Y/N or 1/0).'],
-            ['BLACK, WHITE, HISPANIC',   'flag',   'Race one-hots for the Black- and Hispanic-vs-White gaps.'],
+            ['{P}_Z_RESIDUAL',           'float',  'Each student’s growth compared with what was expected, on a standard scale.'],
+            ['{P}_Z_RESIDUAL_SE',        'float',  'How precise that growth number is for the student.'],
+            ['{P}_Z_T',                  'float',  'Where the student started — this year’s score on a standard scale.'],
+            ['SCHOOL_CODE',              'string', 'Which school the student attends (one district per file).'],
+            ['GRADE',                    'int',    'Grades 3–8 are supported in this version.'],
+            ['GROWTH_YEAR',              'int',    'The school year. The most recent year in the file is used automatically.'],
+            ['FREE_OR_REDUCED_LUNCH',    'flag',   'A simple Yes/No column for economically disadvantaged students.'],
+            ['IEP_DISABILITY',           'flag',   'A simple Yes/No column for students with disabilities.'],
+            ['ENGLISH_LANGUAGE_LEARNER', 'flag',   'A simple Yes/No column for English learners.'],
+            ['BLACK, WHITE, HISPANIC',   'flag',   'Simple Yes/No columns used for the Black-vs-White and Hispanic-vs-White gaps.'],
           ]} />
         </AuxCard>
         <AuxCard title="Frequently asked" collapsible defaultOpen>
           <FAQ items={[
             {
               q: 'Where does my data go?',
-              a: <>Nowhere. The CSV is parsed and queried entirely in this browser tab via DuckDB-WASM. No row, identifier, or aggregate ever leaves your machine. You can verify by opening dev tools and confirming there is no network traffic during analysis.</>,
+              a: <>Nowhere. Your file is read and analyzed entirely in this browser tab — no row, name, or number ever leaves your computer. You can check this yourself: open your browser’s developer tools and you’ll see there’s no network traffic while you work.</>,
             },
             {
               q: 'Do you keep my data between sessions?',
-              a: <>No. Reload the tab and the data is gone — you’ll need to re-upload. We don’t use cookies or local storage for student records.</>,
+              a: <>No. Reload the tab and the data is gone, so you’ll need to upload it again. We don’t store student records in cookies or anywhere else.</>,
             },
             {
               q: 'How big a file can I upload?',
-              a: <>Anything up to roughly 50 MB per subject. Larger districts (multi-year, K–12) typically land at 5–20 MB per file. Parsing and indexing happen in WASM and take a few seconds.</>,
+              a: <>Up to about 50 MB per subject. Most districts — even larger ones with several years of data — land between 5 and 20 MB per file. Reading and preparing the file happens in your browser and takes just a few seconds.</>,
             },
             {
-              q: 'What if my district uses a different minimum-cell-size rule?',
-              a: <>The minimum-n threshold defaults to 10 in this build and is applied consistently across the app; cells below it are flagged everywhere they appear. A control to set it to match your district’s student-privacy or small-cell-suppression policy is planned for a future release.</>,
+              q: 'What if my district uses a different small-group cutoff?',
+              a: <>Right now GrowthLens treats any group with fewer than 10 students as too small to read reliably, and flags those groups everywhere they appear. The ability to change that number to match your district’s privacy or small-group rules is coming in a future release.</>,
             },
             {
-              q: 'What about statistical methods?',
-              a: <>Residual definition, empirical-Bayes shrinkage (including the counter-intuitive cases), τ² estimation, and known limitations are all written up in the methods note. <a href="methods.html" target="_blank" rel="noopener" style={{ color: SLU.blue, fontWeight: 600 }}>Open methods note ↗</a></>,
+              q: 'Want the statistical details?',
+              a: <>The methods note explains how growth compared with expectations is defined, how the numbers are steadied for smaller schools (including a few cases that can feel counter-intuitive), how the spread between schools is estimated, and what the known limitations are. <a href="methods.html" target="_blank" rel="noopener" style={{ color: SLU.blue, fontWeight: 600 }}>Open methods note ↗</a></>,
             },
           ]} />
         </AuxCard>
@@ -569,7 +573,7 @@ function UploadPage({ ctx }) {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: SLU.mute, flexWrap: 'wrap' }}>
         <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('scan'); }}
            style={{ color: SLU.mute, textDecoration: 'underline' }}>
-          Skip and use the bundled Math demo
+          Skip for now and explore the sample math data
         </a>
       </div>
     </>
@@ -585,12 +589,12 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
   };
   const ready = stage === 'ready';
   const errMsg = !error ? null
-    : error.error === 'subject_mismatch' ? `This is the ${subjectLabel} slot, but the file looks like ${String(error.detected || '').toUpperCase()}.`
-    : error.error === 'missing_columns' ? 'Missing required columns: ' + (error.missing || []).join(', ')
-    : error.error === 'no_prefix' ? "Couldn't find a *_Z_RESIDUAL column — is this a DESE growth file?"
-    : error.error === 'no_rows_latest' ? `No rows for the latest year (${error.latestYear ?? '—'}).`
-    : error.error === 'no_year' ? 'No GROWTH_YEAR values found.'
-    : (error.message || 'Could not read this file.');
+    : error.error === 'subject_mismatch' ? `This is the ${subjectLabel} spot, but the file looks like ${String(error.detected || '').toUpperCase()}. Try dropping it on the other subject instead.`
+    : error.error === 'missing_columns' ? 'This file is missing a few columns we need: ' + (error.missing || []).join(', ') + '. Check the “What your file should include” list and try again.'
+    : error.error === 'no_prefix' ? 'We couldn’t find a growth column (one ending in *_Z_RESIDUAL). This usually means it isn’t a DESE growth file — double-check the export.'
+    : error.error === 'no_rows_latest' ? `We didn’t find any students for the most recent year (${error.latestYear ?? '—'}). Make sure that year’s data is included.`
+    : error.error === 'no_year' ? 'We couldn’t find a GROWTH_YEAR column, so we can’t tell which school year this is. Please add it and try again.'
+    : (error.message || 'We couldn’t read this file. Please double-check it’s the right export and try again.');
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setStage('dragover'); }}
@@ -611,7 +615,7 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
         textTransform: 'uppercase', letterSpacing: 1.0,
         color: errMsg ? '#B42318' : ready ? '#1F8A5B' : SLU.mute,
       }}>
-        {errMsg ? '⚠ Error' : ready ? '● Loaded' : stage === 'parsing' ? 'Parsing…' : stage === 'dragover' ? 'Drop to load' : 'Awaiting file'}
+        {errMsg ? '⚠ Error' : ready ? '● Loaded' : stage === 'parsing' ? 'Reading…' : stage === 'dragover' ? 'Drop to load' : 'Waiting for file'}
       </span>
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -628,8 +632,8 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
         {errMsg
           ? errMsg
           : ready
-          ? 'Looks good — schema validated, ready to analyze.'
-          : `Drop a ${subjectLabel} CSV here, or click choose file. One row per student × grade × year.`}
+          ? 'Looks good — your file checks out and is ready to explore.'
+          : `Drop a ${subjectLabel} file here, or click to choose one. One row per student, per grade, per year.`}
       </span>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <label style={{
@@ -721,7 +725,7 @@ function GapPage({ sliceLabel, ctx }) {
     <>
       <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
                    title="Where the gap lives, school by school"
-                   blurb={'For the selected subgroup pair, each school’s within-school gap is estimated and ranked. The figure shows the size and direction of the gap at every school, the district-wide average for reference, and which schools fall below the district’s minimum-n threshold. Use it to see whether gaps replicate across the system or concentrate in a few schools — and where to look first when planning a response.'} />
+                   blurb={'For the two groups you choose, GrowthLens measures the gap between them at every school and lines the schools up from largest to smallest. You’ll see how big each gap is and which way it leans, the district-wide average for context, and which schools have too few students to read reliably. Use it to tell whether a gap shows up across the system or sits in just a few schools.'} />
       <ControlsCard title="Controls" slice={sliceLabel}><GapControls ctx={ctx} /></ControlsCard>
       <OverviewCardGap />
       <ForestSlot ctx={ctx} />
@@ -733,7 +737,7 @@ function ScanPage({ sliceLabel, ctx }) {
     <>
       <BriefHeader eyebrow="System Scan" slice={sliceLabel}
                    title="Where to look first"
-                   blurb={'A district-wide view of grade-level performance residuals — how each school × grade cell compares to what the district average would predict. Cells are colored on a diverging scale; rows surface schools that are consistently above or below expectation, columns surface grades where the system as a whole is over- or under-performing. Use it as a triage step before drilling into a specific subject and subgroup in Gap Analysis.'} />
+                   blurb={'A district-wide view of how each grade is doing at each school, compared with what the district average would predict. Blue cells are growing faster than expected, rust cells slower. Scan the rows for schools that are consistently strong or soft, and the columns for grades where the whole district is ahead or behind — then dig into a specific subject and group in Gap Analysis.'} />
       <ControlsCard title="Controls" slice={sliceLabel}><ScanControls ctx={ctx} /></ControlsCard>
       <OverviewCardScan />
       <HeatmapSlot ctx={ctx} />
@@ -887,7 +891,7 @@ function OverviewCardGap() {
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
-                  mean({meta.groupA}) − mean({meta.groupB}) · random-effects pooled
+                  mean({meta.groupA}) − mean({meta.groupB}) · average gap across schools, giving steadier schools more weight
                 </div>
               </>
             );
@@ -896,7 +900,7 @@ function OverviewCardGap() {
 
         {/* Between-school spread with mini strip */}
         <div style={{ flex: '2 1 380px', minWidth: 320 }}>
-          <StatLabel>Between-school spread of true gaps</StatLabel>
+          <StatLabel>How much schools really differ</StatLabel>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
@@ -907,20 +911,20 @@ function OverviewCardGap() {
                 </span>
                 <span style={{ fontSize: 13, color: SLU.mute }}>SD</span>
               </div>
-              <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, fontFamily: MONO }}>
-                τ² = {meta.tauSquared.toFixed(3)}
+              <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6 }}>
+                between schools only
               </div>
             </div>
             <DistributionStrip schools={schools} districtGap={meta.districtGap} tauSD={tauSD} />
           </div>
           <div style={{ fontSize: 11, color: SLU.mute, marginTop: 8, lineHeight: 1.4, maxWidth: 540 }}>
-            Each dot is a school's shrunken gap. The gold band shows the ±1 SD range we'd expect if the spread is real.
+            Each dot is one school’s shrunken gap — its number nudged toward the district average so a few students can’t swing it. The gold band shows the range where most schools should fall if the spread is real.
           </div>
         </div>
 
         {/* Coverage */}
         <div style={{ flex: '1 1 180px', minWidth: 160 }}>
-          <StatLabel>Schools meeting threshold</StatLabel>
+          <StatLabel>Schools with enough students</StatLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
             <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
                             color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
@@ -930,8 +934,8 @@ function OverviewCardGap() {
               / {meta.nSchools}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4, fontFamily: MONO }}>
-            min cell n ≥ {meta.minCellSize}
+          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
+            at least {meta.minCellSize} students per group
           </div>
         </div>
       </div>
@@ -1023,14 +1027,14 @@ function OverviewCardScan() {
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
 
   return (
-    <AuxCard collapsible title={`Overview · ${data.meta.subject.toUpperCase()} · district grade-level trends · ${yr}`}>
+    <AuxCard collapsible title={`Overview · ${data.meta.subject.toUpperCase()} · how each grade is doing · ${yr}`}>
       <div style={{
         display: 'flex', flexWrap: 'wrap',
         gap: '20px 36px', alignItems: 'flex-start',
       }}>
         {/* Coverage summary */}
         <div style={{ flex: '0 0 auto', minWidth: 160 }}>
-          <StatLabel>Coverage</StatLabel>
+          <StatLabel>Schools included</StatLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
             <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
                             color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
@@ -1045,7 +1049,7 @@ function OverviewCardScan() {
 
         {/* Per-grade cells — one box per grade */}
         <div style={{ flex: '1 1 520px', minWidth: 380 }}>
-          <StatLabel>Average residual by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— n-weighted, vs. district baseline (SD)</span></StatLabel>
+          <StatLabel>Average growth by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— compared with the district average (SD)</span></StatLabel>
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
             {byGrade.map(({ g, n, schoolCount, mean }) => {
               const abs = Math.abs(mean).toFixed(2);
@@ -1178,7 +1182,7 @@ function CSegmented({ value, onChange, options, label, hint, optionHints, disabl
                     tabIndex={active ? 0 : -1}
                     ref={(el) => { refs.current[k] = el; }}
                     onClick={() => { if (!isDisabled) onChange(k); }}
-                    title={isDisabled ? 'Upload this subject’s file to enable it' : optHint}
+                    title={isDisabled ? 'Upload this subject’s file to turn it on' : optHint}
                     style={{
                       flex: 1, border: 'none',
                       background: active ? '#fff' : 'transparent',
@@ -1230,12 +1234,12 @@ function ControlsGrid({ children, columns = 3 }) {
 }
 
 const METHOD_OPTS = { shrunk: 'Shrunken', raw: 'Raw' };
-const METHOD_HINT = 'How point estimates are computed. Shrunken (empirical Bayes) pulls every school toward the district mean in proportion to how noisy its data is — including schools whose raw gap is smaller than average, which can be counter-intuitive. Raw is the unpooled per-school estimate.';
+const METHOD_HINT = 'How each school’s number is figured. Shrunken gently pulls schools with less data toward the district average, so a handful of students can’t swing the result — steadier for small schools, but less extreme. Raw shows each school’s own number exactly as measured: honest, but jumpier when only a few students are involved.';
 const METHOD_OPT_HINTS = {
-  shrunk: 'Shrunken: partial pooling. Small-n schools borrow strength from the district; estimates are more stable but less extreme.',
-  raw: 'Raw: unpooled per-school estimate. Honest about each school’s data but noisier when n is small.',
+  shrunk: 'Shrunken: schools with fewer students are nudged toward the district average, so their numbers are steadier but less extreme.',
+  raw: 'Raw: each school’s own number, exactly as measured — honest about its data, but jumpier when only a few students are involved.',
 };
-const UNIT_HINT = 'Display units for residuals. SD is z-score vs. district baseline; Weeks converts each residual using a year × grade × subject growth factor from Missouri MAP statewide means (defaults to 2025; see methods).';
+const UNIT_HINT = 'How to show the numbers. SD is a standard scale compared with the district average. Weeks converts that into about how many weeks of learning it represents, using Missouri MAP growth norms.';
 
 const SORTS_FALLBACK = {
   gap_desc: 'Gap (largest first)',
@@ -1244,9 +1248,9 @@ const SORTS_FALLBACK = {
   n_desc:   'Sample size',
 };
 const THRESH_FALLBACK = {
-  inline:  'Mark in-place (dim row)',
-  section: 'Section divider',
-  hide:    'Hide below threshold',
+  inline:  'Mark in place (dimmed)',
+  section: 'Group at the bottom',
+  hide:    'Hide',
 };
 
 function flattenOptionMap(map, fallback) {
@@ -1262,11 +1266,11 @@ function GapControls({ ctx }) {
   const threshOpts = flattenOptionMap(window.THRESHOLD_MODES, THRESH_FALLBACK);
   return (
     <ControlsGrid>
-      <CGroup title="Slice">
+      <CGroup title="Show">
         <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Subgroup pair" />
+        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare" />
       </CGroup>
-      <CGroup title="Estimate">
+      <CGroup title="How it’s figured">
         <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
                     options={METHOD_OPTS} label="Method"
                     hint={METHOD_HINT} optionHints={METHOD_OPT_HINTS} />
@@ -1274,11 +1278,11 @@ function GapControls({ ctx }) {
                     options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
                     hint={UNIT_HINT} />
       </CGroup>
-      <CGroup title="Arrange">
+      <CGroup title="Order">
         <CSelect value={ctx.forestSort} onChange={ctx.setForestSort}
                  options={sortOpts} label="Sort" />
         <CSelect value={ctx.threshold} onChange={ctx.setThreshold}
-                 options={threshOpts} label="Below threshold" />
+                 options={threshOpts} label="Small groups" />
       </CGroup>
     </ControlsGrid>
   );
@@ -1286,7 +1290,7 @@ function GapControls({ ctx }) {
 function ScanControls({ ctx }) {
   return (
     <ControlsGrid>
-      <CGroup title="Slice">
+      <CGroup title="Show">
         <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
       </CGroup>
       <CGroup title="Units">

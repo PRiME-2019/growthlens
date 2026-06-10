@@ -1,22 +1,22 @@
 # GrowthLens
 
-A district-level analytics prototype for visualizing student growth residuals across schools, grades, and subgroups. Built for the PRiME Center at Saint Louis University.
+See where your students are growing — privately, in your browser. Built for the PRiME Center at Saint Louis University.
 
-GrowthLens ingests **Missouri DESE/MOSIS** growth files (which carry pre-computed standardized residuals), then aggregates and shrinks them **entirely in the browser** and renders every figure from the real numbers. Parsing and computation run in a **vendored, same-origin DuckDB-WASM** engine — no student data ever leaves the tab.
+Upload one file from your assessment system and GrowthLens turns it into a clear picture of how each school and student group is doing — where growth is strong, where groups are falling behind, and which results rest on too few students to lean on. Everything is figured right here in your browser tab; not one student record is ever uploaded to a server, and you can confirm that yourself in your browser's developer tools.
 
 ## What it does
 
-Seven pages, navigated from the left rail:
+GrowthLens shows how each school is doing compared with the district as a whole, steadies the numbers for smaller schools so a few students can't swing the picture, and measures the gap between student groups school by school. The numbers describe what's happening, not why — use them to ask sharper questions, not to assign blame. There are seven pages, reached from the left rail:
 
-1. **Overview** (landing) — value-prop blurb, three click-through cards, accordion explaining what GrowthLens is and isn't.
-2. **Upload data** — drag-and-drop dropzones for Math + ELA DESE/MOSIS growth files. Each file is parsed, validated, and aggregated in-browser via DuckDB-WASM; nothing is uploaded. Validation errors (file dropped in the wrong subject slot, missing required columns, no `*_Z_RESIDUAL` column, etc.) surface inline.
-3. **System Scan** — heatmap of grade × school residuals with an overall column; sortable by clicking any column header.
-4. **Gap Analysis** — animated forest plot of within-school subgroup gaps; raw ↔ shrunken toggle, SD ↔ weeks-of-learning units, threshold modes for cells below the minimum cell size.
-5. **Status & Growth** — achievement vs. growth scatter with quadrant labels and a district-mean cross; school-level (raw/shrunken) and student-level (raw only) views.
-6. **Demographics** — side-by-side box plots of student residuals by subgroup. The bundled demo shows seven categories; an uploaded DESE file exposes the five engine comparisons (FRL, IEP, EL, Black vs White, Hispanic vs White).
-7. **Export** — generates a PPTX deck of the current slice via PptxGenJS.
+1. **Overview** (landing) — a quick tour of what GrowthLens does, three click-through cards, and a short explainer of what the tool is and isn't.
+2. **Upload data** — drop in your reading (ELA) and math files from your assessment system. Each file is read and checked right here in your browser; nothing is uploaded. If something's off — a file dropped in the wrong subject slot, or a missing column — GrowthLens tells you on the spot so you can fix it.
+3. **System Scan** — a district-wide heat map of how each grade is doing at each school, with an overall column. Click any column header to re-sort. Scan it to spot where growth is consistently strong or soft before you dig into any one group.
+4. **Gap Analysis** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Switch between each school's own number and a steadied version, show results on a standard scale or as weeks of learning, and choose how to handle schools with too few students to read reliably.
+5. **Status & Growth** — two views at once: where students started along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
+6. **Demographics** — side-by-side box plots that compare growth from one student group to the next. The bundled demo shows seven groups; an uploaded file opens up five comparisons (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
+7. **Export** — builds a board-ready PowerPoint deck of what you're currently looking at, ready to edit.
 
-Methods documentation lives in [methods.html](methods.html), linked from the sidebar and the FAQ.
+Want the details on how the numbers are made? The methods note lives in [methods.html](methods.html), linked from the sidebar and the FAQ.
 
 ### Sign convention
 
