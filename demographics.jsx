@@ -48,7 +48,7 @@ function DemographicsControls({ ctx }) {
   return (
     <window.ControlsGrid>
       <window.CGroup title="Slice">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" />
+        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
         <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Subgroup pair" />
       </window.CGroup>
       <window.CGroup title="Estimate">

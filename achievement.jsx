@@ -33,7 +33,7 @@ function AchievementControls({ ctx }) {
   return (
     <window.ControlsGrid>
       <window.CGroup title="Slice">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" />
+        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
       </window.CGroup>
       <window.CGroup title="Estimate">
         <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}

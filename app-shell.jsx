@@ -17,106 +17,14 @@
 //
 // Layout is now a simple two-column grid: LeftNav | main column.
 
-// Subject toggle is live across all screens. Math datasets are derived from
-// the ELA fixtures by a deterministic transform (see ensureMathData below) —
-// good enough to demo the toggle UI end-to-end until real per-subject files
-// are wired in.
+// Subject toggle is live across all screens. Figure data is swapped behind the
+// window.* globals by engine/store.js (GLStore): the bundled fixtures are the
+// Math demo; an uploaded subject shadows the demo. ELA is unavailable until a
+// real ELA file is uploaded.
 const SUBJECTS = { ela: 'ELA', math: 'Math' };
 
-// ---- SUBJECT DATA SWAP ------------------------------------------------------
-// The figure modules read fixed window.* globals (GAPS_DATA, HEATMAP_DATA,
-// DEMO_DATA, DEMO_DATA_BY_SCHOOL, ACH_DATA). To get a Subject toggle without
-// refactoring every figure, we keep one snapshot per subject and point the
-// globals at the active subject's copy before each render. Pages get re-keyed
-// on `subject` so figures re-mount and re-read their inputs.
-const __DATA_KEYS = ['GAPS_DATA', 'HEATMAP_DATA', 'DEMO_DATA', 'DEMO_DATA_BY_SCHOOL', 'ACH_DATA'];
-
-function __deepClone(v) {
-  if (v === null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map(__deepClone);
-  const out = {};
-  for (const k of Object.keys(v)) out[k] = __deepClone(v[k]);
-  return out;
-}
-
-// Deterministic-ish scaler for residual-like numeric fields. Math reads as
-// "tighter spread, slightly negative shift" against ELA — a believable demo
-// contrast without inventing a second story.
-//
-// CAVEAT (demo-only): every residual and CI bound is the same affine transform
-// of its ELA counterpart, so CIs scale by 0.82× in lockstep with the point
-// estimate. A careful viewer will notice that no Math school has an
-// independently wider or narrower CI than its ELA twin. Replace this with real
-// Math data before any external review.
-function __mathify(v, idx) {
-  if (typeof v !== 'number' || !isFinite(v)) return v;
-  // pseudo-noise from idx so the same path produces the same value
-  const jitter = Math.sin(idx * 12.9898 + 78.233) * 0.04;
-  return v * 0.82 - 0.06 + jitter;
-}
-
-const __RESIDUAL_FIELDS = new Set([
-  'r', 'shrunk_gap', 'raw_gap', 'y_raw', 'y_shrunk', 'gap', 'mean',
-  'median', 'q1', 'q3', 'whiskerLo', 'whiskerHi', 'residual',
-  'districtGap', 'tauSquared',
-]);
-const __CI_FIELDS = new Set(['ci', 'ci_raw', 'ci_shrunk', 'raw_ci95', 'shrunk_ci95']);
-
-function __transformInPlace(node, pathIdx) {
-  if (node === null || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    node.forEach((v, i) => __transformInPlace(v, pathIdx + i + 1));
-    return;
-  }
-  for (const k of Object.keys(node)) {
-    const v = node[k];
-    if (__RESIDUAL_FIELDS.has(k) && typeof v === 'number') {
-      node[k] = __mathify(v, pathIdx + k.length);
-    } else if (__CI_FIELDS.has(k) && Array.isArray(v)) {
-      node[k] = v.map((x, i) => __mathify(x, pathIdx + i + 1));
-    } else if (k === 'subject' && typeof v === 'string') {
-      // Only 'subject' is rewritten; other meta strings (groupA, groupB, etc.)
-      // are intentionally inherited from ELA so the demo doesn't drift two
-      // independent stories. Swap in real Math meta before any external use.
-      node[k] = 'math';
-    } else if (v && typeof v === 'object') {
-      __transformInPlace(v, pathIdx + k.length + 1);
-    }
-  }
-}
-
-let __mathBuilt = false;
-function ensureMathData() {
-  if (__mathBuilt) return;
-  for (const key of __DATA_KEYS) {
-    const src = window[key];
-    if (src == null) continue;
-    if (!window.__DATA_ELA) window.__DATA_ELA = {};
-    if (!window.__DATA_MATH) window.__DATA_MATH = {};
-    window.__DATA_ELA[key] = src;
-    const cloned = __deepClone(src);
-    __transformInPlace(cloned, 1);
-    window.__DATA_MATH[key] = cloned;
-  }
-  __mathBuilt = true;
-}
-
-function activateSubject(subject) {
-  const bag = subject === 'math' ? window.__DATA_MATH : window.__DATA_ELA;
-  if (!bag) return;
-  for (const key of __DATA_KEYS) {
-    if (bag[key] !== undefined) window[key] = bag[key];
-  }
-  // __transformInPlace only rewrites residual / CI fields. Cell-count meta
-  // (nMeetingThreshold, nSchools) is recomputed here from the cloned arrays
-  // so the Math snapshot reflects its own schools rather than inheriting ELA.
-  if (window.GAPS_DATA && window.GAPS_DATA.schools) {
-    const sch = window.GAPS_DATA.schools;
-    window.GAPS_DATA.meta.nSchools = sch.length;
-    window.GAPS_DATA.meta.nMeetingThreshold =
-      sch.filter(s => s.meets_min_cell !== false).length;
-  }
-}
+// ---- SUBJECT DATA SWAP -> engine/store.js (GLStore) --------------------------
+// The per-subject window.* swap now lives in the store; see AppBody below.
 
 // Random-effects pooled mean + SE over per-school gap estimates.
 function districtMeanRE(schools, tauSquared) {
@@ -156,7 +64,7 @@ const PAGES = {
 
 function AppBody() {
   const [page, setPage]           = React.useState('landing');
-  const [subject, setSubject]     = React.useState('ela');
+  const [subject, setSubjectState] = React.useState('math');
   const [demo, setDemo]           = React.useState('frl');
   const [estimate, setEstimate]   = React.useState('shrunk');
   const [unit, setUnit]           = React.useState('z');
@@ -169,11 +77,14 @@ function AppBody() {
   const [achLevel, setAchLevel]   = React.useState('school');
   const [achShowMeans, setAchShowMeans] = React.useState(true);
 
-  // Build per-subject dataset variants once, then point the well-known
-  // window.* globals at the active subject's copy before each render. Pages
-  // get re-keyed on `subject` to force figures to re-read the swapped globals.
-  ensureMathData();
-  activateSubject(subject);
+  // Seed the bundled Math demo once (reads the window.* fixtures), then point
+  // the well-known window.* globals at the active (subject, subgroup) via the
+  // store. Pages are re-keyed on `subject` so figures re-read the swapped globals.
+  React.useEffect(() => { if (window.GLStore) window.GLStore.seedDemo(); }, []);
+  if (window.GLStore) { window.GLStore.setActiveSubject(subject); window.GLStore.setActiveSubgroup(demo); }
+  // Only allow switching to a subject the store actually has (demo is Math-only;
+  // ELA becomes available once an ELA file is uploaded). Guards the no-op toggle.
+  const setSubject = (s) => { if (!window.GLStore || window.GLStore.available(s)) setSubjectState(s); };
   // Drive the SD ↔ weeks-of-learning conversion off the active subject so
   // forest-shared's fmtVal / zToWeeks pick up the right effect-size factor
   // without each call site having to thread it through props.
@@ -184,8 +95,14 @@ function AppBody() {
   // which re-opens the controls when scrollY is near zero.
   React.useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
+  // Subjects the store can't render yet are greyed in the toggle (demo is
+  // Math-only; ELA enables once its file uploads). Never grey the active one.
+  const disabledSubjects = Object.keys(SUBJECTS).filter(
+    (s) => s !== subject && !(window.GLStore && window.GLStore.available(s)),
+  );
+
   const ctx = {
-    page, setPage, subject, setSubject, demo, setDemo,
+    page, setPage, subject, setSubject, disabledSubjects, demo, setDemo,
     estimate, setEstimate, unit, setUnit, forestSort, setForestSort,
     threshold, setThreshold,
     demoVar, setDemoVar,
@@ -209,7 +126,7 @@ function AppBody() {
         {(page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement') && <DatasetStrip />}
         {page === 'landing'      && <LandingPage ctx={ctx} />}
         {page === 'upload'       && <UploadPage ctx={ctx} />}
-        <div key={subject} style={{ display: 'contents' }}>
+        <div key={subject + ':' + demo} style={{ display: 'contents' }}>
           {page === 'scan'         && <ScanPage sliceLabel={sliceLabel} ctx={ctx} />}
           {page === 'gap'          && <GapPage sliceLabel={sliceLabel} ctx={ctx} />}
         </div>
@@ -343,16 +260,22 @@ function NavItem({ label, href, external, pdf, placeholder, soon }) {
 
 // ---- DATASET STRIP ----------------------------------------------------------
 function DatasetStrip() {
+  const m = (window.GLStore && window.GLStore.getActiveMeta()) || null;
+  const yr = m && (m.latestYear || m.year);
+  const label = m
+    ? `${m.districtCode ? m.districtCode + ' · ' : ''}`
+      + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload' : 'bundled demo data'}`
+      + ` · ${m.nSchools} schools${yr ? ' · ' + yr : ''}`
+    : 'No dataset loaded';
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   gap: 12, fontSize: 11.5, color: SLU.mute, fontFamily: MONO,
                   flexWrap: 'wrap' }}>
       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        Riverside USD · 2024–25 MAP · 30 schools · bundled demo data
+        {label}
       </span>
       <span style={{ display: 'inline-flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
         <span><span style={{ color: '#1F8A5B' }}>●</span> private — runs in browser</span>
-
       </span>
     </div>
   );
@@ -495,10 +418,29 @@ function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
 function UploadPage({ ctx }) {
   const [files, setFiles] = React.useState({ ela: null, math: null });
   const [stages, setStages] = React.useState({ ela: 'idle', math: 'idle' });
-  const setOne = (key, name) => {
-    setFiles((f) => ({ ...f, [key]: name }));
+  const [errors, setErrors] = React.useState({ ela: null, math: null });
+  // Real pipeline: read+validate the file in DuckDB-WASM, compute the figure
+  // shapes, and register them in the store. Nothing leaves the browser.
+  const onFile = async (key, file) => {
+    setFiles((f) => ({ ...f, [key]: file.name }));
     setStages((s) => ({ ...s, [key]: 'parsing' }));
-    setTimeout(() => setStages((s) => ({ ...s, [key]: 'ready' })), 600);
+    setErrors((e) => ({ ...e, [key]: null }));
+    if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
+      setStages((s) => ({ ...s, [key]: 'idle' }));
+      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'Engine not loaded — check your connection and reload.' } }));
+      return;
+    }
+    try {
+      const conn = await window.GL.getConnection();
+      const res = await window.GLIngest.loadSubjectFile(file, conn, key);
+      if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
+      const shapes = await window.GLCompute.computeSlice(key);
+      window.GLStore.putUploaded(key, shapes, res.meta);
+      setStages((s) => ({ ...s, [key]: 'ready' }));
+    } catch (err) {
+      setStages((s) => ({ ...s, [key]: 'idle' }));
+      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+    }
   };
   const setStage = (key, v) => setStages((s) => ({ ...s, [key]: v }));
   const bothReady = stages.ela === 'ready' && stages.math === 'ready';
@@ -534,7 +476,8 @@ function UploadPage({ ctx }) {
           stage={stages.ela}
           setStage={(v) => setStage('ela', v)}
           filename={files.ela}
-          onAccept={(name) => setOne('ela', name)}
+          onFile={onFile}
+          error={errors.ela}
           placeholder="ELA Student Growth Residuals"
         />
         <SubjectDropZone
@@ -544,7 +487,8 @@ function UploadPage({ ctx }) {
           stage={stages.math}
           setStage={(v) => setStage('math', v)}
           filename={files.math}
-          onAccept={(name) => setOne('math', name)}
+          onFile={onFile}
+          error={errors.math}
           placeholder="Math Student Growth Residuals"
         />
       </div>
@@ -634,14 +578,21 @@ function UploadPage({ ctx }) {
   );
 }
 
-function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onAccept, placeholder }) {
+function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, error, placeholder }) {
   const onDrop = (e) => {
     e.preventDefault();
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) onAccept(f.name);
+    if (f) onFile(subjectKey, f);
     else setStage('idle');
   };
   const ready = stage === 'ready';
+  const errMsg = !error ? null
+    : error.error === 'subject_mismatch' ? `This is the ${subjectLabel} slot, but the file looks like ${String(error.detected || '').toUpperCase()}.`
+    : error.error === 'missing_columns' ? 'Missing required columns: ' + (error.missing || []).join(', ')
+    : error.error === 'no_prefix' ? "Couldn't find a *_Z_RESIDUAL column — is this a DESE growth file?"
+    : error.error === 'no_rows_latest' ? `No rows for the latest year (${error.latestYear ?? '—'}).`
+    : error.error === 'no_year' ? 'No GROWTH_YEAR values found.'
+    : (error.message || 'Could not read this file.');
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setStage('dragover'); }}
@@ -660,9 +611,9 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
         position: 'absolute', top: 14, right: 14,
         fontFamily: LABEL, fontSize: 10, fontWeight: 700,
         textTransform: 'uppercase', letterSpacing: 1.0,
-        color: ready ? '#1F8A5B' : SLU.mute,
+        color: errMsg ? '#B42318' : ready ? '#1F8A5B' : SLU.mute,
       }}>
-        {ready ? '● Loaded' : stage === 'parsing' ? 'Parsing…' : stage === 'dragover' ? 'Drop to load' : 'Awaiting file'}
+        {errMsg ? '⚠ Error' : ready ? '● Loaded' : stage === 'parsing' ? 'Parsing…' : stage === 'dragover' ? 'Drop to load' : 'Awaiting file'}
       </span>
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -675,8 +626,10 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
                      fontFamily: ready || stage === 'parsing' ? MONO : FONT }}>
         {ready || stage === 'parsing' ? filename : placeholder}
       </span>
-      <span style={{ fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
-        {ready
+      <span style={{ fontSize: 12.5, color: errMsg ? '#B42318' : SLU.mute, lineHeight: 1.5 }}>
+        {errMsg
+          ? errMsg
+          : ready
           ? 'Looks good — schema validated, ready to analyze.'
           : `Drop a ${subjectLabel} CSV here, or click choose file. One row per student × grade × year.`}
       </span>
@@ -693,7 +646,7 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
           <input type="file" accept=".csv,text/csv" style={{ display: 'none' }}
                  onChange={(e) => {
                    const f = e.target.files && e.target.files[0];
-                   if (f) onAccept(f.name);
+                   if (f) onFile(subjectKey, f);
                  }} />
         </label>
         {ready && (
@@ -1186,19 +1139,20 @@ function CLabel({ children, hint }) {
     </div>
   );
 }
-function CSegmented({ value, onChange, options, label, hint, optionHints }) {
+function CSegmented({ value, onChange, options, label, hint, optionHints, disabledKeys = [] }) {
   // Roving-tabindex radiogroup: only the active option is in the tab order,
   // ←/→ (and ↑/↓) move and select within the group, Home/End jump to ends.
   const keys = Object.keys(options);
   const refs = React.useRef({});
   const onKey = (e) => {
-    const i = keys.indexOf(value);
+    const nav = keys.filter((k) => !disabledKeys.includes(k));
+    const i = nav.indexOf(value);
     if (i < 0) return;
     let next = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = keys[(i + 1) % keys.length];
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = keys[(i - 1 + keys.length) % keys.length];
-    else if (e.key === 'Home') next = keys[0];
-    else if (e.key === 'End') next = keys[keys.length - 1];
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = nav[(i + 1) % nav.length];
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = nav[(i - 1 + nav.length) % nav.length];
+    else if (e.key === 'Home') next = nav[0];
+    else if (e.key === 'End') next = nav[nav.length - 1];
     if (next) {
       e.preventDefault();
       onChange(next);
@@ -1214,17 +1168,22 @@ function CSegmented({ value, onChange, options, label, hint, optionHints }) {
           const v = options[k];
           const active = value === k;
           const optHint = optionHints && optionHints[k];
+          const isDisabled = disabledKeys.includes(k);
           return (
             <button key={k} role="radio" aria-checked={active}
+                    aria-disabled={isDisabled || undefined}
+                    disabled={isDisabled}
                     tabIndex={active ? 0 : -1}
                     ref={(el) => { refs.current[k] = el; }}
-                    onClick={() => onChange(k)}
-                    title={optHint}
+                    onClick={() => { if (!isDisabled) onChange(k); }}
+                    title={isDisabled ? 'Upload this subject’s file to enable it' : optHint}
                     style={{
                       flex: 1, border: 'none',
                       background: active ? '#fff' : 'transparent',
-                      color: active ? SLU.ink : SLU.ink2,
-                      padding: '6px 10px', borderRadius: 4, cursor: 'pointer',
+                      color: isDisabled ? SLU.mute : active ? SLU.ink : SLU.ink2,
+                      padding: '6px 10px', borderRadius: 4,
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      opacity: isDisabled ? 0.45 : 1,
                       fontSize: 12, fontWeight: active ? 600 : 500,
                       boxShadow: active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                       outline: 'none',
@@ -1302,7 +1261,7 @@ function GapControls({ ctx }) {
   return (
     <ControlsGrid>
       <CGroup title="Slice">
-        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" />
+        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
         <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Subgroup pair" />
       </CGroup>
       <CGroup title="Estimate">
@@ -1326,7 +1285,7 @@ function ScanControls({ ctx }) {
   return (
     <ControlsGrid>
       <CGroup title="Slice">
-        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" />
+        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
       </CGroup>
       <CGroup title="Estimate">
         <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
