@@ -44,17 +44,22 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
   // the new domain while the bars' CSS transitions tween into the new projection.
   const axis = React.useMemo(() => {
     const ciKey = mode === 'raw' ? 'raw_ci95' : 'shrunk_ci95';
-    const pool = data.schools;
-    // Zero-side schools carry null CIs, and non-finite bounds (a degenerate
-    // cell that slipped into the data) are excluded — a single NaN would
-    // otherwise NaN the whole scale and pile every marker onto one spot.
+    // Below-threshold schools don't get a vote on the scale: a CI on a handful
+    // of students can span the whole axis and crush every reliable school into
+    // a sliver. Their point estimates still count (the marker always stays
+    // on-plot); only their interval may run past the edge, drawn with a faded
+    // end. Zero-side schools carry null CIs, and non-finite bounds (a
+    // degenerate cell that slipped into the data) are excluded — a single NaN
+    // would otherwise NaN the whole scale and pile every marker onto one spot.
     const finite = (xs) => xs.filter(Number.isFinite);
-    const cis = pool.map(s => s[ciKey]).filter(Boolean);
+    const cis = data.schools.filter(s => s.meets_min_cell).map(s => s[ciKey]).filter(Boolean);
     const lows = finite(cis.map(c => c[0]));
     const highs = finite(cis.map(c => c[1]));
+    const points = finite(data.schools.map(s => s[gapKey]));
     const ext = Math.max(Math.abs(data.meta.districtGap) || 0,
                          ...finite(data.meta.districtCi95 || []).map(Math.abs),
-                         ...lows.map(Math.abs), ...highs.map(Math.abs));
+                         ...lows.map(Math.abs), ...highs.map(Math.abs),
+                         ...points.map(Math.abs));
     const pad = Math.max(0.04, ext * 0.08);
     const max = Math.ceil((ext + pad) * 20) / 20;
     const min = -max;
@@ -66,6 +71,13 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
     }
     return { min, max, ticks };
   }, [data, mode]);
+
+  // True when any small-n interval runs past the plot edge — turns on the
+  // legend note explaining the faded bar ends.
+  const anyClipped = below.some(s => {
+    const ci = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
+    return !!ci && (ci[0] < axis.min || ci[1] > axis.max);
+  });
 
   // Plot column is fluid — it absorbs whatever width the card has beyond the
   // fixed label/n columns — with a floor below which the chart scrolls
@@ -134,6 +146,9 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
             <>
               <LegendSwatch groupA={data.meta.groupA} groupB={data.meta.groupB} />
               <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
+              {anyClipped && (
+                <span>A bar that fades at the chart’s edge keeps going — hover the school for its full range.</span>
+              )}
               {unit === 'weeks' && (
                 <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about how many weeks of learning each step on the scale stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, {(() => { const fy = wolFactorYear({ subject: data.meta.subject }); return fy ? `${fy} grade 4–8 average` : 'typical MAP average'; })()}; varies by grade — see methods).</span>
               )}
@@ -491,9 +506,15 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed }) {
   // empty group, so the school doesn't silently vanish from the comparison.
   const noEst = gap == null || ci == null;
   const missing = s.n_a === 0 ? meta.groupA : meta.groupB;
-  const xPct = (x) => `${((x - ax.min) / (ax.max - ax.min)) * 100}%`;
-  const left = noEst ? null : xPct(ci[0]);
-  const right = noEst ? null : xPct(ci[1]);
+  const pctOf = (x) => ((x - ax.min) / (ax.max - ax.min)) * 100;
+  const xPct = (x) => `${pctOf(x)}%`;
+  // Below-threshold CIs no longer stretch the axis, so an interval may run
+  // past the plot edge — clamp the bar there and fade the cut end (the
+  // tooltip and aria text still carry the full range).
+  const pLo = noEst ? 0 : pctOf(ci[0]);
+  const pHi = noEst ? 0 : pctOf(ci[1]);
+  const loClip = pLo < 0, hiClip = pHi > 100;
+  const barLo = Math.max(0, pLo), barHi = Math.min(100, pHi);
   const dotX = noEst ? null : xPct(gap);
   const opacity = dimmed ? 0.42 : 1;
   const isNeg = !noEst && gap < 0;
@@ -540,16 +561,24 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed }) {
             </span>
           ) : (
             <>
-              {/* CI bar — animated via CSS transitions on left/width */}
+              {/* CI bar — animated via CSS transitions on left/width; clipped
+                  ends fade out instead of getting a cap */}
               <div style={{
                 position: 'absolute', top: '50%', height: 2, transform: 'translateY(-50%)',
-                left, width: `calc(${right} - ${left})`,
-                background: isNeg ? SLU.neg : SLU.pos, opacity,
+                left: `${barLo}%`, width: `${Math.max(0, barHi - barLo)}%`,
+                background: (() => {
+                  const c = isNeg ? SLU.neg : SLU.pos;
+                  if (loClip && hiClip) return `linear-gradient(90deg, transparent, ${c} 18px, ${c} calc(100% - 18px), transparent)`;
+                  if (loClip) return `linear-gradient(90deg, transparent, ${c} 18px)`;
+                  if (hiClip) return `linear-gradient(270deg, transparent, ${c} 18px)`;
+                  return c;
+                })(),
+                opacity,
                 transition: `left ${TRANSITION}, width ${TRANSITION}, background-color ${TRANSITION}`,
               }} />
-              {/* CI end caps */}
-              <CICap leftPct={left} side="left" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
-              <CICap leftPct={right} side="right" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
+              {/* CI end caps — only where the interval actually ends on-plot */}
+              {!loClip && <CICap leftPct={`${barLo}%`} side="left" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />}
+              {!hiClip && <CICap leftPct={`${barHi}%`} side="right" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />}
               {/* Point */}
               <Dot leftPct={dotX} gap={gap} opacity={opacity} hover={hover} />
             </>
