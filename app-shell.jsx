@@ -112,6 +112,10 @@ function AppBody() {
   // Scroll to the top whenever the user changes analysis tabs so the new
   // page reads from its header.
   React.useEffect(() => { window.scrollTo(0, 0); }, [page]);
+  // Title tracks the page for history / bookmarks / screen readers.
+  React.useEffect(() => {
+    document.title = page === 'landing' ? 'GrowthLens' : `${PAGES[page].label} · GrowthLens`;
+  }, [page]);
 
   // Subjects the store can't render yet are greyed in the toggle (demo is
   // Math-only; ELA enables once its file uploads). Never grey the active one.
@@ -332,17 +336,29 @@ function DatasetStrip({ placeholder }) {
   }
   const m = (window.GLStore && window.GLStore.getActiveMeta()) || null;
   const yr = m && (m.latestYear || m.year);
-  const label = m
+  const isDemo = m && m.source !== 'uploaded';
+  const rest = m
     ? `${m.districtCode ? m.districtCode + ' · ' : ''}`
-      + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload' : 'sample data'}`
-      + ` · ${m.nSchools} school${m.nSchools === 1 ? '' : 's'}${yr ? ' · ' + yr : ''}`
+      + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload · ' : ''}`
+      + `${m.nSchools} school${m.nSchools === 1 ? '' : 's'}${yr ? ' · ' + yr : ''}`
     : 'No data loaded yet';
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   gap: 12, fontSize: 11.5, color: SLU.mute, fontFamily: MONO,
                   flexWrap: 'wrap' }}>
-      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {label}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8,
+                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {/* Sample data gets a real badge — tiny gray mono was easy to miss,
+            and screenshots of synthetic data shouldn't pass for real numbers. */}
+        {isDemo && (
+          <span style={{ padding: '2px 7px', borderRadius: 4, fontFamily: LABEL,
+                         fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8,
+                         textTransform: 'uppercase',
+                         background: 'rgba(154, 118, 17, 0.14)', color: '#7A5D0E' }}>
+            Sample data
+          </span>
+        )}
+        <span>{rest}</span>
       </span>
     </div>
   );
@@ -914,7 +930,9 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
               width: 10, textAlign: 'center', lineHeight: 1,
             }}>▶</span>
           )}
-          <span>{title}</span>
+          {/* Real heading for structure — visually identical to the old span */}
+          <h2 style={{ margin: 0, font: 'inherit', letterSpacing: 'inherit',
+                       textTransform: 'inherit', color: 'inherit' }}>{title}</h2>
         </span>
         {headerExtra}
       </div>
@@ -1389,6 +1407,8 @@ function PlaceholderCard({ label, h }) {
 window.AppBody = AppBody;
 window.BriefHeader = BriefHeader;
 window.AuxCard = AuxCard;
+window.KeyTakeaways = KeyTakeaways;
+window.StatLabel = StatLabel;
 window.CLabel = CLabel;
 window.CSegmented = CSegmented;
 window.SUBJECTS = SUBJECTS;

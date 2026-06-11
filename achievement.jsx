@@ -22,8 +22,67 @@ function AchievementPage({ sliceLabel, ctx }) {
       <window.BriefHeader eyebrow="Status & Growth" slice={sliceLabel}
         title="Where each school sits on both fronts"
         blurb={'Two views at once: where students scored this year along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that score lower but grow faster.'} />
+      <OverviewCardAch ctx={ctx} />
       <AchievementFigure level={level} ctx={ctx} />
     </>
+  );
+}
+
+// District-level context — same scaffolding as the Gap/Scan overview cards:
+// a couple of headline numbers plus generated takeaways, tracking the global
+// units/method settings.
+function OverviewCardAch({ ctx }) {
+  const ach = window.ACH_DATA;
+  if (!ach || !ach.school || !ach.school.points || ach.school.points.length === 0) return null;
+  const SLU = window.SLU;
+  const mode = ctx.estimate || 'shrunk';
+  const unit = ctx.unit || 'z';
+  const isWk = unit === 'weeks';
+  const fmtV = (v) => {
+    const x = isWk ? window.zToWeeks(v) : v;
+    return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
+  };
+  const unitTag = isWk ? 'wk' : 'SD';
+  const yOf = (p) => (mode === 'raw' || p.y_shrunk == null) ? p.y_raw : p.y_shrunk;
+  const schools = ach.school.points;
+  const above = schools.filter((p) => yOf(p) >= 0).length;
+  const studs = (ach.student && ach.student.points) || [];
+  const pct = studs.length ? Math.round(100 * studs.filter((p) => p.y_raw >= 0).length / studs.length) : null;
+  const ds = window.GLStore && window.GLStore.getActiveMeta();
+  const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
+  const takeaways = window.GLInsights
+    ? window.GLInsights.achievementTakeaways({ ach, mode, fmt: { val: (v) => `${fmtV(v)} ${unitTag}` } })
+    : [];
+  const big = { fontSize: 36, fontWeight: 600, fontFamily: window.MONO,
+                color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };
+  return (
+    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · score vs. growth · ${yr}`}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 36px', alignItems: 'flex-start' }}>
+        <div style={{ minWidth: 200 }}>
+          <window.StatLabel>Schools growing faster than expected</window.StatLabel>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={big}>{above}</span>
+            <span style={{ fontSize: 16, color: SLU.mute, fontFamily: window.MONO }}>/ {schools.length}</span>
+          </div>
+          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
+            {mode === 'raw' ? 'each school exactly as measured' : 'after steadying small schools'}
+          </div>
+        </div>
+        {pct != null && (
+          <div style={{ minWidth: 200 }}>
+            <window.StatLabel>Students at or above expectations</window.StatLabel>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+              <span style={big}>{pct}</span>
+              <span style={{ fontSize: 16, color: SLU.mute, fontFamily: window.MONO }}>%</span>
+            </div>
+            <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
+              of {studs.length.toLocaleString()} students with scores
+            </div>
+          </div>
+        )}
+      </div>
+      <window.KeyTakeaways items={takeaways} />
+    </window.AuxCard>
   );
 }
 
@@ -127,9 +186,11 @@ function AchievementFigure({ level, ctx }) {
   // make x symmetric around 0 so the district mean reads clean. The floors
   // guard degenerate domains — a single-school upload's lone dot standardizes
   // to exactly 0, and a zero-width domain would turn every position into NaN.
-  const xExtreme = Math.max(0.5, Math.max(Math.abs(xMin), Math.abs(xMax)) * 1.08);
+  // Padding is generous enough that an extreme dot clears the plot border and
+  // the corner labels instead of sitting on top of them.
+  const xExtreme = Math.max(0.5, Math.max(Math.abs(xMin), Math.abs(xMax)) * 1.15);
   xMin = -xExtreme; xMax = xExtreme;
-  const yExtreme = Math.max(0.05, Math.max(Math.abs(yMinR), Math.abs(yMaxR)) * 1.1);
+  const yExtreme = Math.max(0.05, Math.max(Math.abs(yMinR), Math.abs(yMaxR)) * 1.25);
   const yLo = -yExtreme, yHi = yExtreme;
 
   const xToPx = (v) => padL + ((v - xMin) / (xMax - xMin)) * plotW;
@@ -179,6 +240,8 @@ function AchievementFigure({ level, ctx }) {
     else if (!hx && hy) q.lh++;
     else q.ll++;
   });
+  // "2 schools", not "n=2" — say what's being counted.
+  const qn = (k) => `${k} ${level === 'school' ? (k === 1 ? 'school' : 'schools') : (k === 1 ? 'student' : 'students')}`;
 
   return (
     <section style={{
@@ -190,9 +253,9 @@ function AchievementFigure({ level, ctx }) {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
                      flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 4 }}>
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
+          <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: window.FONT }}>
             This year’s score vs. growth — {level === 'school' ? 'school view' : 'student view'}
-          </div>
+          </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
             x: this year’s score
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
@@ -200,7 +263,9 @@ function AchievementFigure({ level, ctx }) {
             <span style={{ marginLeft: 4 }}>
               {sampled
                 ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
-                : `${points.length.toLocaleString()} point${points.length === 1 ? '' : 's'}`}
+                : `${points.length.toLocaleString()} ${level === 'school'
+                    ? (points.length === 1 ? 'school' : 'schools')
+                    : (points.length === 1 ? 'student' : 'students')}`}
             </span>
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
             four corners split at the district average
@@ -257,16 +322,16 @@ function AchievementFigure({ level, ctx }) {
             district-mean cross stays the only gold mark in the plot. */}
         <QuadrantLabel x={padL + 12}              y={padT + 22}
                        align="start"
-                       title="Lower score · faster growth" sub={`n=${q.lh}`} accent={SLU.ink2} />
+                       title="Lower score · faster growth" sub={qn(q.lh)} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + 22}
                        align="end"
-                       title="Higher score · faster growth" sub={`n=${q.hh}`} accent={SLU.ink2} />
+                       title="Higher score · faster growth" sub={qn(q.hh)} accent={SLU.ink2} />
         <QuadrantLabel x={padL + 12}              y={padT + plotH - 12}
                        align="start" anchorBottom
-                       title="Lower score · slower growth" sub={`n=${q.ll}`} accent={SLU.ink2} />
+                       title="Lower score · slower growth" sub={qn(q.ll)} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + plotH - 12}
                        align="end" anchorBottom
-                       title="Higher score · slower growth" sub={`n=${q.hl}`} accent={SLU.ink2} />
+                       title="Higher score · slower growth" sub={qn(q.hl)} accent={SLU.ink2} />
 
         {/* points — circles get a CSS transition on cx/cy so subject toggles
             tween between positions instead of jumping. We key school-level

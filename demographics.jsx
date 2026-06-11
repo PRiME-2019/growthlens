@@ -42,6 +42,7 @@ function DemographicsPage({ sliceLabel, ctx }) {
       <window.BriefHeader eyebrow="Demographics" slice={sliceLabel}
                    title="How growth varies from group to group"
                    blurb={'For each group, the box shows the middle of the pack and the line shows the typical student; the whiskers and dots show the full spread. Compare the typical student and the spread across groups to see whether differences sit in the middle or out in the tails.'} />
+      <OverviewCardDemo data={districtData} label={label} ctx={ctx} />
       <DemographicsFigure label={label} groups={groups} districtMean={districtMean}
                           demoVar={demoVar} ctx={ctx} />
     </>
@@ -56,6 +57,60 @@ const DEMO_TWEEN = window.MOTION_OK === false ? '0ms' : '460ms cubic-bezier(0.32
 const DEMO_TRANSITION = {
   transition: `x ${DEMO_TWEEN}, y ${DEMO_TWEEN}, x1 ${DEMO_TWEEN}, y1 ${DEMO_TWEEN}, x2 ${DEMO_TWEEN}, y2 ${DEMO_TWEEN}, cx ${DEMO_TWEEN}, cy ${DEMO_TWEEN}, width ${DEMO_TWEEN}, transform ${DEMO_TWEEN}, fill ${DEMO_TWEEN}, stroke ${DEMO_TWEEN}`,
 };
+
+// District-level context — same scaffolding as the other overview cards:
+// headline numbers plus generated takeaways, tracking the global units and
+// the group chosen on the figure card below.
+function OverviewCardDemo({ data, label, ctx }) {
+  if (!data || !data.groups || data.groups.length === 0) return null;
+  const SLU = window.SLU;
+  const unit = ctx.unit || 'z';
+  const isWk = unit === 'weeks';
+  const fmtV = (v) => {
+    const x = isWk ? window.zToWeeks(v) : v;
+    return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
+  };
+  const unitTag = isWk ? 'wk' : 'SD';
+  const groups = data.groups;
+  const sorted = [...groups].sort((a, b) => b.median - a.median);
+  const hi = sorted[0], lo = sorted[sorted.length - 1];
+  const totalN = groups.reduce((t, g) => t + g.n, 0);
+  const ds = window.GLStore && window.GLStore.getActiveMeta();
+  const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
+  const takeaways = window.GLInsights
+    ? window.GLInsights.demographicsTakeaways({ data, fmt: { val: (v) => `${fmtV(v)} ${unitTag}` } })
+    : [];
+  const big = { fontSize: 36, fontWeight: 600, fontFamily: DEMO_PAGE_MONO,
+                color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };
+  return (
+    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · growth by ${label} · ${yr}`}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 36px', alignItems: 'flex-start' }}>
+        {groups.length >= 2 && (
+          <div style={{ minWidth: 220 }}>
+            <window.StatLabel>Typical-student difference</window.StatLabel>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+              <span style={big}>{fmtV(hi.median - lo.median)}</span>
+              <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTag}</span>
+            </div>
+            <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
+              {hi.label} median minus {lo.label} median
+            </div>
+          </div>
+        )}
+        <div style={{ minWidth: 180 }}>
+          <window.StatLabel>Students in view</window.StatLabel>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={big}>{totalN.toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4, fontFamily: DEMO_PAGE_MONO }}>
+            {groups.map((g) => `${g.label} ${g.n.toLocaleString()}`).join(' · ')}
+          </div>
+        </div>
+      </div>
+      <window.KeyTakeaways items={takeaways} />
+    </window.AuxCard>
+  );
+}
 
 // Inline group picker for the card header — options come from the active
 // dataset's comparisons (window.DEMO_SPECS).
@@ -123,7 +178,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
   const leftPad = 220; // group label column
   const rightPad = 140; // stats column
   const topPad = 36;
-  const bottomPad = 44;
+  const bottomPad = 58;  // ticks + the axis title beneath them
   const rowH = 84;
   const plotW = width - leftPad - rightPad;
   const height = topPad + groups.length * rowH + bottomPad;
@@ -154,22 +209,16 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
                      gap: 12, marginBottom: 4 }}>
         <div>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
+          <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: DEMO_PAGE_FONT }}>
             Growth by {label}
-          </div>
+          </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
             Across the whole district
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
             box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
-                          textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-            x: growth vs. expected ({unitLabel})
-          </span>
-          <GroupSelect value={demoVar} onChange={ctx.setDemoVar} />
-        </div>
+        <GroupSelect value={demoVar} onChange={ctx.setDemoVar} />
       </div>
 
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
@@ -291,6 +340,12 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
             </g>
           );
         })}
+        {/* Axis title sits with the axis it describes, not up in the header */}
+        <text x={leftPad + plotW / 2} y={height - 8} fontSize={11}
+              fontFamily={DEMO_PAGE_LABEL} fill={SLU.ink2} textAnchor="middle"
+              fontWeight={700} style={{ textTransform: 'uppercase', letterSpacing: 1.0 }}>
+          Growth vs. expected ({unitLabel})
+        </text>
 
         {/* outlier tooltip — drawn last so it sits above everything. Uploaded
             outliers are bare residuals (no student/school ids), so the tooltip

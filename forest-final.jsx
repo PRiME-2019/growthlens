@@ -103,9 +103,9 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
                       flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 14 }}>
           <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
+            <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: FONT }}>
               {data.meta.subject.toUpperCase()} · {data.meta.groupA} vs. {data.meta.groupB} growth, school by school
-            </div>
+            </h2>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
               How much more or less {data.meta.groupA} students grew than their {data.meta.groupB} schoolmates, {unit === 'weeks' ? 'in weeks of learning' : 'in SD (standard scale)'}.
               The zero line = same growth; each bar is the range the estimate most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
@@ -153,6 +153,7 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
               {showDistrict && (
                 <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
               )}
+              <span>Hover (or tab to) any row for its exact numbers.</span>
               {anyClipped && (
                 <span>A bar that fades at the chart’s edge keeps going — hover the school for its full range.</span>
               )}
@@ -456,11 +457,12 @@ function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
       <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
            onFocus={() => setHover(true)} onBlur={() => setHover(false)}
            tabIndex={0}
+           className="gl-focus"
            role="img"
            aria-label={`District average: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}${ci ? `, 95% CI ${fmtCI(ci, unit)}` : ''}, pooled across ${pool.length} schools, n ${nA + nB}`}
            style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px', position: 'relative', height: h,
                     background: hover ? 'rgba(154, 118, 17, 0.07)' : 'transparent',
-                    cursor: 'crosshair', outline: 'none',
+                    cursor: 'crosshair',
                     boxShadow: hover ? `inset 0 0 0 1px ${SLU.gold}44` : 'none' }}>
         <div style={{ position: 'absolute', left: 8, right: 8, top: 0, bottom: 0 }}>
           {/* Zero rule — continues the reference-group anchor column from the
@@ -546,13 +548,14 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDi
       <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
            onFocus={() => setHover(true)} onBlur={() => setHover(false)}
            tabIndex={0}
+           className="gl-focus"
            role="img"
            aria-label={noEst
              ? `${s.school_id}: no ${missing} students — nothing to compare`
              : `${s.school_id}: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
            style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px', position: 'relative', height: rowH,
                     background: hover && !noEst ? 'rgba(0, 61, 165, 0.04)' : 'transparent',
-                    cursor: noEst ? 'default' : 'crosshair', outline: 'none',
+                    cursor: noEst ? 'default' : 'crosshair',
                     boxShadow: hover && !noEst ? `inset 0 0 0 1px ${SLU.blue}33` : 'none' }}>
         <div style={{ position: 'absolute', left: 8, right: 8, top: 0, bottom: 0 }}>
           {/* Zero rule — the reference-group anchor; a touch darker than the

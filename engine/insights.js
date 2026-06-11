@@ -233,5 +233,137 @@
     return select([schoolExtremes, gradeExtremes, standout, consistency], caveat);
   }
 
-  return { gapTakeaways, scanTakeaways };
+  // ---- Status & Growth ----------------------------------------------------
+  // ach: ACH_DATA ({ school: { points }, student: { points } }). School y
+  // follows the global Method; student level has no shrinkage. The quadrant
+  // split mirrors the figure: n-weighted district means over school points.
+  function achievementTakeaways({ ach, mode = 'shrunk', fmt = fmtSDDefault } = {}) {
+    const schools = (ach && ach.school && ach.school.points) || [];
+    const students = (ach && ach.student && ach.student.points) || [];
+    if (schools.length === 0) return [];
+    const y = (p) => (mode === 'raw' || p.y_shrunk == null) ? p.y_raw : p.y_shrunk;
+    const name = (p) => p.school_name && p.school_name !== p.school_id ? p.school_name : p.school_id;
+
+    let wSum = 0, xw = 0, yw = 0;
+    for (const p of schools) {
+      const w = p.n || 1;
+      wSum += w; xw += p.x * w; yw += y(p) * w;
+    }
+    const xMean = wSum ? xw / wSum : 0;
+    const yMean = wSum ? yw / wSum : 0;
+
+    // A — pattern-breaker: scores below the district average, grows faster.
+    let bright = null;
+    const brights = schools.filter((p) => p.x < xMean && y(p) > yMean)
+      .sort((a, b) => y(b) - y(a));
+    if (brights.length > 0) {
+      const p = brights[0];
+      bright = {
+        text: `**${name(p)}** breaks the pattern: it scores below the district average but grows `
+          + `faster than expected (${fmt.val(y(p))}) — growth worth understanding.`,
+      };
+    }
+
+    // B — the opposite corner: high status hiding slow growth.
+    let masked = null;
+    const maskeds = schools.filter((p) => p.x > xMean && y(p) < yMean)
+      .sort((a, b) => y(a) - y(b));
+    if (maskeds.length > 0) {
+      const p = maskeds[0];
+      masked = {
+        text: `**${name(p)}** scores above the district average but grows slower than expected `
+          + `(${fmt.val(y(p))}) — high status can hide slow growth.`,
+      };
+    }
+
+    // C — student share at/above expectations.
+    let share = null;
+    if (students.length > 0) {
+      const pct = Math.round(100 * students.filter((p) => p.y_raw >= 0).length / students.length);
+      share = { text: `**${pct}%** of students grew at or above expectations this year.` };
+    }
+
+    // D — school growth range.
+    let range = null;
+    if (schools.length >= 2) {
+      const sorted = [...schools].sort((a, b) => y(b) - y(a));
+      const best = sorted[0], worst = sorted[sorted.length - 1];
+      range = {
+        text: `School growth runs from ${fmt.val(y(best))} at **${name(best)}** down to `
+          + `${fmt.val(y(worst))} at **${name(worst)}**.`,
+      };
+    }
+
+    const small = schools.filter((p) => (p.n || 0) < 10);
+    const caveat = small.length > 0
+      ? {
+          caveat: true,
+          text: `Note: ${small.map(name).join(', ')} ${small.length === 1 ? 'has' : 'have'} fewer than `
+            + `10 students with scores — read ${small.length === 1 ? 'its dot' : 'their dots'} with care.`,
+        }
+      : null;
+
+    return select([bright, masked, share, range], caveat);
+  }
+
+  // ---- Demographics ---------------------------------------------------------
+  // data: DEMO_DATA[key] ({ label, districtMean, groups: [{label, n, median,
+  // q1, q3, …}] }). District-wide box plots — no method dimension here.
+  function demographicsTakeaways({ data, fmt = fmtSDDefault } = {}) {
+    const groups = (data && data.groups) || [];
+    if (groups.length === 0) return [];
+    const mag = (v) => fmt.val(Math.abs(v)).replace(/^[+−]\s?/, '');
+
+    // A — the median gap between the highest and lowest group.
+    let medianGap = null;
+    if (groups.length >= 2) {
+      const sorted = [...groups].sort((a, b) => b.median - a.median);
+      const hi = sorted[0], lo = sorted[sorted.length - 1];
+      medianGap = {
+        text: `The typical **${hi.label}** student grew ${fmt.val(hi.median)}, vs. ${fmt.val(lo.median)} `
+          + `for the typical **${lo.label}** student — ${mag(hi.median - lo.median)} apart at the middle `
+          + `of the pack.`,
+      };
+    }
+
+    // B — within-group spread vs. between-group gap: when the middle halves
+    // dwarf the gap, group membership says little about any one student.
+    let overlap = null;
+    if (groups.length >= 2) {
+      const iqrs = groups.map((g) => g.q3 - g.q1).filter(Number.isFinite);
+      const avgIqr = iqrs.length ? iqrs.reduce((a, b) => a + b, 0) / iqrs.length : 0;
+      const meds = groups.map((g) => g.median);
+      const gap = Math.abs(Math.max(...meds) - Math.min(...meds));
+      if (avgIqr > 2 * gap && avgIqr > 0) {
+        overlap = {
+          text: `Growth varies far more within each group than between them — the middle half of a `
+            + `group spans about ${mag(avgIqr)}, against a ${mag(gap)} gap — so the groups overlap heavily.`,
+        };
+      }
+    }
+
+    // C — when even a group's 75th percentile sits below expectations, say so.
+    let depth = null;
+    const sunk = groups.filter((g) => g.median < 0 && g.q3 < 0)
+      .sort((a, b) => a.median - b.median);
+    if (sunk.length > 0) {
+      depth = {
+        text: `Even the 75th-percentile **${sunk[0].label}** student grew below expectations `
+          + `(${fmt.val(sunk[0].q3)}) — this isn't just a struggling tail.`,
+      };
+    }
+
+    const small = groups.filter((g) => (g.n || 0) < 10);
+    const caveat = small.length > 0
+      ? {
+          caveat: true,
+          text: `Note: the ${small.map((g) => `**${g.label}**`).join(' and ')} group${small.length === 1 ? ' has' : 's have'} `
+            + `fewer than 10 students — too few to read reliably.`,
+        }
+      : null;
+
+    return select([medianGap, overlap, depth], caveat);
+  }
+
+  return { gapTakeaways, scanTakeaways, achievementTakeaways, demographicsTakeaways };
 });

@@ -103,7 +103,7 @@ function HeatmapShell({ children, title, subtitle, controls, footer }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
                       gap: 12, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>{title}</div>
+            <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: FONT }}>{title}</h2>
             {subtitle && <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>{subtitle}</div>}
           </div>
           {controls}
@@ -184,10 +184,10 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
   );
 }
 
-function ScaleLegend() {
+function ScaleLegend({ unit = 'z' }) {
   const stops = [-SCALE_MAX, -SCALE_MAX / 2, 0, SCALE_MAX / 2, SCALE_MAX];
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, color: SLU.ink2, fontFamily: MONO }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, color: SLU.ink2, fontFamily: MONO, flexWrap: 'wrap' }}>
       <span style={{ color: SLU.mute, fontFamily: FONT }}>below the district average</span>
       <span style={{ display: 'inline-flex' }}>
         {stops.map((t, i) => (
@@ -196,6 +196,11 @@ function ScaleLegend() {
       </span>
       <span style={{ color: SLU.mute, fontFamily: FONT }}>above the district average</span>
       <span style={{ marginLeft: 12 }}>−{SCALE_MAX} ··· 0 ··· +{SCALE_MAX} SD</span>
+      {unit === 'weeks' && (
+        <span style={{ color: SLU.mute, fontFamily: FONT }}>
+          — cells show weeks, but shades stay keyed to SD so colors compare across views
+        </span>
+      )}
     </div>
   );
 }
@@ -257,6 +262,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
     onFocus: () => { focusPos.current = { r, c }; setHover(hoverKey); },
     onBlur: () => setHover(null),
     role: 'gridcell',
+    className: 'gl-focus',   // visible keyboard focus even on blank cells
     'aria-label': label,
   });
 
@@ -267,7 +273,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
       controls={<CommonControls nMode={nMode} setNMode={setNMode} />}
       footer={
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-          <ScaleLegend />
+          <ScaleLegend unit={unit} />
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <SuppressedSwatch /> too few students to read reliably (fewer than {MIN_N})
           </span>

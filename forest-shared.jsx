@@ -125,7 +125,8 @@ function Select({ value, onChange, options, label }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
       {label && <span style={{ color: SLU.mute }}>{label}</span>}
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+              aria-label={label || undefined} style={{
         fontSize: 12, fontFamily: FONT, padding: '4px 8px',
         border: `1px solid ${SLU.rule}`, borderRadius: 6, background: '#fff', color: SLU.ink2,
       }}>

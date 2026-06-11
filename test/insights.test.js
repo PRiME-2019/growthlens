@@ -122,6 +122,89 @@ test('gapTakeaways: returns at most 4 items', () => {
   assert.ok(out.length >= 2 && out.length <= 4, `got ${out.length}`);
 });
 
+// ---- achievement -------------------------------------------------------------
+
+const ACH = {
+  school: { points: [
+    { school_id: 'S1', school_name: 'Lincoln', x: -0.8, y_raw: 0.12, y_shrunk: 0.09, n: 200 },
+    { school_id: 'S2', school_name: 'Carver', x: 0.6, y_raw: -0.15, y_shrunk: -0.11, n: 250 },
+    { school_id: 'S3', school_name: 'Riverside', x: 0.4, y_raw: 0.10, y_shrunk: 0.08, n: 220 },
+    { school_id: 'S4', school_name: 'Hillcrest', x: -0.2, y_raw: -0.30, y_shrunk: -0.20, n: 8 },
+  ] },
+  student: { points: [
+    { x: 0.1, y_raw: 0.2 }, { x: -0.3, y_raw: 0.4 }, { x: 0.5, y_raw: -0.1 }, { x: 0.2, y_raw: -0.6 },
+  ] },
+};
+
+test('achievementTakeaways: names the pattern-breaker (low score, fast growth)', () => {
+  const out = I.achievementTakeaways({ ach: ACH, mode: 'shrunk', fmt: fmtSD });
+  const t = out.find((x) => /Lincoln/.test(x.text));
+  assert.ok(t, 'bright-spot takeaway present');
+  assert.match(t.text, /\+0\.09 SD/);   // shrunken value under shrunk mode
+});
+
+test('achievementTakeaways: flags high score but slow growth', () => {
+  const out = I.achievementTakeaways({ ach: ACH, mode: 'shrunk', fmt: fmtSD });
+  const t = out.find((x) => /Carver/.test(x.text));
+  assert.ok(t, 'high-status-slow-growth takeaway present');
+});
+
+test('achievementTakeaways: reports the student share at/above expectations', () => {
+  const out = I.achievementTakeaways({ ach: ACH, mode: 'shrunk', fmt: fmtSD });
+  const t = out.find((x) => /\*\*50%\*\*/.test(x.text));
+  assert.ok(t, 'student share takeaway present (2 of 4 ≥ 0)');
+});
+
+test('achievementTakeaways: small-school caveat flagged and last', () => {
+  const out = I.achievementTakeaways({ ach: ACH, mode: 'shrunk', fmt: fmtSD });
+  const last = out[out.length - 1];
+  assert.equal(last.caveat, true);
+  assert.match(last.text, /Hillcrest/);
+});
+
+test('achievementTakeaways: respects raw mode for school values', () => {
+  const out = I.achievementTakeaways({ ach: ACH, mode: 'raw', fmt: fmtSD });
+  assert.ok(out.some((x) => x.text.includes('+0.12 SD')), 'raw value shown in raw mode');
+});
+
+// ---- demographics ------------------------------------------------------------
+
+const DEMO = {
+  label: 'FRL status',
+  districtMean: -0.03,
+  groups: [
+    { key: 'frl', label: 'FRL', n: 950, median: -0.05, q1: -0.38, q3: 0.28, mean: -0.06, whiskerLo: -1.2, whiskerHi: 1.1, outliers: [] },
+    { key: 'nonfrl', label: 'non-FRL', n: 980, median: 0.08, q1: -0.27, q3: 0.43, mean: 0.07, whiskerLo: -1.1, whiskerHi: 1.3, outliers: [] },
+  ],
+};
+
+test('demographicsTakeaways: leads with the median gap between groups', () => {
+  const out = I.demographicsTakeaways({ data: DEMO, fmt: fmtSD });
+  const t = out[0].text;
+  assert.match(t, /\*\*non-FRL\*\*/);
+  assert.match(t, /\*\*FRL\*\*/);
+  assert.match(t, /\+0\.08 SD/);
+  assert.match(t, /−0\.05 SD/);
+});
+
+test('demographicsTakeaways: notes within-group spread vs between-group gap', () => {
+  const out = I.demographicsTakeaways({ data: DEMO, fmt: fmtSD });
+  const t = out.find((x) => /within/.test(x.text));
+  assert.ok(t, 'overlap takeaway present (avg IQR 0.68 >> gap 0.13)');
+});
+
+test('demographicsTakeaways: small-group caveat when a group is under 10', () => {
+  const tiny = { ...DEMO, groups: [DEMO.groups[0], { ...DEMO.groups[1], n: 6 }] };
+  const out = I.demographicsTakeaways({ data: tiny, fmt: fmtSD });
+  const last = out[out.length - 1];
+  assert.equal(last.caveat, true);
+  assert.match(last.text, /non-FRL/);
+});
+
+test('demographicsTakeaways: empty groups produce no takeaways', () => {
+  assert.deepEqual(I.demographicsTakeaways({ data: { groups: [] }, fmt: fmtSD }), []);
+});
+
 // ---- scan ------------------------------------------------------------------
 
 const HEAT = {
