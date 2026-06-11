@@ -876,7 +876,7 @@ function GapPage({ sliceLabel, ctx }) {
       <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
                    title="Where the gap lives, school by school"
                    blurb={'For the two groups you choose, GrowthLens measures the gap between them at every school and lines the schools up from largest to smallest. You’ll see how big each gap is and which way it leans, the district-wide average for context, and which schools have too few students to read reliably. Use it to tell whether a gap shows up across the system or sits in just a few schools.'} />
-      <OverviewCardGap />
+      <OverviewCardGap unit={ctx.unit} estimate={ctx.estimate} />
       <ForestSlot ctx={ctx} />
     </>
   );
@@ -887,7 +887,7 @@ function ScanPage({ sliceLabel, ctx }) {
       <BriefHeader eyebrow="System Scan" slice={sliceLabel}
                    title="Where to look first"
                    blurb={'A district-wide view of how each grade is doing at each school, compared with what the district average would predict. Blue cells are growing faster than expected, rust cells slower. Scan the rows for schools that are consistently strong or soft, and the columns for grades where the whole district is ahead or behind — then dig into a specific subject and group in Gap Analysis.'} />
-      <OverviewCardScan />
+      <OverviewCardScan unit={ctx.unit} />
       <HeatmapSlot ctx={ctx} />
     </>
   );
@@ -957,13 +957,22 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
 // District-level numeric context for the current slice. Sits between the
 // page header and the figure — a quick "what does the district look like in
 // aggregate" reference before drilling into school-level detail.
-function OverviewCardGap() {
+function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
   const data = window.GAPS_DATA;
   if (!data) return null;
   const { meta, schools } = data;
   const tauSD = Math.sqrt(Math.max(0, meta.tauSquared));
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
+  // Track the global Units setting: weeks values round to whole weeks (the
+  // scale's resolution), SD keeps two decimals. The pooled district gap and
+  // τ are method-independent, so only the strip dots follow Method.
+  const isWk = unit === 'weeks';
+  const fmtBig = (v) => {
+    const x = isWk ? window.zToWeeks(v) : v;
+    return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
+  };
+  const unitTag = isWk ? 'wk' : 'SD';
 
   return (
     <AuxCard collapsible title={`Overview · ${meta.subject.toUpperCase()} · ${meta.groupA} − ${meta.groupB} · ${yr}`}>
@@ -977,19 +986,18 @@ function OverviewCardGap() {
           {(() => {
             const re = (window.districtMeanRE && window.districtMeanRE(schools, meta.tauSquared)) || null;
             const mu = re ? re.mu : meta.districtGap;
-            const sign = mu >= 0 ? '+' : '−';
             return (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                   <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
                                   color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
-                    {sign}{Math.abs(mu).toFixed(2)}
+                    {fmtBig(mu)}
                   </span>
-                  <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>SD</span>
+                  <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTag}</span>
                 </div>
                 {re && (
                   <div style={{ fontSize: 11, color: SLU.mute, marginTop: 4, fontFamily: MONO }}>
-                    95% CI [{re.ciLo >= 0 ? '+' : '−'}{Math.abs(re.ciLo).toFixed(2)}, {re.ciHi >= 0 ? '+' : '−'}{Math.abs(re.ciHi).toFixed(2)}]
+                    95% CI [{fmtBig(re.ciLo)}, {fmtBig(re.ciHi)}]
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
@@ -1009,18 +1017,21 @@ function OverviewCardGap() {
                 <span style={{ fontSize: 22, color: SLU.mute, fontFamily: MONO, lineHeight: 1 }}>±</span>
                 <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
                                 color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
-                  {tauSD.toFixed(2)}
+                  {isWk ? Math.abs(Math.round(window.zToWeeks(tauSD))) : tauSD.toFixed(2)}
                 </span>
-                <span style={{ fontSize: 13, color: SLU.mute }}>SD</span>
+                <span style={{ fontSize: 13, color: SLU.mute }}>{unitTag}</span>
               </div>
               <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6 }}>
                 between schools only
               </div>
             </div>
-            <DistributionStrip schools={schools} districtGap={meta.districtGap} tauSD={tauSD} />
+            <DistributionStrip schools={schools} districtGap={meta.districtGap} tauSD={tauSD}
+                               unit={unit} estimate={estimate} />
           </div>
           <div style={{ fontSize: 11, color: SLU.mute, marginTop: 8, lineHeight: 1.4, maxWidth: 540 }}>
-            Each dot is one school’s shrunken gap — its number nudged toward the district average so a few students can’t swing it. The gold band shows the range where most schools should fall if the spread is real.
+            {estimate === 'raw'
+              ? 'Each dot is one school’s raw gap — exactly as measured, so schools with few students can swing wide. The gold band shows the range where most schools should fall if the spread is real.'
+              : 'Each dot is one school’s shrunken gap — its number nudged toward the district average so a few students can’t swing it. The gold band shows the range where most schools should fall if the spread is real.'}
           </div>
         </div>
 
@@ -1045,12 +1056,20 @@ function OverviewCardGap() {
   );
 }
 
-function DistributionStrip({ schools, districtGap, tauSD }) {
+function DistributionStrip({ schools, districtGap, tauSD, unit = 'z', estimate = 'shrunk' }) {
   const width = 320, height = 56;
-  // Auto-range from data so dots never silently clamp to the edge. Zero-side
-  // schools carry null estimates — they have no dot to draw.
-  const dots = schools.filter(s => Number.isFinite(s.shrunk_gap));
-  const gaps = dots.map(s => s.shrunk_gap);
+  // Dots follow the global Method setting; geometry stays in z-space and only
+  // the labels convert to weeks (z↔weeks is linear, same trick as the forest
+  // axis). Auto-range from data so dots never silently clamp to the edge.
+  // Zero-side schools carry null estimates — they have no dot to draw.
+  const gapKey = estimate === 'raw' ? 'raw_gap' : 'shrunk_gap';
+  const dots = schools.filter(s => Number.isFinite(s[gapKey]));
+  const gaps = dots.map(s => s[gapKey]);
+  const fmtN = (v) => {
+    const x = unit === 'weeks' ? Math.round(window.zToWeeks(v)) : v;
+    if (x === 0) return '0';
+    return (x > 0 ? '+' : '−') + (unit === 'weeks' ? Math.abs(x) : Math.abs(x).toFixed(2));
+  };
   const dataMin = Math.min(districtGap - tauSD, ...gaps);
   const dataMax = Math.max(districtGap + tauSD, ...gaps);
   const pad = Math.max(0.08, (dataMax - dataMin) * 0.12);
@@ -1080,17 +1099,17 @@ function DistributionStrip({ schools, districtGap, tauSD }) {
         <g key={t}>
           <line x1={x(t)} x2={x(t)} y1={y + 14} y2={y + 18} stroke={SLU.mute} strokeWidth={1} />
           <text x={x(t)} y={y + 28} fontSize={9} fontFamily={MONO} fill={SLU.mute} textAnchor="middle">
-            {t === 0 ? '0' : (t > 0 ? '+' : '−') + Math.abs(t).toFixed(2)}
+            {fmtN(t)}
           </text>
         </g>
       ))}
       <text x={x(districtGap)} y={y - 14} fontSize={9} fontFamily={FONT} fill={SLU.gold}
             textAnchor="middle" fontWeight={600}>
-        district {(districtGap >= 0 ? '+' : '−') + Math.abs(districtGap).toFixed(2)}
+        district {fmtN(districtGap)}
       </text>
       {dots.map(s => {
-        const cx = Math.max(3, Math.min(width - 3, x(s.shrunk_gap)));
-        const inside = s.shrunk_gap >= districtGap - tauSD && s.shrunk_gap <= districtGap + tauSD;
+        const cx = Math.max(3, Math.min(width - 3, x(s[gapKey])));
+        const inside = s[gapKey] >= districtGap - tauSD && s[gapKey] <= districtGap + tauSD;
         return (
           <circle key={s.school_id} cx={cx} cy={y} r={3}
                   fill={inside ? SLU.mute : SLU.ink}
@@ -1106,10 +1125,15 @@ function DistributionStrip({ schools, districtGap, tauSD }) {
 // District-level mean residual is ~0 by construction, so we don't color-encode
 // here; cells show the grade and student count, with overall coverage on the
 // left as a sister stat block.
-function OverviewCardScan() {
+function OverviewCardScan({ unit = 'z' }) {
   const data = window.HEATMAP_DATA;
   if (!data) return null;
   const grades = ['3', '4', '5', '6', '7', '8'];
+  // Units follow the global setting, converted per grade like the heatmap's
+  // cells (estimate is a no-op here for the same reason it is there — the
+  // dataset stores one residual per cell). Cell colors stay in SD space so
+  // they always match the heatmap legend.
+  const isWk = unit === 'weeks';
 
   const color = window.divColor || (() => '#fff');
   const byGrade = grades.map(g => {
@@ -1153,11 +1177,13 @@ function OverviewCardScan() {
 
         {/* Per-grade cells — one box per grade */}
         <div style={{ flex: '1 1 520px', minWidth: 380 }}>
-          <StatLabel>Average growth by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— compared with the district average (SD)</span></StatLabel>
+          <StatLabel>Average growth by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— compared with the district average ({isWk ? 'weeks of learning' : 'SD'})</span></StatLabel>
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
             {/* Grades absent from the data would render misleading "▲0.00 · n=0" boxes. */}
             {byGrade.filter((b) => b.n > 0).map(({ g, n, schoolCount, mean }) => {
-              const abs = Math.abs(mean).toFixed(2);
+              const abs = isWk
+                ? String(Math.abs(Math.round(window.zToWeeks(mean, { grade: g }))))
+                : Math.abs(mean).toFixed(2);
               const above = mean >= 0;
               // Same luminance-based ink rules as HeatmapH1's cells.
               const glyphColor = window.heatGlyphInk ? window.heatGlyphInk(mean) : (above ? SLU.pos : SLU.neg);
@@ -1184,7 +1210,7 @@ function OverviewCardScan() {
                         {above ? '▲' : '▼'}
                       </span>
                       <span>{abs}</span>
-                      <span style={{ fontSize: 10, fontWeight: 500, color: SLU.mute, marginLeft: 2 }}>SD</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: SLU.mute, marginLeft: 2 }}>{isWk ? 'wk' : 'SD'}</span>
                     </div>
                     <div style={{ fontSize: 10, color: SLU.mute, fontFamily: MONO, marginTop: 4 }}>
                       n={n.toLocaleString()}
