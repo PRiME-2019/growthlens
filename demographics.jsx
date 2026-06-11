@@ -42,34 +42,9 @@ function DemographicsPage({ sliceLabel, ctx }) {
       <window.BriefHeader eyebrow="Demographics" slice={sliceLabel}
                    title="How growth varies from group to group"
                    blurb={'For each group, the box shows the middle of the pack and the line shows the typical student; the whiskers and dots show the full spread. Compare the typical student and the spread across groups to see whether differences sit in the middle or out in the tails.'} />
-      <window.ControlsCard title="Controls"><DemographicsControls ctx={ctx} /></window.ControlsCard>
-      <DemographicsFigure label={label} groups={groups} districtMean={districtMean} ctx={ctx} />
+      <DemographicsFigure label={label} groups={groups} districtMean={districtMean}
+                          demoVar={demoVar} ctx={ctx} />
     </>
-  );
-}
-
-function DemographicsControls({ ctx }) {
-  const demoOptions = {};
-  if (window.DEMO_SPECS) {
-    Object.entries(window.DEMO_SPECS).forEach(([k, v]) => { demoOptions[k] = v.label; });
-  }
-  // No "Groups to compare" here — that control drives the Gap Analysis slice and
-  // had no effect on this figure; the "Group" select below is what slices this page.
-  return (
-    <window.ControlsGrid>
-      <window.CGroup title="Show">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-      </window.CGroup>
-      <window.CGroup title="Units">
-        <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
-                    options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
-                    hint={window.UNIT_HINT} />
-      </window.CGroup>
-      <window.CGroup title="Group">
-        <window.CSelect value={demoOptions[ctx.demoVar] ? ctx.demoVar : (demoOptions.frl ? 'frl' : Object.keys(demoOptions)[0])} onChange={ctx.setDemoVar}
-                 options={demoOptions} label="Group" />
-      </window.CGroup>
-    </window.ControlsGrid>
   );
 }
 
@@ -82,7 +57,31 @@ const DEMO_TRANSITION = {
   transition: `x ${DEMO_TWEEN}, y ${DEMO_TWEEN}, x1 ${DEMO_TWEEN}, y1 ${DEMO_TWEEN}, x2 ${DEMO_TWEEN}, y2 ${DEMO_TWEEN}, cx ${DEMO_TWEEN}, cy ${DEMO_TWEEN}, width ${DEMO_TWEEN}, transform ${DEMO_TWEEN}, fill ${DEMO_TWEEN}, stroke ${DEMO_TWEEN}`,
 };
 
-function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
+// Inline group picker for the card header — options come from the active
+// dataset's comparisons (window.DEMO_SPECS), same source the Controls card used.
+function GroupSelect({ value, onChange }) {
+  const SLU = window.SLU;
+  const options = {};
+  if (window.DEMO_SPECS) {
+    Object.entries(window.DEMO_SPECS).forEach(([k, v]) => { options[k] = v.label; });
+  }
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
+                      textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
+        Group
+      </span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+        fontFamily: DEMO_PAGE_FONT, fontSize: 12.5, color: SLU.ink, padding: '7px 26px 7px 12px',
+        border: `1px solid ${SLU.rule}`, borderRadius: 999, background: '#fff', cursor: 'pointer',
+      }}>
+        {Object.entries(options).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
   const SLU = window.SLU;
   const [hover, setHover] = React.useState(null); // {gKey, oi, px, py, record, boxStroke}
   if (!groups || groups.length === 0) {
@@ -164,10 +163,13 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
             box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
           </div>
         </div>
-        <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
-                        textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-          x: growth vs. expected ({unitLabel})
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
+                          textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
+            x: growth vs. expected ({unitLabel})
+          </span>
+          <GroupSelect value={demoVar} onChange={ctx.setDemoVar} />
+        </div>
       </div>
 
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
