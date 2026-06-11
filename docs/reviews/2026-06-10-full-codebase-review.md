@@ -60,8 +60,8 @@ and keyboard-grid probes, zero console errors.
 
 **Remaining (intentional/by design):** ControlsCard auto-vs-manual collapse interplay
 (documented behavior); quadrant counts when the mean cross is hidden (matches the blurb);
-the methodology DRAFT needs PRiME review and the methods note still doesn't explain the
-weeks conversion to end users.
+the methodology note is accepted as written — the only open docs idea is a future
+end-user-facing explanation of the weeks conversion in methods.html.
 
 ## Open — high priority (all FIXED — see status update)
 

@@ -1,10 +1,5 @@
 # Methodology
 
-> **DRAFT — written from the behavior of `scripts/01_build_conversion_factors.R` and the
-> deployed `reference/conversion_factors.json`. The mechanics below are faithful to the
-> code; the *rationale* paragraphs are a first pass for PRiME review. Edit freely and
-> remove this banner when the team owns the wording.**
-
 ## Synthetic cohort design
 
 Pairing grade `g` in year `t` with grade `g−1` in year `t−1` approximates within-student
