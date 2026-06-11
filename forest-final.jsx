@@ -36,6 +36,10 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
   });
   const meets = all.filter(s => s.meets_min_cell);
   const below = all.filter(s => !s.meets_min_cell);
+  // With fewer than two reliable schools there is nothing to pool — the
+  // "district average" would just restate the one school. Hide the district
+  // panel, the dashed rule, and their legend entry in that case.
+  const showDistrict = meets.length >= 2;
 
   // Axis domain — symmetric around zero, so the favors-A and favors-B halves
   // of the plot are the same size and zero sits at the center. The extent
@@ -122,17 +126,18 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
           <ForestTable meets={meets} below={below} mode={mode} unit={unit}
                        districtGap={data.meta.districtGap}
                        districtCi={data.meta.districtCi95 || null}
-                       groupA={data.meta.groupA} groupB={data.meta.groupB} />
+                       groupA={data.meta.groupA} groupB={data.meta.groupB}
+                       showDistrict={showDistrict} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: MIN_CHART_W }}>
             <HeaderRow plotMinW={PLOT_MIN_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
-            <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} />
-            {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
+            {showDistrict && <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} />}
+            {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} showDistrict={showDistrict} />)}
             {below.length > 0 && (
               <>
                 <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
-                {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
+                {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed showDistrict={showDistrict} />)}
               </>
             )}
             </div>
@@ -145,7 +150,9 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
           {view === 'chart' ? (
             <>
               <LegendSwatch groupA={data.meta.groupA} groupB={data.meta.groupB} />
-              <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
+              {showDistrict && (
+                <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
+              )}
               {anyClipped && (
                 <span>A bar that fades at the chart’s edge keeps going — hover the school for its full range.</span>
               )}
@@ -224,7 +231,7 @@ function ViewToggle({ view, setView }) {
 // ---- TABLE VIEW -------------------------------------------------------------
 // Same data as the forest rows, in a plain dense table. Most useful for export
 // and for users who'd rather scan numbers than aim at dots.
-function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA, groupB }) {
+function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA, groupB, showDistrict = true }) {
   const rows = [...meets, ...below];
   const dividerAt = meets.length;
   // Pooled Ns mirror the chart's District panel: only schools meeting the
@@ -251,6 +258,7 @@ function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA
         <tbody>
           {/* District pooled estimate pinned first — vs. district and B don't
               apply to the reference itself */}
+          {showDistrict && (
           <tr style={{ borderBottom: `1px solid ${SLU.rule}`, background: 'rgba(154, 118, 17, 0.07)' }}>
             <TD align="left">
               <span style={{ fontFamily: FONT, fontWeight: 700, color: SLU.ink }}>District</span>
@@ -262,6 +270,7 @@ function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA
             <TD mono mute>—</TD>
             <TD mono mute>—</TD>
           </tr>
+          )}
           {rows.map((s, i) => {
             const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
             const ci  = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
@@ -295,8 +304,8 @@ function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA
                     {noEst ? '—' : fmtVal(gap, unit)}
                   </TD>
                   <TD mono mute>{noEst ? '—' : fmtCI(ci, unit)}</TD>
-                  <TD mono mute={noEst} color={noEst ? undefined : SLU.ink2}>
-                    {noEst ? '—' : fmtVal(vs, unit)}
+                  <TD mono mute={noEst || !showDistrict} color={noEst || !showDistrict ? undefined : SLU.ink2}>
+                    {noEst || !showDistrict ? '—' : fmtVal(vs, unit)}
                   </TD>
                   <TD mono mute>{s.shrinkage_factor == null ? '—' : s.shrinkage_factor.toFixed(2)}</TD>
                 </tr>
@@ -495,7 +504,7 @@ function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
   );
 }
 
-function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed }) {
+function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDistrict = true }) {
   const [hover, setHover] = React.useState(false);
   const ax = axis || AXIS;
   const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
@@ -551,9 +560,11 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed }) {
               figure's meaning. Tweens with the bars when the axis re-scales. */}
           <div style={{ position: 'absolute', top: 0, bottom: 0, left: xPct(0), width: 1, background: SLU.mute,
                         opacity: 0.55, transition: `left ${TRANSITION}` }} />
-          {/* District gap rule (Bayes prior) */}
-          <div style={{ position: 'absolute', top: 2, bottom: 2, left: xPct(window.GAPS_DATA.meta.districtGap),
-                        width: 1, borderLeft: `1px dashed ${SLU.gold}`, transition: `left ${TRANSITION}` }} />
+          {/* District gap rule (Bayes prior) — only when there's a real pool */}
+          {showDistrict && (
+            <div style={{ position: 'absolute', top: 2, bottom: 2, left: xPct(window.GAPS_DATA.meta.districtGap),
+                          width: 1, borderLeft: `1px dashed ${SLU.gold}`, transition: `left ${TRANSITION}` }} />
+          )}
           {noEst ? (
             <span style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0,
                            fontSize: 10.5, fontStyle: 'italic', color: SLU.mute, opacity }}>

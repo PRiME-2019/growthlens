@@ -74,6 +74,30 @@ test('gapTakeaways: respects the selected method for school-level values', () =>
   assert.ok(shr.some((t) => t.text.includes('−0.18 SD')), 'shrunk mode shows shrunken gap');
 });
 
+test('gapTakeaways: single reliable school gets an explicit context line instead of pervasiveness', () => {
+  const one = slice('frl', 'FRL', 'non-FRL', -0.13, [sch('S1', -0.13, -0.21, -0.05)]);
+  const out = I.gapTakeaways({ slices: { frl: one }, activeKey: 'frl', mode: 'shrunk', fmt: fmtSD });
+  const ctx = out.find((t) => /only school/.test(t.text));
+  assert.ok(ctx, 'single-school context line present');
+  assert.match(ctx.text, /\*\*S1\*\*/);
+  assert.ok(!out.some((t) => /reliable schools show/.test(t.text)), 'no pervasiveness counts');
+  assert.ok(!out.some((t) => /widest school-level gap/.test(t.text)), 'no extremes with one school');
+});
+
+test('scanTakeaways: single school gets a context line instead of school extremes', () => {
+  const oneSchool = {
+    meta: { subject: 'math' },
+    schools: [
+      { school_id: 'S1', grades: { 3: { n: 30, r: 0.2, ok: true }, 4: { n: 30, r: 0.02, ok: true } } },
+    ],
+  };
+  const out = I.scanTakeaways({ heat: oneSchool, fmt: fmtSD });
+  const ctx = out.find((t) => /only school/.test(t.text));
+  assert.ok(ctx, 'single-school context line present');
+  assert.match(ctx.text, /\*\*S1\*\*/);
+  assert.match(ctx.text, /\+0\.11 SD/); // n-weighted overall mean (0.2*30 + 0.02*30) / 60
+});
+
 test('gapTakeaways: caveat counts below-threshold schools and is last', () => {
   const withBelow = slice('frl', 'FRL', 'non-FRL', -0.13, [
     sch('S1', -0.20, -0.30, -0.10),

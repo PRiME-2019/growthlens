@@ -338,7 +338,7 @@ function DatasetStrip({ placeholder }) {
   const label = m
     ? `${m.districtCode ? m.districtCode + ' · ' : ''}`
       + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload' : 'sample data'}`
-      + ` · ${m.nSchools} schools${yr ? ' · ' + yr : ''}`
+      + ` · ${m.nSchools} school${m.nSchools === 1 ? '' : 's'}${yr ? ' · ' + yr : ''}`
     : 'No data loaded yet';
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1047,31 +1047,41 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
           })()}
         </div>
 
-        {/* Between-school spread with mini strip */}
+        {/* Between-school spread with mini strip — meaningless with fewer
+            than two reliable schools, so it gives way to a short note. */}
         <div style={{ flex: '2 1 380px', minWidth: 320 }}>
           <StatLabel>How much schools really differ</StatLabel>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                <span style={{ fontSize: 22, color: SLU.mute, fontFamily: MONO, lineHeight: 1 }}>±</span>
-                <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
-                                color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
-                  {isWk ? Math.abs(Math.round(window.zToWeeks(tauSD))) : tauSD.toFixed(2)}
-                </span>
-                <span style={{ fontSize: 13, color: SLU.mute }}>{unitTag}</span>
+          {schools.filter((s) => s.meets_min_cell).length >= 2 ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                    <span style={{ fontSize: 22, color: SLU.mute, fontFamily: MONO, lineHeight: 1 }}>±</span>
+                    <span style={{ fontSize: 36, fontWeight: 600, fontFamily: MONO,
+                                    color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
+                      {isWk ? Math.abs(Math.round(window.zToWeeks(tauSD))) : tauSD.toFixed(2)}
+                    </span>
+                    <span style={{ fontSize: 13, color: SLU.mute }}>{unitTag}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6 }}>
+                    between schools only
+                  </div>
+                </div>
+                <DistributionStrip schools={schools} districtGap={meta.districtGap} tauSD={tauSD}
+                                   unit={unit} estimate={estimate} />
               </div>
-              <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6 }}>
-                between schools only
+              <div style={{ fontSize: 11, color: SLU.mute, marginTop: 8, lineHeight: 1.4, maxWidth: 540 }}>
+                {estimate === 'raw'
+                  ? 'Each dot is one school’s raw gap — exactly as measured, so schools with few students can swing wide. The gold band shows the range where most schools should fall if the spread is real.'
+                  : 'Each dot is one school’s shrunken gap — its number nudged toward the district average so a few students can’t swing it. The gold band shows the range where most schools should fall if the spread is real.'}
               </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: SLU.mute, lineHeight: 1.5, maxWidth: 420 }}>
+              Fewer than two schools here have enough students to compare, so
+              between-school spread doesn’t apply to this data.
             </div>
-            <DistributionStrip schools={schools} districtGap={meta.districtGap} tauSD={tauSD}
-                               unit={unit} estimate={estimate} />
-          </div>
-          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 8, lineHeight: 1.4, maxWidth: 540 }}>
-            {estimate === 'raw'
-              ? 'Each dot is one school’s raw gap — exactly as measured, so schools with few students can swing wide. The gold band shows the range where most schools should fall if the spread is real.'
-              : 'Each dot is one school’s shrunken gap — its number nudged toward the district average so a few students can’t swing it. The gold band shows the range where most schools should fall if the spread is real.'}
-          </div>
+          )}
         </div>
 
         {/* Coverage */}
@@ -1221,7 +1231,7 @@ function OverviewCardScan({ unit = 'z' }) {
                             color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
               {totalSchools}
             </span>
-            <span style={{ fontSize: 13, color: SLU.mute }}>schools</span>
+            <span style={{ fontSize: 13, color: SLU.mute }}>school{totalSchools === 1 ? '' : 's'}</span>
           </div>
           <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, fontFamily: MONO, lineHeight: 1.5 }}>
             {totalN.toLocaleString()} students<br/>grades 3–8 · {data.meta.subject.toUpperCase()} MAP

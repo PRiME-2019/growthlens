@@ -96,6 +96,10 @@ function AchievementFigure({ level, ctx }) {
   const points = sampled
     ? allPoints.filter((_, i) => i % Math.ceil(allPoints.length / MAX_STUDENT_DOTS) === 0)
     : allPoints;
+  if (points.length === 0) {
+    return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
+                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data to show yet.</div>;
+  }
 
   // Standardize prior achievement against this dataset's own mean / sd
   // rather than the previously hardcoded (50, 10). Falls back gracefully if
@@ -120,10 +124,12 @@ function AchievementFigure({ level, ctx }) {
     if (p[yKey] < yMinR) yMinR = p[yKey];
     if (p[yKey] > yMaxR) yMaxR = p[yKey];
   });
-  // make x symmetric around 0 so the district mean reads clean
-  const xExtreme = Math.max(Math.abs(xMin), Math.abs(xMax)) * 1.08;
+  // make x symmetric around 0 so the district mean reads clean. The floors
+  // guard degenerate domains — a single-school upload's lone dot standardizes
+  // to exactly 0, and a zero-width domain would turn every position into NaN.
+  const xExtreme = Math.max(0.5, Math.max(Math.abs(xMin), Math.abs(xMax)) * 1.08);
   xMin = -xExtreme; xMax = xExtreme;
-  const yExtreme = Math.max(Math.abs(yMinR), Math.abs(yMaxR)) * 1.1;
+  const yExtreme = Math.max(0.05, Math.max(Math.abs(yMinR), Math.abs(yMaxR)) * 1.1);
   const yLo = -yExtreme, yHi = yExtreme;
 
   const xToPx = (v) => padL + ((v - xMin) / (xMax - xMin)) * plotW;
@@ -194,7 +200,7 @@ function AchievementFigure({ level, ctx }) {
             <span style={{ marginLeft: 4 }}>
               {sampled
                 ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
-                : `${points.length.toLocaleString()} points`}
+                : `${points.length.toLocaleString()} point${points.length === 1 ? '' : 's'}`}
             </span>
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
             four corners split at the district average
@@ -223,8 +229,10 @@ function AchievementFigure({ level, ctx }) {
         <line x1={padL} x2={padL + plotW} y1={yToPx(0)} y2={yToPx(0)}
               stroke={SLU.ink2} strokeWidth={1} opacity={0.55} />
 
-        {/* District-mean cross — dashed, labeled on the right & top */}
-        {ctx.achShowMeans !== false && (
+        {/* District-mean cross — dashed, labeled on the right & top. With a
+            single point the "average" is just that point, so the cross only
+            adds noise — skip it. */}
+        {ctx.achShowMeans !== false && points.length >= 2 && (
           <g>
             <line x1={xToPx(xMean)} x2={xToPx(xMean)} y1={padT} y2={padT + plotH}
                   stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />

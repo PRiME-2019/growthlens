@@ -60,9 +60,16 @@
 
     // B — pervasiveness of the active comparison: is this one campus, or the
     // whole district? "Clear of zero" = the school's interval excludes zero on
-    // the same side as the district direction.
+    // the same side as the district direction. With a single reliable school
+    // there is nothing to spread across — say so explicitly instead, since the
+    // "district-wide" number is really just that school.
     let pervasiveness = null;
-    if (meets.length >= 2 && Math.abs(districtGap) > 1e-9) {
+    if (meets.length === 1) {
+      pervasiveness = {
+        text: `**${meets[0].school_id}** is the only school with enough students to compare here, `
+          + `so the district-wide gap is just this school's gap.`,
+      };
+    } else if (meets.length >= 2 && Math.abs(districtGap) > 1e-9) {
       const dSign = Math.sign(districtGap);
       const same = meets.filter((s) => Math.sign(s[gapKey]) === dSign);
       const clear = same.filter((s) => {
@@ -161,6 +168,13 @@
       schoolExtremes = {
         text: `**${best.id}** shows the strongest overall growth (${fmt.val(best.mean)}); `
           + `**${worst.id}** the weakest (${fmt.val(worst.mean)}).`,
+      };
+    } else if (bySchool.length === 1) {
+      // Single-school upload: no across-school comparison to make — anchor
+      // the takeaways to the one school instead.
+      schoolExtremes = {
+        text: `**${bySchool[0].id}** is the only school in this data; its overall growth is `
+          + `${fmt.val(bySchool[0].mean)}.`,
       };
     }
 
