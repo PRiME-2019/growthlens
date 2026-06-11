@@ -40,14 +40,25 @@
     for (const sg of I.SUBGROUPS) {
       const A = await cells(conn, table, 'school_id', predicate(sg.a));
       const B = await cells(conn, table, 'school_id', predicate(sg.b));
+      const aById = Object.fromEntries(A.map(c => [c.g, c]));
       const bById = Object.fromEntries(B.map(c => [c.g, c]));
+      // Union of both sides: a school with zero students in one group has no
+      // SQL row there, but it still belongs in the figure — listed with its
+      // counts and null estimates (there is no gap to compute), so the UI can
+      // show it in the too-few section instead of it silently vanishing.
+      const ids = [...new Set([...A, ...B].map(c => c.g))];
       const schools = [];
-      for (const a of A) {
-        const b = bById[a.g]; if (!b) continue;
-        const rawGap = a.rbar - b.rbar;                 // focal − reference
-        const rawSe = S.gapSE(a.se, b.se);
-        const meets = a.n >= MIN_N && b.n >= MIN_N;
-        schools.push({ school_id: a.g, n_a: a.n, n_b: b.n, raw_gap: rawGap, raw_se: rawSe, meets_min_cell: meets });
+      for (const id of ids) {
+        const a = aById[id], b = bById[id];
+        if (a && b) {
+          const rawGap = a.rbar - b.rbar;               // focal − reference
+          const rawSe = S.gapSE(a.se, b.se);
+          const meets = a.n >= MIN_N && b.n >= MIN_N;
+          schools.push({ school_id: id, n_a: a.n, n_b: b.n, raw_gap: rawGap, raw_se: rawSe, meets_min_cell: meets });
+        } else {
+          schools.push({ school_id: id, n_a: a ? a.n : 0, n_b: b ? b.n : 0,
+                         raw_gap: null, raw_se: null, meets_min_cell: false });
+        }
       }
       const fitRows = schools.filter(s => s.meets_min_cell).map(s => ({ gap: s.raw_gap, se: s.raw_se }));
       // With <2 fit schools τ² can't be estimated: B would hit 0 and pin every
@@ -57,6 +68,12 @@
       const tau2 = canShrink ? S.remlTau2(fitRows) : 0;
       const pooled = S.pooledMean(fitRows, tau2) || { mu: 0, ciLo: 0, ciHi: 0 };
       for (const s of schools) {
+        if (s.raw_gap == null) {
+          // Zero-side school — nothing to estimate, nothing to shrink.
+          s.raw_ci95 = null; s.shrunk_gap = null; s.shrunk_se = null;
+          s.shrunk_ci95 = null; s.shrinkage_factor = null;
+          continue;
+        }
         s.raw_ci95 = [s.raw_gap - 1.96 * s.raw_se, s.raw_gap + 1.96 * s.raw_se];
         if (canShrink) {
           const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu });
@@ -69,7 +86,7 @@
       }
       byDemo[sg.key] = {
         meta: { subject, demographic: sg.key, groupA: sg.aLabel, groupB: sg.bLabel,
-                districtGap: pooled.mu, tauSquared: tau2,
+                districtGap: pooled.mu, districtCi95: [pooled.ciLo, pooled.ciHi], tauSquared: tau2,
                 nSchools: schools.length, nMeetingThreshold: schools.filter(s => s.meets_min_cell).length, minCellSize: MIN_N },
         schools,
       };

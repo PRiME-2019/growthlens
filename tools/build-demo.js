@@ -256,17 +256,31 @@ function buildGaps(cmp) {
     const mine = students.filter(st => st.sid === sc.id);
     const a = cellStats(mine.filter(cmp.a));             // focal
     const b = cellStats(mine.filter(cmp.b));             // reference
+    // Mirror engine/compute.js: a school missing one side entirely carries
+    // null estimates (there's no gap to compute) but stays listed so the UI
+    // can show it in the too-few section; a school with no students on
+    // either side has no SQL rows at all and is dropped.
+    if (a.n === 0 || b.n === 0) {
+      return { school_id: sc.id, n_a: a.n, n_b: b.n,
+               raw_gap: null, raw_se: null, meets_min_cell: false };
+    }
     return {
       school_id: sc.id, n_a: a.n, n_b: b.n,
       raw_gap: a.rbar - b.rbar, raw_se: S.gapSE(a.se, b.se),
       meets_min_cell: a.n >= MIN_N && b.n >= MIN_N,
     };
-  });
+  }).filter(s => s.n_a > 0 || s.n_b > 0);
   const fit = rows.filter(s => s.meets_min_cell).map(s => ({ gap: s.raw_gap, se: s.raw_se }));
   const canShrink = fit.length >= 2;                     // same τ² guard as compute.js
   const tau2 = canShrink ? S.remlTau2(fit) : 0;
-  const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+  const pooled = S.pooledMean(fit, tau2) || { mu: 0, ciLo: 0, ciHi: 0 };
   const schools = rows.map(s => {
+    if (s.raw_gap == null) {
+      return { school_id: s.school_id, n_a: s.n_a, n_b: s.n_b,
+               raw_gap: null, raw_se: null, raw_ci95: null,
+               shrunk_gap: null, shrunk_se: null, shrunk_ci95: null,
+               shrinkage_factor: null, meets_min_cell: false };
+    }
     const sh = canShrink
       ? S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu })
       : { shrunkGap: s.raw_gap, shrunkSe: s.raw_se, B: 1 };
@@ -278,10 +292,11 @@ function buildGaps(cmp) {
       shrunk_ci95: [round(sh.shrunkGap - 1.96 * sh.shrunkSe, 4), round(sh.shrunkGap + 1.96 * sh.shrunkSe, 4)],
       shrinkage_factor: round(sh.B, 3), meets_min_cell: s.meets_min_cell,
     };
-  }).sort((x, y) => x.shrunk_gap - y.shrunk_gap);
+  }).sort((x, y) => (x.shrunk_gap ?? Infinity) - (y.shrunk_gap ?? Infinity));
   const meta = {
     subject: 'math', demographic: cmp.key, groupA: cmp.aLabel, groupB: cmp.bLabel,
-    districtGap: round(pooled.mu, 4), tauSquared: round(tau2, 4),
+    districtGap: round(pooled.mu, 4), districtCi95: [round(pooled.ciLo, 4), round(pooled.ciHi, 4)],
+    tauSquared: round(tau2, 4),
     nSchools: schools.length, nMeetingThreshold: rows.filter(s => s.meets_min_cell).length, minCellSize: MIN_N,
   };
   return { meta, schools };
@@ -358,7 +373,7 @@ function buildAchievement() {
 
 // ---- serialize -------------------------------------------------------------
 function fmtSchoolRow(s) {
-  const ci = a => `[${a[0]}, ${a[1]}]`;
+  const ci = a => a ? `[${a[0]}, ${a[1]}]` : 'null';
   return `    { school_id: ${JSON.stringify(s.school_id)}, n_a: ${s.n_a}, n_b: ${s.n_b}, `
     + `raw_gap: ${s.raw_gap}, raw_se: ${s.raw_se}, raw_ci95: ${ci(s.raw_ci95)}, `
     + `shrunk_gap: ${s.shrunk_gap}, shrunk_se: ${s.shrunk_se}, shrunk_ci95: ${ci(s.shrunk_ci95)}, `
@@ -369,7 +384,7 @@ function fmtGapSlice(gaps) {
   return '{\n  meta: {\n'
     + `    subject: ${JSON.stringify(m.subject)},\n    demographic: ${JSON.stringify(m.demographic)},\n`
     + `    groupA: ${JSON.stringify(m.groupA)},\n    groupB: ${JSON.stringify(m.groupB)},\n`
-    + `    districtGap: ${m.districtGap},\n    tauSquared: ${m.tauSquared},\n`
+    + `    districtGap: ${m.districtGap},\n    districtCi95: [${m.districtCi95[0]}, ${m.districtCi95[1]}],\n    tauSquared: ${m.tauSquared},\n`
     + `    nSchools: ${m.nSchools},\n    nMeetingThreshold: ${m.nMeetingThreshold},\n    minCellSize: ${m.minCellSize},\n  },\n`
     + '  schools: [\n' + gaps.schools.map(fmtSchoolRow).join('\n') + '\n  ],\n}';
 }

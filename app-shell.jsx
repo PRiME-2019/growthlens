@@ -1057,8 +1057,10 @@ function OverviewCardGap() {
 
 function DistributionStrip({ schools, districtGap, tauSD }) {
   const width = 320, height = 56;
-  // Auto-range from data so dots never silently clamp to the edge.
-  const gaps = schools.map(s => s.shrunk_gap);
+  // Auto-range from data so dots never silently clamp to the edge. Zero-side
+  // schools carry null estimates — they have no dot to draw.
+  const dots = schools.filter(s => Number.isFinite(s.shrunk_gap));
+  const gaps = dots.map(s => s.shrunk_gap);
   const dataMin = Math.min(districtGap - tauSD, ...gaps);
   const dataMax = Math.max(districtGap + tauSD, ...gaps);
   const pad = Math.max(0.08, (dataMax - dataMin) * 0.12);
@@ -1096,7 +1098,7 @@ function DistributionStrip({ schools, districtGap, tauSD }) {
             textAnchor="middle" fontWeight={600}>
         district {(districtGap >= 0 ? '+' : '−') + Math.abs(districtGap).toFixed(2)}
       </text>
-      {schools.map(s => {
+      {dots.map(s => {
         const cx = Math.max(3, Math.min(width - 3, x(s.shrunk_gap)));
         const inside = s.shrunk_gap >= districtGap - tauSD && s.shrunk_gap <= districtGap + tauSD;
         return (

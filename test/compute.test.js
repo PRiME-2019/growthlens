@@ -104,6 +104,31 @@ test('computeSlice: emits all five comparisons with focal − reference signs', 
   }
 });
 
+test('computeSlice: a school with zero students on one side appears with null estimates', async () => {
+  const rows = makeRows({});
+  // S3 loses all its EL students — the school exists in the comparison's
+  // reference side only. It must still be listed (so the UI can show it in
+  // the too-few section) with null estimates rather than NaN or absence.
+  rows.forEach((r) => { if (r.school_id === 'S3') r.el = false; });
+  const C = freshCompute(rows);
+  const out = await C.computeSlice('math');
+  const el = out.GAPS_DATA_BY_DEMO.el;
+  assert.equal(el.schools.length, 3, 'zero-side school still listed');
+  const s3 = el.schools.find((s) => s.school_id === 'S3');
+  assert.equal(s3.n_a, 0);
+  assert.ok(s3.n_b > 0);
+  assert.equal(s3.meets_min_cell, false);
+  assert.equal(s3.raw_gap, null);
+  assert.equal(s3.raw_ci95, null);
+  assert.equal(s3.shrunk_gap, null);
+  assert.equal(s3.shrunk_ci95, null);
+  assert.equal(s3.shrinkage_factor, null);
+  // The schools with both sides keep real estimates.
+  for (const s of el.schools.filter((x) => x.school_id !== 'S3')) {
+    assert.ok(Number.isFinite(s.raw_gap) && Number.isFinite(s.shrunk_gap));
+  }
+});
+
 test('computeSlice: DEMO_DATA carries districtMean and both outlier tails', async () => {
   const C = freshCompute(makeRows({ nPerSide: 60 }));
   const out = await C.computeSlice('math');

@@ -347,15 +347,17 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
     s2.addText(s.v, { x, y: y + 0.4, w: 4, h: 1.0, fontFace: MONO_FACE, fontSize: 48, bold: true, color: INK });
     s2.addText(s.note, { x, y: y + 1.6, w: 4, h: 0.4, fontFace: FONT_FACE, fontSize: 11, color: MUTE, italic: true });
   });
-  // distribution strip with auto-range so dots don't pile at the edges
-  const gaps = schools.map(s => s.shrunk_gap);
+  // distribution strip with auto-range so dots don't pile at the edges;
+  // zero-side schools carry null estimates and have no dot to draw
+  const dots = schools.filter(s => Number.isFinite(s.shrunk_gap));
+  const gaps = dots.map(s => s.shrunk_gap);
   const stripLo = Math.min(meta.districtGap - 0.05, ...gaps);
   const stripHi = Math.max(meta.districtGap + 0.05, ...gaps);
   const stripPad = Math.max(0.05, (stripHi - stripLo) * 0.1);
   const sMin = stripLo - stripPad, sMax = stripHi + stripPad;
   const stripX = (g) => 0.7 + ((g - sMin) / (sMax - sMin)) * 12;
   s2.addShape('rect', { x: 0.7, y: 5.2, w: 12, h: 0.04, fill: { color: 'D9D9DD' }, line: { color: 'D9D9DD' } });
-  schools.forEach((s) => {
+  dots.forEach((s) => {
     const px = stripX(s.shrunk_gap);
     s2.addShape('ellipse', { x: px - 0.08, y: 5.13, w: 0.16, h: 0.16,
                               fill: { color: INK }, line: { color: 'FFFFFF', width: 0.5 } });

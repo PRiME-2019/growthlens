@@ -29,7 +29,6 @@ function AchievementPage({ sliceLabel, ctx }) {
 }
 
 function AchievementControls({ ctx }) {
-  const showMeans = ctx.achShowMeans !== false;
   return (
     <window.ControlsGrid>
       <window.CGroup title="Slice">
@@ -48,11 +47,48 @@ function AchievementControls({ ctx }) {
       <window.CGroup title="View">
         <window.CSegmented value={ctx.achLevel || 'school'} onChange={ctx.setAchLevel}
                     options={{ school: 'School', student: 'Student' }} label="Level" />
-        <window.CSegmented value={showMeans ? 'on' : 'off'}
-                    onChange={(v) => ctx.setAchShowMeans(v === 'on')}
-                    options={{ on: 'Show', off: 'Hide' }} label="District means" />
       </window.CGroup>
     </window.ControlsGrid>
+  );
+}
+
+// Show/Hide pill for the district-average cross — lives on the figure card's
+// title row (same visual as the forest card's View toggle), since it only
+// affects this figure.
+const ACH_TWEEN = window.MOTION_OK === false ? '0ms' : '420ms cubic-bezier(0.32, 0.72, 0.24, 1)';
+function MeansToggle({ show, setShow }) {
+  const SLU = window.SLU;
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
+                      textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
+        District average
+      </span>
+      <div style={{ position: 'relative', display: 'inline-flex', background: SLU.rule2, borderRadius: 999, padding: 3 }}>
+        <div style={{
+          position: 'absolute', top: 3, bottom: 3, width: 'calc(50% - 3px)',
+          left: show ? 3 : 'calc(50% + 0px)',
+          background: '#fff', borderRadius: 999,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
+          transition: `left ${ACH_TWEEN}`,
+        }} />
+        {[['show', 'Show'], ['hide', 'Hide']].map(([k, label]) => {
+          const active = (k === 'show') === show;
+          return (
+            <button key={k} onClick={() => setShow(k === 'show')}
+                    aria-pressed={active}
+                    style={{
+                      position: 'relative', zIndex: 1, border: 'none', background: 'transparent',
+                      padding: '6px 14px', borderRadius: 999, cursor: 'pointer',
+                      fontSize: 12.5, fontWeight: active ? 600 : 500,
+                      color: active ? SLU.ink : SLU.ink2, fontFamily: window.FONT,
+                    }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -169,9 +205,9 @@ function AchievementFigure({ level, ctx }) {
       boxShadow: '0 1px 2px rgba(15,23,42,.04)',
       padding: '18px 22px 24px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-                     gap: 12, marginBottom: 4 }}>
-        <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+                     flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 4 }}>
+        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
             This year’s score vs. growth — {level === 'school' ? 'school view' : 'student view'}
           </div>
@@ -184,12 +220,11 @@ function AchievementFigure({ level, ctx }) {
                 ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
                 : `${points.length.toLocaleString()} points`}
             </span>
+            <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
+            four corners split at the district average
           </div>
         </div>
-        <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
-                        textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-          four corners split at the district average
-        </span>
+        <MeansToggle show={ctx.achShowMeans !== false} setShow={ctx.setAchShowMeans} />
       </div>
 
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
@@ -211,18 +246,12 @@ function AchievementFigure({ level, ctx }) {
                   stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
             <line x1={padL} x2={padL + plotW} y1={yToPx(yMean)} y2={yToPx(yMean)}
                   stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
-            <g transform={`translate(${padL + plotW + 6} ${yToPx(yMean)})`}>
-              <text x={0} y={3} fontSize={9.5} fontFamily={window.LABEL} fill={SLU.gold}
-                    fontWeight={700}
-                    style={{ textTransform: 'uppercase', letterSpacing: 0.9 }}>
-                District
-              </text>
-              <text x={0} y={14} fontSize={9.5} fontFamily={window.LABEL} fill={SLU.gold}
-                    fontWeight={700}
-                    style={{ textTransform: 'uppercase', letterSpacing: 0.9 }}>
-                average
-              </text>
-            </g>
+            <text x={padL + plotW - 8} y={yToPx(yMean) - 6} fontSize={9.5}
+                  fontFamily={window.LABEL} fill={SLU.gold} textAnchor="end"
+                  fontWeight={700}
+                  style={{ textTransform: 'uppercase', letterSpacing: 0.9 }}>
+              District average
+            </text>
             <text x={xToPx(xMean)} y={padT - 8} fontSize={9.5}
                   fontFamily={window.LABEL} fill={SLU.gold} textAnchor="middle"
                   fontWeight={700}

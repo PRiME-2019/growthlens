@@ -47,27 +47,41 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
   const threshold = thresholdProp || 'section';
 
   const gapKey = mode === 'raw' ? 'raw_gap' : 'shrunk_gap';
-  const all = [...data.schools].sort((a, b) => SORTS_FINAL[sort].fn(a, b, gapKey));
+  // Zero-side schools carry null estimates — they always sort last, since
+  // every comparator reads numeric fields they don't have.
+  const cmpFn = SORTS_FINAL[sort].fn;
+  const all = [...data.schools].sort((a, b) => {
+    const an = a[gapKey] == null, bn = b[gapKey] == null;
+    if (an || bn) return an === bn ? 0 : (an ? 1 : -1);
+    return cmpFn(a, b, gapKey);
+  });
   const meets = all.filter(s => s.meets_min_cell);
   const below = all.filter(s => !s.meets_min_cell);
   const visible = threshold === 'hide' ? meets : all;
 
-  // Axis domain — auto-ranged from this dataset rather than a fixed constant,
-  // so the re-signed demo (all-negative gaps) and real uploads both fill the
-  // plot instead of huddling at one edge. The domain covers BOTH raw and
-  // shrunken CIs, plus 0 and the district line, so toggling Method tweens
-  // positions on a stable scale instead of rescaling the whole plot.
+  // Axis domain — symmetric around zero, so the favors-A and favors-B halves
+  // of the plot are the same size and zero sits at the center. The extent
+  // auto-ranges from what's actually displayed: the active method's CIs (raw
+  // OR shrunken, not their union), minus any schools the threshold control
+  // hides, plus the district line. Toggling Method re-scales the axis — ticks
+  // jump to the new domain while the bars' CSS transitions tween into the
+  // new projection.
   const axis = React.useMemo(() => {
-    const lows = [], highs = [];
-    for (const s of data.schools) {
-      lows.push(s.raw_ci95[0], s.shrunk_ci95[0]);
-      highs.push(s.raw_ci95[1], s.shrunk_ci95[1]);
-    }
-    const lo = Math.min(0, data.meta.districtGap, ...lows);
-    const hi = Math.max(0, data.meta.districtGap, ...highs);
-    const pad = Math.max(0.04, (hi - lo) * 0.06);
-    const min = Math.floor((lo - pad) * 20) / 20;
-    const max = Math.ceil((hi + pad) * 20) / 20;
+    const ciKey = mode === 'raw' ? 'raw_ci95' : 'shrunk_ci95';
+    const pool = threshold === 'hide' ? data.schools.filter(s => s.meets_min_cell) : data.schools;
+    // Zero-side schools carry null CIs, and non-finite bounds (a degenerate
+    // cell that slipped into the data) are excluded — a single NaN would
+    // otherwise NaN the whole scale and pile every marker onto one spot.
+    const finite = (xs) => xs.filter(Number.isFinite);
+    const cis = pool.map(s => s[ciKey]).filter(Boolean);
+    const lows = finite(cis.map(c => c[0]));
+    const highs = finite(cis.map(c => c[1]));
+    const ext = Math.max(Math.abs(data.meta.districtGap) || 0,
+                         ...finite(data.meta.districtCi95 || []).map(Math.abs),
+                         ...lows.map(Math.abs), ...highs.map(Math.abs));
+    const pad = Math.max(0.04, ext * 0.08);
+    const max = Math.ceil((ext + pad) * 20) / 20;
+    const min = -max;
     const span = max - min;
     const step = span > 2 ? 0.5 : span > 0.9 ? 0.25 : span > 0.35 ? 0.1 : 0.05;
     const ticks = [];
@@ -75,9 +89,15 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
       ticks.push(Math.round(t * 100) / 100);
     }
     return { min, max, ticks };
-  }, [data]);
+  }, [data, mode, threshold]);
 
-  const PLOT_W = 560;
+  // Plot column is fluid — it absorbs whatever width the card has beyond the
+  // fixed label/n columns — with a floor below which the chart scrolls
+  // horizontally instead of crushing. Bars/axis position by percentage, so no
+  // pixel measurement is needed. (Divs are content-box: the floor math adds
+  // each column's horizontal padding.)
+  const PLOT_MIN_W = 560;
+  const MIN_CHART_W = (86 + 20) + 2 * (60 + 20) + (PLOT_MIN_W + 16);
   const ROW_H = 26;
 
   return (
@@ -93,12 +113,13 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
                       flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 14 }}>
           <div style={{ flex: '1 1 280px', minWidth: 0 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-              {data.meta.subject.toUpperCase()} gap by school · {data.meta.groupA} − {data.meta.groupB}
+              {data.meta.subject.toUpperCase()} · {data.meta.groupA} vs. {data.meta.groupB} growth, school by school
             </div>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-              Each school’s gap, with the range it most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
+              How much more or less {data.meta.groupA} students grew than their {data.meta.groupB} schoolmates, {unit === 'weeks' ? 'in weeks of learning' : 'in SD (standard scale)'}.
+              The zero line = same growth; each bar is the range the estimate most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
               <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-              district gap {fmtVal(data.meta.districtGap, unit)} · {data.meta.nMeetingThreshold}/{data.meta.nSchools} schools meet n≥{data.meta.minCellSize}
+              {data.meta.nMeetingThreshold}/{data.meta.nSchools} schools meet n≥{data.meta.minCellSize}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
@@ -111,24 +132,27 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
         {view === 'table' ? (
           <ForestTable schools={visible} meets={meets} below={below}
                        threshold={threshold} mode={mode} unit={unit}
-                       districtGap={data.meta.districtGap} />
+                       districtGap={data.meta.districtGap}
+                       districtCi={data.meta.districtCi95 || null}
+                       groupA={data.meta.groupA} groupB={data.meta.groupB} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 86 + 60 + 60 + PLOT_W }}>
-            <HeaderRow plotW={PLOT_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
+            <div style={{ minWidth: MIN_CHART_W }}>
+            <HeaderRow plotMinW={PLOT_MIN_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
+            <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} />
             {threshold === 'section' ? (
               <>
-                {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
+                {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
                 {below.length > 0 && (
                   <>
                     <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
-                    {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
+                    {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
                   </>
                 )}
               </>
             ) : (
               visible.map((s, i) => (
-                <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H}
+                <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H}
                             stripe={i % 2 === 1} dimmed={threshold === 'inline' && !s.meets_min_cell} />
               ))
             )}
@@ -142,17 +166,15 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
           {view === 'chart' ? (
             <>
               <LegendSwatch groupA={data.meta.groupA} groupB={data.meta.groupB} />
-              <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold dashed line</span> = the district-wide average.</span>
-              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
+              <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
               {unit === 'weeks' && (
                 <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about how many weeks of learning each step on the scale stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, {(() => { const fy = wolFactorYear({ subject: data.meta.subject }); return fy ? `${fy} grade 4–8 average` : 'typical MAP average'; })()}; varies by grade — see methods).</span>
               )}
             </>
           ) : (
             <>
-              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>Gap</b> in {unit === 'weeks' ? 'weeks of learning' : 'SD'}; a positive number leans toward {data.meta.groupA}.</span>
+              <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>{data.meta.groupA} vs. {data.meta.groupB}</b> in {unit === 'weeks' ? 'weeks of learning' : 'SD'}; positive = {data.meta.groupA} ahead, negative = behind.</span>
               <span><b style={{ color: SLU.ink2, fontWeight: 600 }}>B</b> = how far this school was nudged toward the district average (0 = pulled all the way, 1 = left as measured).</span>
-              <span><span style={{ color: SLU.ink2 }}>n*</span> marks schools with too few students to read reliably (fewer than {data.meta.minCellSize} students).</span>
               {unit === 'weeks' && (
                 <span><span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks</span> = about how many weeks of learning each step stands for (SD × {Math.round(weeksPerSD({ subject: data.meta.subject }))}, {(() => { const fy = wolFactorYear({ subject: data.meta.subject }); return fy ? `${fy} grade 4–8 average` : 'typical MAP average'; })()}).</span>
               )}
@@ -197,11 +219,15 @@ function ViewToggle({ view, setView }) {
 // ---- TABLE VIEW -------------------------------------------------------------
 // Same data as the forest rows, in a plain dense table. Most useful for export
 // and for users who'd rather scan numbers than aim at dots.
-function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap }) {
+function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap, districtCi, groupA, groupB }) {
   const rows = threshold === 'section'
     ? [...meets, ...below]
     : schools;
   const dividerAt = threshold === 'section' ? meets.length : -1;
+  // Pooled Ns mirror the chart's District panel: only schools meeting the
+  // cell-size floor feed the pooled mean.
+  const dNa = meets.reduce((t, s) => t + s.n_a, 0);
+  const dNb = meets.reduce((t, s) => t + s.n_b, 0);
 
   return (
     <div style={{ overflowX: 'auto', marginTop: 4 }}>
@@ -211,23 +237,37 @@ function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap
         <thead>
           <tr style={{ borderBottom: `1px solid ${SLU.rule}` }}>
             <TH align="left">School</TH>
-            <TH>n<sub>{'a'}</sub></TH>
-            <TH>n<sub>{'b'}</sub></TH>
-            <TH>Gap ({unit === 'weeks' ? 'wk' : 'SD'})</TH>
+            <TH>n {groupA}</TH>
+            <TH>n {groupB}</TH>
+            <TH>{groupA} vs. {groupB} ({unit === 'weeks' ? 'wk' : 'SD'})</TH>
             <TH>95% CI</TH>
             <TH>vs. district</TH>
             <TH>Shrinkage B</TH>
           </tr>
         </thead>
         <tbody>
+          {/* District pooled estimate pinned first — vs. district and B don't
+              apply to the reference itself */}
+          <tr style={{ borderBottom: `1px solid ${SLU.rule}`, background: 'rgba(154, 118, 17, 0.07)' }}>
+            <TD align="left">
+              <span style={{ fontFamily: FONT, fontWeight: 700, color: SLU.ink }}>District</span>
+            </TD>
+            <TD mono mute>{dNa}</TD>
+            <TD mono mute>{dNb}</TD>
+            <TD mono bold color={SLU.gold}>{fmtVal(districtGap, unit)}</TD>
+            <TD mono mute>{districtCi ? fmtCI(districtCi, unit) : '—'}</TD>
+            <TD mono mute>—</TD>
+            <TD mono mute>—</TD>
+          </tr>
           {rows.map((s, i) => {
             const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
             const ci  = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
+            const noEst = gap == null || ci == null;   // zero-side school
             const dimmed = threshold === 'inline' && !s.meets_min_cell
                           || (threshold === 'section' && i >= dividerAt);
             const sectionStart = i === dividerAt && threshold === 'section' && below.length > 0;
-            const vs = gap - districtGap;
-            const isNeg = gap < 0;
+            const vs = noEst ? null : gap - districtGap;
+            const isNeg = !noEst && gap < 0;
             return (
               <React.Fragment key={s.school_id}>
                 {sectionStart && (
@@ -246,26 +286,17 @@ function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap
                   opacity: dimmed ? 0.5 : 1,
                   background: i % 2 === 1 ? '#FAFAFB' : '#fff',
                 }}>
-                  <TD align="left" mono>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      {s.school_id}
-                      {!s.meets_min_cell && (
-                        <span style={{ fontFamily: FONT, fontSize: 9.5, padding: '1px 4px',
-                                        borderRadius: 3, background: SLU.gold, color: '#fff',
-                                        letterSpacing: 0.5 }}>n*</span>
-                      )}
-                    </span>
-                  </TD>
+                  <TD align="left" mono>{s.school_id}</TD>
                   <TD mono mute>{s.n_a}</TD>
                   <TD mono mute>{s.n_b}</TD>
-                  <TD mono bold color={isNeg ? SLU.neg : SLU.pos}>
-                    {fmtVal(gap, unit)}
+                  <TD mono bold={!noEst} mute={noEst} color={noEst ? undefined : (isNeg ? SLU.neg : SLU.pos)}>
+                    {noEst ? '—' : fmtVal(gap, unit)}
                   </TD>
-                  <TD mono mute>{fmtCI(ci, unit)}</TD>
-                  <TD mono color={SLU.ink2}>
-                    {fmtVal(vs, unit)}
+                  <TD mono mute>{noEst ? '—' : fmtCI(ci, unit)}</TD>
+                  <TD mono mute={noEst} color={noEst ? undefined : SLU.ink2}>
+                    {noEst ? '—' : fmtVal(vs, unit)}
                   </TD>
-                  <TD mono mute>{s.shrinkage_factor.toFixed(2)}</TD>
+                  <TD mono mute>{s.shrinkage_factor == null ? '—' : s.shrinkage_factor.toFixed(2)}</TD>
                 </tr>
               </React.Fragment>
             );
@@ -298,32 +329,36 @@ function TD({ children, align = 'right', mono, bold, mute, color }) {
   );
 }
 
-function HeaderRow({ plotW, unit, groupA, groupB, axis }) {
+function HeaderRow({ plotMinW, unit, groupA, groupB, axis }) {
   const colHead = (label, w, align = 'right') => (
-    <div style={{ width: w, padding: '0 10px', textAlign: align,
+    <div style={{ width: w, padding: '0 10px 6px', textAlign: align,
                   fontSize: 10.5, fontFamily: LABEL, color: SLU.mute, textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
       {label}
     </div>
   );
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', borderBottom: `1px solid ${SLU.rule}`, paddingBottom: 4 }}>
-        {colHead('School', 86, 'left')}
-        {colHead(`n ${groupA}`, 60)}
-        {colHead(`n ${groupB}`, 60)}
-        <div style={{ width: plotW, padding: '0 8px' }}>
-          <UnitAxis width={plotW - 16} groupA={groupA} groupB={groupB} unit={unit} axis={axis} />
-        </div>
+    <div style={{ display: 'flex', alignItems: 'flex-end', borderBottom: `1px solid ${SLU.rule}` }}>
+      {colHead('School', 86, 'left')}
+      {colHead(`n ${groupA}`, 60)}
+      {colHead(`n ${groupB}`, 60)}
+      <div style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px' }}>
+        <UnitAxis groupA={groupA} groupB={groupB} unit={unit} axis={axis} />
       </div>
     </div>
   );
 }
 
-// Custom axis that re-labels ticks based on unit. Tick positions are still in z-domain;
-// only the rendered text changes, since z↔weeks is a linear scale.
-function UnitAxis({ width, groupA, groupB, unit, axis }) {
+// Custom axis that re-labels ticks based on unit. Tick positions are still in
+// z-domain; only the rendered text changes, since z↔weeks is a linear scale.
+// Coordinates are percentages so the axis tracks the fluid plot column with no
+// pixel measurement. Two layered bands keep the header readable: direction
+// cues above, tick labels + marks below. Zero is anchored to the reference
+// group: its tick is labeled with the group's name instead of "0", and the
+// cues read as the focal group sitting behind/ahead of that anchor. The unit
+// name itself lives in the figure subtitle.
+function UnitAxis({ groupA, groupB, unit, axis }) {
   const ax = axis || AXIS;
-  const xs = (x) => ((x - ax.min) / (ax.max - ax.min)) * width;
+  const pct = (x) => ((x - ax.min) / (ax.max - ax.min)) * 100;
   const fmtTick = (t) => {
     if (unit === 'weeks') {
       const w = Math.round(zToWeeks(t));
@@ -331,43 +366,153 @@ function UnitAxis({ width, groupA, groupB, unit, axis }) {
     }
     return t === 0 ? '0' : (t > 0 ? '+' : '−') + Math.abs(t).toFixed(2);
   };
-  const height = 28;
+  const height = 46;
+  const zeroPct = pct(0);
   return (
-    <svg width={width} height={height} style={{ display: 'block' }}>
-      <line x1={xs(0)} x2={xs(0)} y1={height - 6} y2={height} stroke={SLU.ink} strokeWidth={1} />
-      {ax.ticks.map(t => (
-        <g key={t}>
-          <line x1={xs(t)} x2={xs(t)} y1={height - 4} y2={height} stroke={SLU.mute} strokeWidth={1} />
-          <text x={xs(t)} y={height - 8} fontSize={10} fontFamily={MONO} fill={SLU.ink2} textAnchor="middle">
-            {fmtTick(t)}
-          </text>
-        </g>
-      ))}
-      <text x={xs(0) - 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end">◀ favors {groupB}</text>
-      <text x={xs(0) + 6} y={height - 16} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="start">favors {groupA} ▶</text>
-      <text x={width} y={12} fontSize={9.5} fill={SLU.mute} fontFamily={FONT} textAnchor="end" fontStyle="italic">
-        {unit === 'weeks' ? 'weeks of learning' : 'standard scale (SD)'}
-      </text>
+    <svg width="100%" height={height} style={{ display: 'block', overflow: 'visible' }} aria-hidden="true">
+      {/* direction cues — own band so they never collide with tick labels;
+          each side renders only when zero sits far enough in for it to fit */}
+      {zeroPct > 14 && (
+        <text x={`${zeroPct}%`} dx={-7} y={12} fontSize={10} fontWeight={600}
+              fill={SLU.mute} fontFamily={FONT} textAnchor="end">◀ {groupA} behind</text>
+      )}
+      {zeroPct < 86 && (
+        <text x={`${zeroPct}%`} dx={7} y={12} fontSize={10} fontWeight={600}
+              fill={SLU.mute} fontFamily={FONT} textAnchor="start">{groupA} ahead ▶</text>
+      )}
+      {/* zero gets a taller, inked mark */}
+      <line x1={`${zeroPct}%`} x2={`${zeroPct}%`} y1={height - 8} y2={height} stroke={SLU.ink} strokeWidth={1} />
+      {ax.ticks.map(t => {
+        const p = pct(t);
+        const isZero = t === 0;
+        // Numeric labels too close to the anchor name would overlap it —
+        // keep their tick marks but drop the text.
+        if (!isZero && Math.abs(p - zeroPct) < 6) {
+          return <line key={t} x1={`${p}%`} x2={`${p}%`} y1={height - 5} y2={height} stroke={SLU.mute} strokeWidth={1} />;
+        }
+        // Clamp anchors at the extremes so edge labels overhang the padding
+        // instead of clipping ("−0.50" → ".50").
+        const anchor = p < 3 ? 'start' : p > 97 ? 'end' : 'middle';
+        return (
+          <g key={t}>
+            <line x1={`${p}%`} x2={`${p}%`} y1={height - 5} y2={height} stroke={SLU.mute} strokeWidth={1} />
+            <text x={`${p}%`} y={height - 10}
+                  fontSize={isZero ? 9 : 10}
+                  fontFamily={isZero ? LABEL : MONO}
+                  fontWeight={isZero ? 700 : 400}
+                  fill={isZero ? SLU.ink : SLU.ink2} textAnchor={anchor}
+                  style={isZero ? { textTransform: 'uppercase', letterSpacing: 0.8 } : undefined}>
+              {isZero ? groupB : fmtTick(t)}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 // (UnitToggle removed — units live in the shared Controls card.)
 
-function ForestRow({ s, mode, unit, axis, plotW, rowH, stripe, dimmed }) {
+// District average panel — the pooled estimate every school below is compared
+// against, pinned above the per-school rows. Diamond marks the pooled mean
+// (the meta-analysis convention); gold matches the dashed district rule that
+// runs through the school rows. The pooled mean comes only from schools
+// meeting the cell-size floor, so the n columns sum over those schools. The
+// estimate is the shrinkage prior — it doesn't change with the Method toggle.
+function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
+  const [hover, setHover] = React.useState(false);
+  const ax = axis;
+  const gap = data.meta.districtGap;
+  const ci = data.meta.districtCi95 || null;   // absent on data computed before this field existed
+  const pool = data.schools.filter(s => s.meets_min_cell);
+  const nA = pool.reduce((t, s) => t + s.n_a, 0);
+  const nB = pool.reduce((t, s) => t + s.n_b, 0);
+  const xPct = (x) => `${((x - ax.min) / (ax.max - ax.min)) * 100}%`;
+  const tipOnLeft = (gap - ax.min) / (ax.max - ax.min) > 0.55;
+  const h = rowH + 8;
+  const dirText = `${data.meta.groupA} ${gap < 0 ? 'behind' : 'ahead'}`;
+  const magnitude = fmtVal(gap, unit).replace(/^[+−]/, '');
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', height: h,
+                  background: 'rgba(154, 118, 17, 0.07)' }}>
+      <div style={{ width: 86, padding: '0 10px', fontFamily: FONT, fontSize: 12,
+                    fontWeight: 700, color: SLU.ink }}>
+        District
+      </div>
+      <NumCell w={60} value={nA} mute />
+      <NumCell w={60} value={nB} mute />
+      <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+           onFocus={() => setHover(true)} onBlur={() => setHover(false)}
+           tabIndex={0}
+           role="img"
+           aria-label={`District average: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}${ci ? `, 95% CI ${fmtCI(ci, unit)}` : ''}, pooled across ${pool.length} schools, n ${nA + nB}`}
+           style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px', position: 'relative', height: h,
+                    background: hover ? 'rgba(154, 118, 17, 0.07)' : 'transparent',
+                    cursor: 'crosshair', outline: 'none',
+                    boxShadow: hover ? `inset 0 0 0 1px ${SLU.gold}44` : 'none' }}>
+        <div style={{ position: 'absolute', left: 8, right: 8, top: 0, bottom: 0 }}>
+          {/* Zero rule — continues the reference-group anchor column from the
+              school rows */}
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: xPct(0), width: 1, background: SLU.mute,
+                        opacity: 0.55, transition: `left ${TRANSITION}` }} />
+          {ci && (
+            <>
+              <div style={{
+                position: 'absolute', top: '50%', height: 2, transform: 'translateY(-50%)',
+                left: xPct(ci[0]), width: `calc(${xPct(ci[1])} - ${xPct(ci[0])})`,
+                background: SLU.gold,
+                transition: `left ${TRANSITION}, width ${TRANSITION}`,
+              }} />
+              <CICap leftPct={xPct(ci[0])} side="left" color={SLU.gold} opacity={1} />
+              <CICap leftPct={xPct(ci[1])} side="right" color={SLU.gold} opacity={1} />
+            </>
+          )}
+          {/* Pooled-mean diamond */}
+          <div style={{ position: 'absolute', top: '50%', left: xPct(gap),
+                        width: 15, height: 15, marginTop: -7.5, marginLeft: -7.5,
+                        transition: `left ${TRANSITION}`, lineHeight: 0 }}>
+            <svg width="15" height="15" viewBox="-7.5 -7.5 15 15" style={{ display: 'block' }}>
+              <polygon points="0,-6 6,0 0,6 -6,0" fill={SLU.gold} stroke="#fff" strokeWidth="1" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+        {hover && (
+          <Tooltip
+            schoolId="District"
+            gap={gap} ci={ci} unit={unit}
+            n_a={nA} n_b={nB} B={null}
+            anchorLeftPct={xPct(gap)}
+            tipOnLeft={tipOnLeft}
+            tag="pooled" accent={SLU.gold}
+            dirText={dirText}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed }) {
   const [hover, setHover] = React.useState(false);
   const ax = axis || AXIS;
   const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
   const ci = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
-  const innerW = plotW - 16;
+  const meta = window.GAPS_DATA.meta;
+  // Zero-side school: no estimate to draw. The row still renders — id, n
+  // columns (one of them 0), reference rules — with a note naming the
+  // empty group, so the school doesn't silently vanish from the comparison.
+  const noEst = gap == null || ci == null;
+  const missing = s.n_a === 0 ? meta.groupA : meta.groupB;
   const xPct = (x) => `${((x - ax.min) / (ax.max - ax.min)) * 100}%`;
-  const left = xPct(ci[0]);
-  const right = xPct(ci[1]);
-  const dotX = xPct(gap);
+  const left = noEst ? null : xPct(ci[0]);
+  const right = noEst ? null : xPct(ci[1]);
+  const dotX = noEst ? null : xPct(gap);
   const opacity = dimmed ? 0.42 : 1;
-  const isNeg = gap < 0;
-  const dotXNum = ((gap - ax.min) / (ax.max - ax.min)) * innerW;
-  const tipOnLeft = dotXNum > innerW * 0.55;
+  const isNeg = !noEst && gap < 0;
+  const tipOnLeft = !noEst && (gap - ax.min) / (ax.max - ax.min) > 0.55;
+  const dirText = noEst ? null : `${meta.groupA} ${isNeg ? 'behind' : 'ahead'}`;
+  const magnitude = noEst ? null : fmtVal(gap, unit).replace(/^[+−]/, '');
 
   return (
     <div style={{
@@ -377,10 +522,6 @@ function ForestRow({ s, mode, unit, axis, plotW, rowH, stripe, dimmed }) {
       <div style={{ width: 86, padding: '0 10px', fontFamily: MONO, fontSize: 12, color: dimmed ? SLU.mute : SLU.ink2,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
         {s.school_id}
-        {!s.meets_min_cell && (
-          <span style={{ fontFamily: FONT, fontSize: 9.5, padding: '1px 4px', borderRadius: 3,
-                          background: SLU.gold, color: '#fff', letterSpacing: 0.5 }}>n*</span>
-        )}
       </div>
       <NumCell w={60} value={s.n_a} dim={dimmed} mute />
       <NumCell w={60} value={s.n_b} dim={dimmed} mute />
@@ -389,31 +530,45 @@ function ForestRow({ s, mode, unit, axis, plotW, rowH, stripe, dimmed }) {
            onFocus={() => setHover(true)} onBlur={() => setHover(false)}
            tabIndex={0}
            role="img"
-           aria-label={`${s.school_id}: gap ${fmtVal(gap, unit)}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
-           style={{ width: plotW, padding: '0 8px', position: 'relative', height: rowH,
-                    background: hover ? 'rgba(0, 61, 165, 0.04)' : 'transparent',
-                    cursor: 'crosshair', outline: 'none',
-                    boxShadow: hover ? `inset 0 0 0 1px ${SLU.blue}33` : 'none' }}>
+           aria-label={noEst
+             ? `${s.school_id}: no ${missing} students — nothing to compare`
+             : `${s.school_id}: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
+           style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px', position: 'relative', height: rowH,
+                    background: hover && !noEst ? 'rgba(0, 61, 165, 0.04)' : 'transparent',
+                    cursor: noEst ? 'default' : 'crosshair', outline: 'none',
+                    boxShadow: hover && !noEst ? `inset 0 0 0 1px ${SLU.blue}33` : 'none' }}>
         <div style={{ position: 'absolute', left: 8, right: 8, top: 0, bottom: 0 }}>
-          {/* Zero rule */}
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: xPct(0), width: 1, background: SLU.rule }} />
+          {/* Zero rule — the reference-group anchor; a touch darker than the
+              grid since "on this line = growing like {groupB}" carries the
+              figure's meaning. Tweens with the bars when the axis re-scales. */}
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: xPct(0), width: 1, background: SLU.mute,
+                        opacity: 0.55, transition: `left ${TRANSITION}` }} />
           {/* District gap rule (Bayes prior) */}
           <div style={{ position: 'absolute', top: 2, bottom: 2, left: xPct(window.GAPS_DATA.meta.districtGap),
-                        width: 1, borderLeft: `1px dashed ${SLU.gold}` }} />
-          {/* CI bar — animated via CSS transitions on left/width */}
-          <div style={{
-            position: 'absolute', top: '50%', height: 2, transform: 'translateY(-50%)',
-            left, width: `calc(${right} - ${left})`,
-            background: isNeg ? SLU.neg : SLU.pos, opacity,
-            transition: `left ${TRANSITION}, width ${TRANSITION}, background-color ${TRANSITION}`,
-          }} />
-          {/* CI end caps */}
-          <CICap leftPct={left} side="left" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
-          <CICap leftPct={right} side="right" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
-          {/* Point */}
-          <Dot leftPct={dotX} gap={gap} opacity={opacity} hover={hover} />
+                        width: 1, borderLeft: `1px dashed ${SLU.gold}`, transition: `left ${TRANSITION}` }} />
+          {noEst ? (
+            <span style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: 0,
+                           fontSize: 10.5, fontStyle: 'italic', color: SLU.mute, opacity }}>
+              no {missing} students
+            </span>
+          ) : (
+            <>
+              {/* CI bar — animated via CSS transitions on left/width */}
+              <div style={{
+                position: 'absolute', top: '50%', height: 2, transform: 'translateY(-50%)',
+                left, width: `calc(${right} - ${left})`,
+                background: isNeg ? SLU.neg : SLU.pos, opacity,
+                transition: `left ${TRANSITION}, width ${TRANSITION}, background-color ${TRANSITION}`,
+              }} />
+              {/* CI end caps */}
+              <CICap leftPct={left} side="left" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
+              <CICap leftPct={right} side="right" color={isNeg ? SLU.neg : SLU.pos} opacity={opacity} />
+              {/* Point */}
+              <Dot leftPct={dotX} gap={gap} opacity={opacity} hover={hover} />
+            </>
+          )}
         </div>
-        {hover && (
+        {hover && !noEst && (
           <Tooltip
             schoolId={s.school_id}
             gap={gap} ci={ci} unit={unit} mode={mode}
@@ -422,6 +577,7 @@ function ForestRow({ s, mode, unit, axis, plotW, rowH, stripe, dimmed }) {
             anchorLeftPct={dotX}
             tipOnLeft={tipOnLeft}
             isNeg={isNeg}
+            dirText={dirText}
           />
         )}
       </div>
@@ -481,9 +637,12 @@ function NumCell({ w, value, dim, mute }) {
 
 // Tooltip — anchored to the dot, flips side near the right edge so it doesn't clip.
 // White-bg variant matches the demographics / achievement tooltip vocabulary.
-function Tooltip({ schoolId, gap, ci, unit, mode, n_a, n_b, B, anchorLeftPct, tipOnLeft, isNeg }) {
+// The district row reuses it with `tag` / `accent` overrides, a null B (the
+// shrinkage factor has no meaning for the pooled mean), and possibly no CI.
+function Tooltip({ schoolId, gap, ci, unit, mode, n_a, n_b, B, anchorLeftPct, tipOnLeft, isNeg,
+                   tag, accent: accentProp, dirText }) {
   const offset = 14;
-  const accent = isNeg ? SLU.neg : SLU.pos;
+  const accent = accentProp || (isNeg ? SLU.neg : SLU.pos);
   const baseStyle = {
     position: 'absolute',
     top: '50%',
@@ -511,20 +670,27 @@ function Tooltip({ schoolId, gap, ci, unit, mode, n_a, n_b, B, anchorLeftPct, ti
         <span style={{ fontFamily: MONO, fontSize: 11, color: SLU.mute }}>{schoolId}</span>
         <span style={{ fontSize: 10, color: SLU.mute, fontFamily: LABEL,
                         textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-          {mode === 'shrunk' ? 'shrunken' : 'raw'}
+          {tag || (mode === 'shrunk' ? 'shrunken' : 'raw')}
         </span>
       </div>
       <div style={{ marginTop: 4, fontFamily: MONO, fontSize: 16, fontWeight: 600, color: accent }}>
         {fmtVal(gap, unit)}
+        {dirText && (
+          <span style={{ fontFamily: FONT, fontSize: 10.5, fontWeight: 600, color: SLU.mute, marginLeft: 7 }}>
+            {dirText}
+          </span>
+        )}
       </div>
-      <div style={{ marginTop: 2, fontFamily: MONO, fontSize: 11.5, color: SLU.ink2 }}>
-        95% CI: {fmtCI(ci, unit)}
-      </div>
+      {ci && (
+        <div style={{ marginTop: 2, fontFamily: MONO, fontSize: 11.5, color: SLU.ink2 }}>
+          95% CI: {fmtCI(ci, unit)}
+        </div>
+      )}
       <div style={{ marginTop: 8, paddingTop: 6, borderTop: `1px solid ${SLU.rule2}`,
                     fontSize: 10.5, color: SLU.mute, display: 'flex', gap: 12, fontFamily: MONO }}>
         <span>nₐ {n_a}</span>
         <span>nᵇ {n_b}</span>
-        <span>B {B.toFixed(2)}</span>
+        {B != null && <span>B {B.toFixed(2)}</span>}
       </div>
     </div>
   );
@@ -536,11 +702,11 @@ function LegendSwatch({ groupA, groupB }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <svg width="11" height="11" viewBox="-5.5 -5.5 11 11"><circle r="4" fill={SLU.pos} stroke="#fff" strokeWidth="1" /></svg>
-      <span>● gap favors {groupA}</span>
+      <span>● {groupA} ahead of {groupB} peers</span>
       <svg width="11" height="11" viewBox="-5.5 -5.5 11 11" style={{ marginLeft: 8 }}>
         <polygon points="0,4 -4,-3 4,-3" fill={SLU.neg} stroke="#fff" strokeWidth="1" />
       </svg>
-      <span>▼ gap favors {groupB}</span>
+      <span>▼ {groupA} behind {groupB} peers</span>
     </span>
   );
 }
