@@ -398,7 +398,7 @@ function UnitAxis({ groupA, groupB, unit, axis }) {
   );
 }
 
-// (UnitToggle removed — units live in the shared Controls card.)
+// (UnitToggle removed — units live in the sidebar Analysis panel.)
 
 // District average panel — the pooled estimate every school below is compared
 // against, pinned above the per-school rows. Diamond marks the pooled mean

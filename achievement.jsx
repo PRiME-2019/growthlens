@@ -29,6 +29,7 @@ function AchievementPage({ sliceLabel, ctx }) {
 
 // Two-option pill used on the figure card (same visual as the forest card's
 // View toggle): [['school','School'],['student','Student']] etc.
+// Exactly two options — the sliding thumb is hardcoded to 50% halves.
 const ACH_TWEEN = window.MOTION_OK === false ? '0ms' : '420ms cubic-bezier(0.32, 0.72, 0.24, 1)';
 function PillToggle({ label, value, options, onChange }) {
   const SLU = window.SLU;

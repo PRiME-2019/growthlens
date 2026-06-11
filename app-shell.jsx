@@ -111,8 +111,7 @@ function AppBody() {
   };
 
   // Scroll to the top whenever the user changes analysis tabs so the new
-  // page reads from its header; pairs with ControlsCard's scroll handler
-  // which re-opens the controls when scrollY is near zero.
+  // page reads from its header.
   React.useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
   // Subjects the store can't render yet are greyed in the toggle (demo is
@@ -888,7 +887,6 @@ function ScanPage({ sliceLabel, ctx }) {
       <BriefHeader eyebrow="System Scan" slice={sliceLabel}
                    title="Where to look first"
                    blurb={'A district-wide view of how each grade is doing at each school, compared with what the district average would predict. Blue cells are growing faster than expected, rust cells slower. Scan the rows for schools that are consistently strong or soft, and the columns for grades where the whole district is ahead or behind — then dig into a specific subject and group in Gap Analysis.'} />
-      <ControlsCard title="Controls" slice={sliceLabel}><ScanControls ctx={ctx} /></ControlsCard>
       <OverviewCardScan />
       <HeatmapSlot ctx={ctx} />
     </>
@@ -952,56 +950,6 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
       </div>
       {open && children}
     </section>
-  );
-}
-function ControlsCard({ title, slice, children }) {
-  // Sticky to viewport top so controls stay reachable while scrolling long
-  // figures (forest / heatmap). The slice strip pinned above keeps subject /
-  // subgroup context visible even when the BriefHeader has scrolled away.
-  //
-  // Auto-collapse once when the user first scrolls down past the top, and
-  // re-open as a pair when they return near the top. Manual click overrides
-  // until the next auto-cycle: if the user manually collapsed at the top
-  // (no auto-collapse latched), scrolling away won't re-collapse and coming
-  // back won't force-open. Tab changes scroll to top in AppBody, which fires
-  // this handler and naturally resets the card to its open state.
-  const [open, setOpen] = React.useState(true);
-  const hasAutoCollapsed = React.useRef(false);
-  React.useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || window.pageYOffset || 0;
-      if (y < 8) {
-        if (hasAutoCollapsed.current) {
-          hasAutoCollapsed.current = false;
-          setOpen(true);
-        }
-      } else if (!hasAutoCollapsed.current && y > 80) {
-        hasAutoCollapsed.current = true;
-        setOpen(false);
-      }
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const headerTitle = slice
-    ? <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
-        <span>{title}</span>
-        <span style={{ fontSize: 10.5, fontFamily: LABEL, letterSpacing: 1.0,
-                        textTransform: 'uppercase', color: SLU.mute, fontWeight: 700 }}>·</span>
-        <span style={{ fontSize: 11, fontFamily: LABEL, letterSpacing: 1.0,
-                        textTransform: 'uppercase', color: SLU.blue, fontWeight: 700 }}>{slice}</span>
-      </span>
-    : title;
-  return (
-    <div style={{
-      position: 'sticky', top: 12, zIndex: 20,
-      background: 'transparent',
-      boxShadow: '0 6px 14px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.04)',
-      borderRadius: 8,
-    }}>
-      <AuxCard title={headerTitle} collapsible open={open} onToggle={() => setOpen(o => !o)}>{children}</AuxCard>
-    </div>
   );
 }
 
@@ -1263,23 +1211,6 @@ function StatLabel({ children }) {
 }
 
 // ---- CONTROL ATOMS ----------------------------------------------------------
-function GHead({ children }) {
-  return (
-    <div style={{ fontSize: 10.5, fontFamily: LABEL, color: SLU.mute,
-                   textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700,
-                   marginBottom: 10 }}>
-      {children}
-    </div>
-  );
-}
-function CGroup({ title, children }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <GHead>{title}</GHead>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
-    </div>
-  );
-}
 function CLabel({ children, hint }) {
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -1358,41 +1289,6 @@ function CSegmented({ value, onChange, options, label, hint, optionHints, disabl
     </div>
   );
 }
-function CSelect({ value, onChange, options, label, disabledKeys = [], disabledHint }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <CLabel>{label}</CLabel>
-      <select value={value} onChange={e => onChange(e.target.value)}
-              style={{
-                fontFamily: FONT, fontSize: 12, color: SLU.ink, padding: '7px 24px 7px 9px',
-                border: `1px solid ${SLU.rule}`, borderRadius: 6, background: '#fff',
-                cursor: 'pointer', width: '100%',
-              }}>
-        {Object.entries(options).map(([k, v]) => {
-          const off = disabledKeys.includes(k);
-          return (
-            <option key={k} value={k} disabled={off}>
-              {v}{off && disabledHint ? ` ${disabledHint}` : ''}
-            </option>
-          );
-        })}
-      </select>
-    </div>
-  );
-}
-
-// Controls cards lay out their groups in a horizontal grid. Each group keeps
-// its label + a vertical stack of its individual controls. Wraps at narrow
-// widths so groups never crush into one another.
-function ControlsGrid({ children }) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(auto-fit, minmax(220px, 1fr))`,
-      gap: 28,
-    }}>{children}</div>
-  );
-}
 
 const METHOD_OPTS = { shrunk: 'Shrunken', raw: 'Raw' };
 const METHOD_HINT = 'How each school’s number is figured. Shrunken gently pulls schools with less data toward the district average, so a handful of students can’t swing the result — steadier for small schools, but less extreme. Raw shows each school’s own number exactly as measured: honest, but jumpier when only a few students are involved.';
@@ -1401,21 +1297,6 @@ const METHOD_OPT_HINTS = {
   raw: 'Raw: each school’s own number, exactly as measured — honest about its data, but jumpier when only a few students are involved.',
 };
 const UNIT_HINT = 'How to show the numbers. SD is a standard scale compared with the district average. Weeks converts that into about how many weeks of learning it represents, using Missouri MAP growth norms.';
-
-function ScanControls({ ctx }) {
-  return (
-    <ControlsGrid>
-      <CGroup title="Show">
-        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-      </CGroup>
-      <CGroup title="Units">
-        <CSegmented value={ctx.unit} onChange={ctx.setUnit}
-                    options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
-                    hint={UNIT_HINT} />
-      </CGroup>
-    </ControlsGrid>
-  );
-}
 
 // ---- SLOTS ------------------------------------------------------------------
 function ForestSlot({ ctx }) {
@@ -1447,12 +1328,8 @@ function PlaceholderCard({ label, h }) {
 // page modules loaded after the shell) can reuse the same chrome.
 window.AppBody = AppBody;
 window.BriefHeader = BriefHeader;
-window.ControlsCard = ControlsCard;
 window.AuxCard = AuxCard;
-window.ControlsGrid = ControlsGrid;
-window.CGroup = CGroup;
 window.CLabel = CLabel;
-window.CSelect = CSelect;
 window.CSegmented = CSegmented;
 window.SUBJECTS = SUBJECTS;
 window.DEMOS = DEMOS;
