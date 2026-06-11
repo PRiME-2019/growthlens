@@ -26,11 +26,16 @@ function DemographicsPage({ sliceLabel, ctx }) {
   // 5 comparisons; a stale demo key like 'race' would otherwise render "No data").
   const dd = window.DEMO_DATA || {};
   const demoVar = dd[ctx.demoVar] ? ctx.demoVar : (dd.frl ? 'frl' : Object.keys(dd)[0]);
+  // Write the clamp back into ctx so stale state can't silently flip the figure
+  // when the dataset changes again later.
+  React.useEffect(() => { if (demoVar && demoVar !== ctx.demoVar) ctx.setDemoVar(demoVar); });
 
   const districtData = dd[demoVar];
   const groups = districtData ? districtData.groups : [];
   const label = districtData ? districtData.label : '';
-  const districtMean = districtData ? districtData.districtMean : 0;
+  // Default to 0 (the residual scale's natural center) if the dataset doesn't
+  // carry a districtMean, so the reference line never silently disappears.
+  const districtMean = (districtData && districtData.districtMean != null) ? districtData.districtMean : 0;
 
   return (
     <>
@@ -48,11 +53,12 @@ function DemographicsControls({ ctx }) {
   if (window.DEMO_SPECS) {
     Object.entries(window.DEMO_SPECS).forEach(([k, v]) => { demoOptions[k] = v.label; });
   }
+  // No "Groups to compare" here — that control drives the Gap Analysis slice and
+  // had no effect on this figure; the "Group" select below is what slices this page.
   return (
     <window.ControlsGrid>
       <window.CGroup title="Show">
         <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <window.CSelect value={ctx.demo} onChange={ctx.setDemo} options={window.DEMOS} label="Groups to compare" />
       </window.CGroup>
       <window.CGroup title="Units">
         <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
@@ -71,7 +77,7 @@ function DemographicsControls({ ctx }) {
 // subject toggles. Geometry properties (x, y, x1, y1, x2, y2, cx, cy, width)
 // are CSS-animatable in all modern evergreen browsers; older engines fall
 // back to a hard cut rather than breaking.
-const DEMO_TWEEN = '460ms cubic-bezier(0.32, 0.72, 0.24, 1)';
+const DEMO_TWEEN = window.MOTION_OK === false ? '0ms' : '460ms cubic-bezier(0.32, 0.72, 0.24, 1)';
 const DEMO_TRANSITION = {
   transition: `x ${DEMO_TWEEN}, y ${DEMO_TWEEN}, x1 ${DEMO_TWEEN}, y1 ${DEMO_TWEEN}, x2 ${DEMO_TWEEN}, y2 ${DEMO_TWEEN}, cx ${DEMO_TWEEN}, cy ${DEMO_TWEEN}, width ${DEMO_TWEEN}, transform ${DEMO_TWEEN}, fill ${DEMO_TWEEN}, stroke ${DEMO_TWEEN}`,
 };
@@ -92,7 +98,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
   const unitLabel = unit === 'weeks' ? 'weeks' : 'SD';
   const fmt = (v) => {
     const x = toUnit(v);
-    return (x >= 0 ? '+' : '') + x.toFixed(2);
+    return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
   };
 
   // x scale tracks actual residual values — not forced symmetric around 0.
@@ -101,7 +107,14 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
     xMin = Math.min(xMin, g.whiskerLo, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
     xMax = Math.max(xMax, g.whiskerHi, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
   });
-  const span = xMax - xMin;
+  let span = xMax - xMin;
+  if (!(span > 0) || !isFinite(span)) {
+    // Degenerate domain (all values identical, or no whisker data at all) —
+    // widen it rather than divide by zero into NaN coordinates.
+    xMin = (isFinite(xMin) ? xMin : 0) - 0.5;
+    xMax = (isFinite(xMax) ? xMax : 0) + 0.5;
+    span = xMax - xMin;
+  }
   const pad = span * 0.06;
   xMin -= pad;
   xMax += pad;
@@ -148,7 +161,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
             Across the whole district
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            box = the middle half of students, line = the typical student, dots = individual outliers
+            box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
           </div>
         </div>
         <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
@@ -157,7 +170,8 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
         </span>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
+           role="img" aria-label={`Box plots of growth by ${label}, ${groups.length} groups`}>
         {/* district mean reference — computed from pooled student residuals */}
         {toUnit(xLo) <= toUnit(districtMean) && toUnit(districtMean) <= toUnit(xHi) && (
           <g>
@@ -175,6 +189,9 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
         {/* group rows */}
         {groups.map((g, i) => {
           const cy = topPad + i * rowH + rowH / 2;
+          // Same 10-student floor as everywhere else — the Upload FAQ promises
+          // too-small groups are flagged wherever they appear.
+          const tooFew = g.n < 10;
           const boxTop = cy - 18;
           const boxH = 36;
           const x_q1 = xToPx(g.q1);
@@ -190,7 +207,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
           const boxStroke = above ? SLU.blue : SLU.neg;
 
           return (
-            <g key={g.key}>
+            <g key={g.key} opacity={tooFew ? 0.45 : 1}>
               {/* row guide (subtle) */}
               <line x1={leftPad} x2={leftPad + plotW} y1={cy + rowH / 2 - 2} y2={cy + rowH / 2 - 2}
                     stroke={SLU.rule2} strokeWidth={1} opacity={i === groups.length - 1 ? 0 : 1} />
@@ -202,7 +219,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
               </text>
               <text x={leftPad - 14} y={cy + 14} fontSize={11} fill={SLU.mute}
                     textAnchor="end" fontFamily={DEMO_PAGE_MONO}>
-                n={g.n.toLocaleString()}
+                n={g.n.toLocaleString()}{tooFew && <tspan fill={SLU.gold} fontWeight="700"> · too few</tspan>}
               </text>
 
               {/* whisker */}
@@ -223,18 +240,22 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
                 <polygon points="0,-5 5,0 0,5 -5,0" fill="#fff" stroke={boxStroke} strokeWidth={1.2} />
               </g>
 
-              {/* outliers */}
+              {/* outliers — visible dot rides inside a generous invisible hit
+                  area, since a ~5px target is hard to hover precisely */}
               {(g.outliers || []).map((o, oi) => {
                 const rec = typeof o === 'number' ? { residual: o } : o;
                 const px = xToPx(rec.residual);
                 const isHover = hover && hover.gKey === g.key && hover.oi === oi;
                 return (
-                  <circle key={oi} cx={px} cy={cy} r={isHover ? 4.2 : 2.4}
-                          fill={boxStroke} fillOpacity={isHover ? 0.95 : 0.55}
-                          stroke={isHover ? '#fff' : 'none'} strokeWidth={isHover ? 1.4 : 0}
-                          style={{ ...DEMO_TRANSITION, cursor: 'pointer' }}
-                          onMouseEnter={() => setHover({ gKey: g.key, oi, px, py: cy, record: rec, boxStroke, groupLabel: g.label })}
-                          onMouseLeave={() => setHover(h => (h && h.gKey === g.key && h.oi === oi) ? null : h)} />
+                  <g key={oi} style={{ cursor: 'pointer' }}
+                     onMouseEnter={() => setHover({ gKey: g.key, oi, px, py: cy, record: rec, boxStroke, groupLabel: g.label })}
+                     onMouseLeave={() => setHover(h => (h && h.gKey === g.key && h.oi === oi) ? null : h)}>
+                    <circle cx={px} cy={cy} r={9} fill="transparent" />
+                    <circle cx={px} cy={cy} r={isHover ? 4.2 : 2.4}
+                            fill={boxStroke} fillOpacity={isHover ? 0.95 : 0.55}
+                            stroke={isHover ? '#fff' : 'none'} strokeWidth={isHover ? 1.4 : 0}
+                            style={DEMO_TRANSITION} pointerEvents="none" />
+                  </g>
                 );
               })}
 
@@ -269,10 +290,13 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
           );
         })}
 
-        {/* outlier tooltip — drawn last so it sits above everything */}
+        {/* outlier tooltip — drawn last so it sits above everything. Uploaded
+            outliers are bare residuals (no student/school ids), so the tooltip
+            collapses to a compact value + group line instead of placeholders. */}
         {hover && hover.record && (() => {
           const r = hover.record;
-          const tipW = 168, tipH = 64;
+          const hasIds = !!(r.student_id || r.school_id);
+          const tipW = 168, tipH = hasIds ? 64 : 28;
           const px = hover.px;
           const py = hover.py;
           // Flip the tooltip to whichever side has room.
@@ -287,22 +311,26 @@ function DemographicsFigure({ label, groups, districtMean = 0, ctx }) {
               <rect x={tx} y={ty} width={tipW} height={tipH} rx={5}
                     fill="#fff" stroke={hover.boxStroke} strokeWidth={1.2}
                     filter="drop-shadow(0 2px 6px rgba(15,23,42,0.12))" />
-              <text x={tx + 10} y={ty + 16} fontSize={11.5} fontFamily={DEMO_PAGE_MONO}
+              <text x={tx + 10} y={ty + 18} fontSize={11.5} fontFamily={DEMO_PAGE_MONO}
                     fontWeight={700} fill={SLU.ink}>
-                {r.student_id || 'student'}
+                {r.student_id || hover.groupLabel}
               </text>
-              <text x={tx + tipW - 10} y={ty + 16} fontSize={11} fontFamily={DEMO_PAGE_MONO}
+              <text x={tx + tipW - 10} y={ty + 18} fontSize={11} fontFamily={DEMO_PAGE_MONO}
                     fill={hover.boxStroke} textAnchor="end" fontWeight={700}>
                 {resid} {unitLabel}
               </text>
-              <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 24} y2={ty + 24}
-                    stroke={SLU.rule2} strokeWidth={1} />
-              <text x={tx + 10} y={ty + 38} fontSize={10.5} fontFamily={DEMO_PAGE_MONO} fill={SLU.ink2}>
-                {hover.groupLabel}
-              </text>
-              <text x={tx + 10} y={ty + 52} fontSize={10} fontFamily={DEMO_PAGE_MONO} fill={SLU.mute}>
-                {r.school_id || ''}{r.grade ? ` · Gr ${r.grade}` : ''}
-              </text>
+              {hasIds && (
+                <g>
+                  <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 24} y2={ty + 24}
+                        stroke={SLU.rule2} strokeWidth={1} />
+                  <text x={tx + 10} y={ty + 38} fontSize={10.5} fontFamily={DEMO_PAGE_MONO} fill={SLU.ink2}>
+                    {hover.groupLabel}
+                  </text>
+                  <text x={tx + 10} y={ty + 52} fontSize={10} fontFamily={DEMO_PAGE_MONO} fill={SLU.mute}>
+                    {r.school_id || ''}{r.grade ? ` · Gr ${r.grade}` : ''}
+                  </text>
+                </g>
+              )}
             </g>
           );
         })()}

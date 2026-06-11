@@ -13,20 +13,27 @@
              count(*) AS n,
              avg(residual) AS rbar,
              var_samp(residual) AS s2,
-             avg(residual_se * residual_se) AS ms2,
-             avg(status) AS status
+             avg(residual_se * residual_se) AS ms2
       FROM ${table} ${where}
       GROUP BY ${groupExpr}
     `)).toArray();
     return rows.map(r => ({
       g: r.g, n: Number(r.n), rbar: Number(r.rbar),
-      s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2), status: Number(r.status),
+      s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2),
       se: S.cellSE({ s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2), n: Number(r.n) }),
     }));
   }
 
   // predicate on the canonical boolean column (dbCol), not the raw DESE header (col).
   function predicate(side) { return `${side.dbCol} = ${side.val ? 'TRUE' : 'FALSE'}`; }
+
+  // Down-sample outliers evenly across the sorted list so both tails survive —
+  // a plain slice(0, k) of the ascending list keeps only the most-negative end.
+  function sampleOutliers(outliers, k = 8) {
+    if (!outliers || outliers.length <= k) return outliers || [];
+    const step = Math.ceil(outliers.length / k);
+    return outliers.filter((_, i) => i % step === 0);
+  }
 
   async function buildGaps(conn, table, subject) {
     const byDemo = {};
@@ -43,13 +50,22 @@
         schools.push({ school_id: a.g, n_a: a.n, n_b: b.n, raw_gap: rawGap, raw_se: rawSe, meets_min_cell: meets });
       }
       const fitRows = schools.filter(s => s.meets_min_cell).map(s => ({ gap: s.raw_gap, se: s.raw_se }));
-      const tau2 = S.remlTau2(fitRows);
+      // With <2 fit schools τ² can't be estimated: B would hit 0 and pin every
+      // school to the pooled mean with zero-width CIs — a fabricated exact
+      // value. Shrinkage is undefined there, so fall back to raw (B = 1).
+      const canShrink = fitRows.length >= 2;
+      const tau2 = canShrink ? S.remlTau2(fitRows) : 0;
       const pooled = S.pooledMean(fitRows, tau2) || { mu: 0, ciLo: 0, ciHi: 0 };
       for (const s of schools) {
-        const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu });
         s.raw_ci95 = [s.raw_gap - 1.96 * s.raw_se, s.raw_gap + 1.96 * s.raw_se];
-        s.shrunk_gap = sh.shrunkGap; s.shrunk_se = sh.shrunkSe; s.shrinkage_factor = sh.B;
-        s.shrunk_ci95 = [sh.shrunkGap - 1.96 * sh.shrunkSe, sh.shrunkGap + 1.96 * sh.shrunkSe];
+        if (canShrink) {
+          const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu });
+          s.shrunk_gap = sh.shrunkGap; s.shrunk_se = sh.shrunkSe; s.shrinkage_factor = sh.B;
+          s.shrunk_ci95 = [sh.shrunkGap - 1.96 * sh.shrunkSe, sh.shrunkGap + 1.96 * sh.shrunkSe];
+        } else {
+          s.shrunk_gap = s.raw_gap; s.shrunk_se = s.raw_se; s.shrinkage_factor = 1;
+          s.shrunk_ci95 = s.raw_ci95.slice();
+        }
       }
       byDemo[sg.key] = {
         meta: { subject, demographic: sg.key, groupA: sg.aLabel, groupB: sg.bLabel,
@@ -75,52 +91,51 @@
   }
 
   async function buildDemo(conn, table) {
-    // District-wide + per-school residual distributions for each subgroup side.
-    const demoData = {}, bySchool = {};
+    // District-wide residual distributions for each subgroup side.
+    // districtMean is the dashed reference line on the Demographics figure —
+    // one mean residual over the whole table (≈0 for state-standardized residuals).
+    const dRow = (await conn.query(`SELECT avg(residual) AS m FROM ${table}`)).toArray()[0];
+    const districtMean = dRow && dRow.m != null ? Number(dRow.m) : 0;
+    const demoData = {};
     for (const sg of I.SUBGROUPS) {
       const groups = [];
-      const perSchool = {}; // school_id -> [{key,label,...stat}]
       for (const side of [sg.a, sg.b]) {
         const key = side === sg.a ? 'A' : 'B', label = side === sg.a ? sg.aLabel : sg.bLabel;
-        const rows = (await conn.query(`SELECT school_id, residual FROM ${table} WHERE ${predicate(side)}`)).toArray();
-        const all = rows.map(r => Number(r.residual));
-        const stat = S.summarize(all);
+        const rows = (await conn.query(`SELECT residual FROM ${table} WHERE ${predicate(side)}`)).toArray();
+        const stat = S.summarize(rows.map(r => Number(r.residual)));
         if (!stat) continue; // empty subgroup side (no students) — skip rather than spread null
-        groups.push({ key, label, ...stat, outliers: stat.outliers.slice(0, 8) });
-        const bySch = {};
-        for (const r of rows) { (bySch[r.school_id] = bySch[r.school_id] || []).push(Number(r.residual)); }
-        for (const [sid, vals] of Object.entries(bySch)) {
-          const st = S.summarize(vals);
-          if (!st) continue; // skip empty per-school side
-          (perSchool[sid] = perSchool[sid] || []).push({ key, label, ...st, outliers: st.outliers.slice(0, 8) });
-        }
+        groups.push({ key, label, ...stat, outliers: sampleOutliers(stat.outliers) });
       }
-      demoData[sg.key] = { label: sg.label, short: sg.key.toUpperCase(), groups };
-      bySchool[sg.key] = {};
-      for (const [sid, gs] of Object.entries(perSchool)) bySchool[sg.key][sid] = { groups: gs };
+      demoData[sg.key] = { label: sg.label, groups, districtMean };
     }
-    return { demoData, bySchool };
+    return { demoData };
   }
 
   async function buildAchievement(conn, table) {
     // Student points (raw only) + school points (status vs overall residual, raw + shrunk overall).
-    const students = (await conn.query(`SELECT school_id, status AS x, residual AS y FROM ${table}`)).toArray()
+    // Rows with no status score would otherwise plot at x=0 (Number(null) === 0).
+    const students = (await conn.query(`SELECT school_id, status AS x, residual AS y FROM ${table} WHERE status IS NOT NULL`)).toArray()
       .map((r, i) => ({ school_id: r.school_id, school_idx: 0, hue: 0, x: Number(r.x), y_raw: Number(r.y) }));
     const schoolAgg = await (async () => {
       const c = await cellsOverall(conn, table);
       const fit = c.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
-      const tau2 = S.remlTau2(fit); const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+      // Same τ² guard as buildGaps: shrinkage is undefined with <2 fit schools.
+      const canShrink = fit.length >= 2;
+      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
       return c.map((s, i) => {
-        const sh = S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu });
+        const yShrunk = canShrink
+          ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap
+          : s.rbar;
         return { school_id: s.g, school_name: s.g, school_idx: i, hue: (i * 360 / c.length) % 360,
-                 x: s.status, y_raw: s.rbar, y_shrunk: sh.shrunkGap, n: s.n };
+                 x: s.status, y_raw: s.rbar, y_shrunk: yShrunk, n: s.n };
       });
     })();
     const idx = Object.fromEntries(schoolAgg.map((s, i) => [s.school_id, i]));
     students.forEach(p => { p.school_idx = idx[p.school_id] ?? 0; p.hue = (p.school_idx * 360 / schoolAgg.length) % 360; });
     return {
-      student: { points: students, reg_raw: S.ols(students, 'x', 'y_raw') },
-      school: { points: schoolAgg, reg_raw: S.ols(schoolAgg, 'x', 'y_raw'), reg_shrunk: S.ols(schoolAgg, 'x', 'y_shrunk') },
+      student: { points: students },
+      school: { points: schoolAgg },
     };
   }
   async function cellsOverall(conn, table) {
@@ -140,7 +155,7 @@
     const heatmap = await buildHeatmap(conn, table, subject);
     const demo = await buildDemo(conn, table);
     const ach = await buildAchievement(conn, table);
-    return { GAPS_DATA_BY_DEMO: gaps, HEATMAP_DATA: heatmap, DEMO_DATA: demo.demoData, DEMO_DATA_BY_SCHOOL: demo.bySchool, ACH_DATA: ach };
+    return { GAPS_DATA_BY_DEMO: gaps, HEATMAP_DATA: heatmap, DEMO_DATA: demo.demoData, ACH_DATA: ach };
   }
 
   window.GLCompute = { computeSlice };

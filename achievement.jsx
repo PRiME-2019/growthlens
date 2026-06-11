@@ -21,7 +21,7 @@ function AchievementPage({ sliceLabel, ctx }) {
     <>
       <window.BriefHeader eyebrow="Status & Growth" slice={sliceLabel}
         title="Where each school sits on both fronts"
-        blurb={'Two views at once: where students started (prior achievement) along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that start lower but grow faster.'} />
+        blurb={'Two views at once: where students scored this year along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that score lower but grow faster.'} />
       <window.ControlsCard title="Controls"><AchievementControls ctx={ctx} /></window.ControlsCard>
       <AchievementFigure level={level} ctx={ctx} />
     </>
@@ -59,6 +59,9 @@ function AchievementControls({ ctx }) {
 function AchievementFigure({ level, ctx }) {
   const SLU = window.SLU;
   const [hover, setHover] = React.useState(null); // school-level tooltip
+  // Drop any open tooltip when the view re-plots under it — a stale hover
+  // would otherwise pin a phantom tooltip from the previous slice.
+  React.useEffect(() => { setHover(null); }, [level, ctx.subject, ctx.estimate, ctx.unit]);
   const data = window.ACH_DATA && window.ACH_DATA[level];
   if (!data) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -73,7 +76,14 @@ function AchievementFigure({ level, ctx }) {
   const toUnit = (v) => unit === 'weeks' ? window.zToWeeks(v) : v;
   const unitLabel = unit === 'weeks' ? 'weeks' : 'SD';
 
-  const points = data.points;
+  // Cap the student view — a large district would otherwise mount tens of
+  // thousands of animated SVG circles. Stride-sampling keeps the shape.
+  const MAX_STUDENT_DOTS = 2000;
+  const allPoints = data.points;
+  const sampled = level === 'student' && allPoints.length > MAX_STUDENT_DOTS;
+  const points = sampled
+    ? allPoints.filter((_, i) => i % Math.ceil(allPoints.length / MAX_STUDENT_DOTS) === 0)
+    : allPoints;
 
   // Standardize prior achievement against this dataset's own mean / sd
   // rather than the previously hardcoded (50, 10). Falls back gracefully if
@@ -120,21 +130,25 @@ function AchievementFigure({ level, ctx }) {
   const xMean = wSum ? xwSum / wSum : 0;
   const yMean = wSum ? ywSum / wSum : 0;
 
-  // x ticks — half-SD steps on the z scale
+  // x ticks — half-SD steps on the z scale, clamped to the plot domain so no
+  // stray tick draws left of the y-axis.
   const xTicks = [];
   const xStep = 0.5;
-  for (let t = -Math.ceil(xExtreme / xStep) * xStep; t <= xExtreme + 1e-9; t += xStep) {
+  for (let t = Math.ceil(-xExtreme / xStep) * xStep; t <= xExtreme + 1e-9; t += xStep) {
     xTicks.push(+t.toFixed(2));
   }
 
-  // y ticks — half-SD steps in z mode; round-week steps in weeks mode that
-  // scale with the active year × subject conversion factor.
+  // y ticks — step adapts to the data span (the school view's range can be well
+  // under 0.5 SD, which used to leave a single lonely '0' tick); weeks mode
+  // scales the same step through the active year × subject conversion factor.
+  const ySpanZ = 2 * yExtreme;
+  const zStep = ySpanZ > 2 ? 0.5 : ySpanZ > 0.9 ? 0.25 : ySpanZ > 0.35 ? 0.1 : 0.05;
   const yStep = unit === 'weeks'
-    ? Math.max(5, Math.round(window.zToWeeks(0.5) / 5) * 5)
-    : 0.5;
+    ? Math.max(5, Math.round(window.zToWeeks(zStep) / 5) * 5)
+    : zStep;
   const yTickMax = toUnit(yHi);
   const yTicks = [];
-  for (let t = -Math.ceil(yTickMax / yStep) * yStep; t <= yTickMax; t += yStep) {
+  for (let t = Math.ceil(-yTickMax / yStep) * yStep; t <= yTickMax + 1e-9; t += yStep) {
     yTicks.push(t);
   }
 
@@ -159,13 +173,17 @@ function AchievementFigure({ level, ctx }) {
                      gap: 12, marginBottom: 4 }}>
         <div>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-            Where students started vs. how they grew — {level === 'school' ? 'school view' : 'student view'}
+            This year’s score vs. growth — {level === 'school' ? 'school view' : 'student view'}
           </div>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-            x: where students started
+            x: this year’s score
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
             y: growth vs. expected ({unitLabel}) ·
-            <span style={{ marginLeft: 4 }}>{points.length.toLocaleString()} points</span>
+            <span style={{ marginLeft: 4 }}>
+              {sampled
+                ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
+                : `${points.length.toLocaleString()} points`}
+            </span>
           </div>
         </div>
         <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
@@ -174,7 +192,8 @@ function AchievementFigure({ level, ctx }) {
         </span>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
+           role="img" aria-label={`Scatter of this year's score versus growth, ${level} view, ${points.length} points`}>
         {/* plot bg */}
         <rect x={padL} y={padT} width={plotW} height={plotH}
               fill="#FAFAFB" stroke={SLU.rule2} strokeWidth={1} />
@@ -189,11 +208,9 @@ function AchievementFigure({ level, ctx }) {
         {ctx.achShowMeans !== false && (
           <g>
             <line x1={xToPx(xMean)} x2={xToPx(xMean)} y1={padT} y2={padT + plotH}
-                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95}
-                  style={{ transition: 'x1 700ms cubic-bezier(.4,0,.2,1), x2 700ms cubic-bezier(.4,0,.2,1)' }} />
+                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
             <line x1={padL} x2={padL + plotW} y1={yToPx(yMean)} y2={yToPx(yMean)}
-                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95}
-                  style={{ transition: 'y1 700ms cubic-bezier(.4,0,.2,1), y2 700ms cubic-bezier(.4,0,.2,1)' }} />
+                  stroke={SLU.gold} strokeWidth={1.25} strokeDasharray="4 3" opacity={0.95} />
             <g transform={`translate(${padL + plotW + 6} ${yToPx(yMean)})`}>
               <text x={0} y={3} fontSize={9.5} fontFamily={window.LABEL} fill={SLU.gold}
                     fontWeight={700}
@@ -219,16 +236,16 @@ function AchievementFigure({ level, ctx }) {
             district-mean cross stays the only gold mark in the plot. */}
         <QuadrantLabel x={padL + 12}              y={padT + 22}
                        align="start"
-                       title="Lower start · faster growth" sub={`n=${q.lh}`} accent={SLU.ink2} />
+                       title="Lower score · faster growth" sub={`n=${q.lh}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + 22}
                        align="end"
-                       title="Higher start · faster growth" sub={`n=${q.hh}`} accent={SLU.ink2} />
+                       title="Higher score · faster growth" sub={`n=${q.hh}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + 12}              y={padT + plotH - 12}
                        align="start" anchorBottom
-                       title="Lower start · slower growth" sub={`n=${q.ll}`} accent={SLU.ink2} />
+                       title="Lower score · slower growth" sub={`n=${q.ll}`} accent={SLU.ink2} />
         <QuadrantLabel x={padL + plotW - 12}      y={padT + plotH - 12}
                        align="end" anchorBottom
-                       title="Higher start · slower growth" sub={`n=${q.hl}`} accent={SLU.ink2} />
+                       title="Higher score · slower growth" sub={`n=${q.hl}`} accent={SLU.ink2} />
 
         {/* points — circles get a CSS transition on cx/cy so subject toggles
             tween between positions instead of jumping. We key school-level
@@ -238,11 +255,13 @@ function AchievementFigure({ level, ctx }) {
         {points.map((p, i) => {
           const cx = xToPx(toZ(p.x)), cy = yToPx(p[yKey]);
           const color = `hsl(${p.hue}, 62%, 48%)`;
+          const tween = window.MOTION_OK === false ? 'none'
+            : 'cx 700ms cubic-bezier(.4,0,.2,1), cy 700ms cubic-bezier(.4,0,.2,1)';
           if (level === 'student') {
             return (
               <circle key={i} cx={cx} cy={cy} r={3}
                       fill={color} fillOpacity={0.55}
-                      style={{ transition: 'cx 700ms cubic-bezier(.4,0,.2,1), cy 700ms cubic-bezier(.4,0,.2,1)' }} />
+                      style={{ transition: tween }} />
             );
           }
           // school level: size by n. No on-plot ID label — reveal name on hover.
@@ -253,7 +272,7 @@ function AchievementFigure({ level, ctx }) {
                     fill={color} fillOpacity={isHover ? 0.95 : 0.78}
                     stroke="#fff" strokeWidth={isHover ? 2 : 1.4}
                     style={{ cursor: 'pointer',
-                             transition: 'cx 700ms cubic-bezier(.4,0,.2,1), cy 700ms cubic-bezier(.4,0,.2,1), r 200ms ease-out' }}
+                             transition: window.MOTION_OK === false ? 'none' : `${tween}, r 200ms ease-out` }}
                     onMouseEnter={() => setHover({ i, px: cx, py: cy, point: p, color })}
                     onMouseLeave={() => setHover(h => (h && h.i === i) ? null : h)} />
           );
@@ -279,13 +298,17 @@ function AchievementFigure({ level, ctx }) {
                     fontWeight={700} fill={SLU.ink}>
                 {p.school_name || p.school_id}
               </text>
-              <text x={tx + 10} y={ty + 32} fontSize={10.5} fontFamily={window.MONO} fill={SLU.mute}>
-                {p.school_id}
-              </text>
+              {/* Skip the code line when it would just repeat the title (uploads
+                  have no school names, so school_name === school_id). */}
+              {p.school_name && p.school_name !== p.school_id && (
+                <text x={tx + 10} y={ty + 32} fontSize={10.5} fontFamily={window.MONO} fill={SLU.mute}>
+                  {p.school_id}
+                </text>
+              )}
               <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 40} y2={ty + 40}
                     stroke={SLU.rule2} strokeWidth={1} />
               <text x={tx + 10} y={ty + 56} fontSize={11} fontFamily={window.MONO} fill={SLU.ink2}>
-                Started {(toZ(p.x) >= 0 ? '+' : '−') + Math.abs(toZ(p.x)).toFixed(2)} SD
+                Scored {(toZ(p.x) >= 0 ? '+' : '−') + Math.abs(toZ(p.x)).toFixed(2)} SD
               </text>
               <text x={tx + 10} y={ty + 70} fontSize={11} fontFamily={window.MONO} fill={SLU.ink2}>
                 Grew <tspan fill={hover.color} fontWeight={700}>{yVal} {unitLabel}</tspan>
@@ -315,7 +338,7 @@ function AchievementFigure({ level, ctx }) {
         <text x={padL + plotW / 2} y={height - 14} fontSize={11}
               fontFamily={window.LABEL} fill={SLU.ink2} textAnchor="middle"
               fontWeight={700} style={{ textTransform: 'uppercase', letterSpacing: 1.0 }}>
-          Where students started (prior achievement)
+          This year’s achievement (status score)
         </text>
 
         {/* y ticks */}
@@ -339,6 +362,32 @@ function AchievementFigure({ level, ctx }) {
           Growth vs. expected ({unitLabel})
         </text>
       </svg>
+
+      {/* School color legend — hue was the only school encoding, which left
+          non-hovering (and colorblind) users with nothing to read. */}
+      {(() => {
+        const sps = (window.ACH_DATA && window.ACH_DATA.school && window.ACH_DATA.school.points) || [];
+        if (!sps.length) return null;
+        const MAX_CHIPS = 24;
+        const shown = sps.slice(0, MAX_CHIPS);
+        return (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${SLU.rule2}`,
+                        display: 'flex', flexWrap: 'wrap', gap: '6px 14px',
+                        fontSize: 11, color: SLU.ink2, fontFamily: window.FONT }}>
+            {shown.map((p) => (
+              <span key={p.school_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%',
+                               background: `hsl(${p.hue}, 62%, 48%)`,
+                               boxShadow: '0 0 0 1px rgba(0,0,0,0.18)' }} />
+                {p.school_name && p.school_name !== p.school_id ? p.school_name : p.school_id}
+              </span>
+            ))}
+            {sps.length > MAX_CHIPS && (
+              <span style={{ color: SLU.mute }}>+ {sps.length - MAX_CHIPS} more — hover a dot for its name</span>
+            )}
+          </div>
+        );
+      })()}
     </section>
   );
 }

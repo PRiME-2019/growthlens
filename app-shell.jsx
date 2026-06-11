@@ -57,7 +57,7 @@ const PAGES = {
   upload:       { label: 'Upload data',          hint: 'Add your data file' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
   gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
-  achievement:  { label: 'Status & Growth',      hint: 'Start vs. growth' },
+  achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
   demographics: { label: 'Demographics',         hint: 'Growth by group' },
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
 };
@@ -76,6 +76,11 @@ function AppBody() {
   const [demoVar, setDemoVar]     = React.useState('frl');
   const [achLevel, setAchLevel]   = React.useState('school');
   const [achShowMeans, setAchShowMeans] = React.useState(true);
+  // Bumped by the Upload page when data lands or is removed, so the shell
+  // (DatasetStrip, store re-pointing, availability) refreshes without waiting
+  // for a navigation.
+  const [, setDataRev] = React.useState(0);
+  const bumpDataRev = React.useCallback(() => setDataRev((r) => r + 1), []);
 
   // Seed the bundled Math demo once (reads the window.* fixtures), then point
   // the well-known window.* globals at the active (subject, subgroup) via the
@@ -85,10 +90,15 @@ function AppBody() {
   // Only allow switching to a subject the store actually has (demo is Math-only;
   // ELA becomes available once an ELA file is uploaded). Guards the no-op toggle.
   const setSubject = (s) => { if (!window.GLStore || window.GLStore.available(s)) setSubjectState(s); };
-  // Drive the SD ↔ weeks-of-learning conversion off the active subject so
-  // forest-shared's fmtVal / zToWeeks pick up the right effect-size factor
-  // without each call site having to thread it through props.
-  window.WOL_OPTS = { year: 2025, subject };
+  // Drive the SD ↔ weeks-of-learning conversion off the active subject — and the
+  // active dataset's growth year once a real file is loaded — so forest-shared's
+  // fmtVal / zToWeeks pick up the right effect-size factor without each call
+  // site having to thread it through props.
+  const activeMeta = window.GLStore && window.GLStore.getActiveMeta();
+  window.WOL_OPTS = {
+    year: activeMeta && typeof activeMeta.latestYear === 'number' ? activeMeta.latestYear : 2025,
+    subject,
+  };
 
   // Scroll to the top whenever the user changes analysis tabs so the new
   // page reads from its header; pairs with ControlsCard's scroll handler
@@ -101,16 +111,34 @@ function AppBody() {
     (s) => s !== subject && !(window.GLStore && window.GLStore.available(s)),
   );
 
+  // Same idea for subgroups: the demo ships only the FRL slice, so the other
+  // four "Groups to compare" options are disabled rather than silently showing
+  // FRL data under the wrong header. Snap back if the active one vanishes
+  // (e.g. removing an upload returns to the FRL-only demo).
+  const availableDemos = (window.GLStore && window.GLStore.availableSubgroups()) || Object.keys(DEMOS);
+  const disabledDemos = Object.keys(DEMOS).filter(
+    (k) => k !== demo && availableDemos.length > 0 && !availableDemos.includes(k),
+  );
+  React.useEffect(() => {
+    if (!window.GLStore) return;
+    const avail = window.GLStore.availableSubgroups();
+    if (avail.length && !avail.includes(demo)) setDemo(avail.includes('frl') ? 'frl' : avail[0]);
+  });
+
   const ctx = {
-    page, setPage, subject, setSubject, disabledSubjects, demo, setDemo,
+    page, setPage, subject, setSubject, disabledSubjects, demo, setDemo, disabledDemos,
     estimate, setEstimate, unit, setUnit, forestSort, setForestSort,
     threshold, setThreshold,
     demoVar, setDemoVar,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
+    bumpDataRev,
   };
 
   const sliceLabel = `${SUBJECTS[subject]} · ${DEMOS[demo].split(' · ')[0]}`;
+  // Scan / Demographics / Status & Growth don't slice by subgroup, so their
+  // headers show the subject only — the full slice label belongs to Gap Analysis.
+  const subjectLabel = SUBJECTS[subject];
 
   return (
     <div style={{
@@ -128,14 +156,14 @@ function AppBody() {
         {page === 'landing'      && <LandingPage ctx={ctx} />}
         {page === 'upload'       && <UploadPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
-          {page === 'scan'         && <ScanPage sliceLabel={sliceLabel} ctx={ctx} />}
+          {page === 'scan'         && <ScanPage sliceLabel={subjectLabel} ctx={ctx} />}
           {page === 'gap'          && <GapPage sliceLabel={sliceLabel} ctx={ctx} />}
         </div>
         {/* Achievement & Demographics render OUTSIDE the subject-keyed wrapper
             so their SVG geometry stays mounted across ELA↔Math toggles and
             elements can tween between positions instead of re-mounting. */}
-        {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={sliceLabel} ctx={ctx} />}
-        {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={sliceLabel} ctx={ctx} />}
+        {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={subjectLabel} ctx={ctx} />}
+        {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={subjectLabel} ctx={ctx} />}
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
     </div>
@@ -214,7 +242,7 @@ function LeftNav({ page, setPage }) {
   );
 }
 
-function NavItem({ label, href, external, pdf, placeholder, soon }) {
+function NavItem({ label, href, external, placeholder, soon }) {
   if (placeholder) {
     return (
       <span style={{
@@ -243,13 +271,6 @@ function NavItem({ label, href, external, pdf, placeholder, soon }) {
           color: SLU.ink, textDecoration: 'none', borderRadius: 6,
         }}>
       <span style={{ flex: 1 }}>{label}</span>
-      {pdf && (
-        <span style={{
-          fontSize: 9.5, fontFamily: LABEL, letterSpacing: 0.8, textTransform: 'uppercase',
-          color: SLU.mute, fontWeight: 700,
-          padding: '1px 5px', border: `1px solid ${SLU.rule}`, borderRadius: 3,
-        }}>PDF</span>
-      )}
       {external && (
         <svg width="11" height="11" viewBox="0 0 11 11" style={{ color: SLU.mute }}>
           <path d="M4 2 H9 V7 M9 2 L4 7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
@@ -348,7 +369,7 @@ function LandingPage({ ctx }) {
         <LandingCard
           eyebrow="01 · Bring data"
           title="Upload your file"
-          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist and a sample file waiting on the upload page."
+          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist waiting on the upload page."
           cta="Go to upload →"
           onClick={() => ctx.setPage('upload')}
           accent={SLU.blue}
@@ -424,33 +445,100 @@ function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
 }
 
 function UploadPage({ ctx }) {
-  const [files, setFiles] = React.useState({ ela: null, math: null });
-  const [stages, setStages] = React.useState({ ela: 'idle', math: 'idle' });
+  // Seed from the store so navigating away and back doesn't show "Waiting for
+  // file" over data that is still loaded and driving every figure.
+  const upMeta = (k) => (window.GLStore && window.GLStore.getUploadedMeta) ? window.GLStore.getUploadedMeta(k) : null;
+  const [files, setFiles] = React.useState(() => ({
+    ela: (upMeta('ela') || {}).filename || null,
+    math: (upMeta('math') || {}).filename || null,
+  }));
+  const [stages, setStages] = React.useState(() => ({
+    ela: upMeta('ela') ? 'ready' : 'idle',
+    math: upMeta('math') ? 'ready' : 'idle',
+  }));
   const [errors, setErrors] = React.useState({ ela: null, math: null });
+  // Per-zone note shown under the "Looks good" line (e.g. rows outside grades
+  // 3–8 that were set aside). Seeded from the store like files/stages.
+  const [notes, setNotes] = React.useState(() => {
+    const note = (k) => {
+      const m = upMeta(k);
+      return m && m.nDroppedGrades > 0
+        ? `${m.nDroppedGrades.toLocaleString()} rows outside grades 3–8 were set aside.` : null;
+    };
+    return { ela: note('ela'), math: note('math') };
+  });
+  // Ignore a second file dropped on a slot while its first is still parsing —
+  // two computeSlice runs racing on the same t_<subject> table would interleave.
+  const inFlight = React.useRef({ ela: false, math: false });
   // Real pipeline: read+validate the file in DuckDB-WASM, compute the figure
   // shapes, and register them in the store. Nothing leaves the browser.
   const onFile = async (key, file) => {
-    setFiles((f) => ({ ...f, [key]: file.name }));
-    setStages((s) => ({ ...s, [key]: 'parsing' }));
-    setErrors((e) => ({ ...e, [key]: null }));
-    if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
-      setStages((s) => ({ ...s, [key]: 'idle' }));
-      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
-      return;
-    }
+    if (inFlight.current[key]) return;
+    inFlight.current[key] = true;
     try {
-      const conn = await window.GL.getConnection();
-      const res = await window.GLIngest.loadSubjectFile(file, conn, key);
-      if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
-      const shapes = await window.GLCompute.computeSlice(key);
-      window.GLStore.putUploaded(key, shapes, res.meta);
-      setStages((s) => ({ ...s, [key]: 'ready' }));
-    } catch (err) {
-      setStages((s) => ({ ...s, [key]: 'idle' }));
-      setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+      setFiles((f) => ({ ...f, [key]: file.name }));
+      setErrors((e) => ({ ...e, [key]: null }));
+      if (file.size > 50 * 1024 * 1024) {
+        // Matches the FAQ's promised "up to about 50 MB" limit.
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'too_large', message: 'That file is over the 50 MB limit. Most district exports land between 5 and 20 MB — double-check this is one subject for one district.' } }));
+        return;
+      }
+      setStages((s) => ({ ...s, [key]: 'parsing' }));
+      if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
+        return;
+      }
+      try {
+        const conn = await window.GL.getConnection();
+        const res = await window.GLIngest.loadSubjectFile(file, conn, key);
+        if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
+        const shapes = await window.GLCompute.computeSlice(key);
+        window.GLStore.putUploaded(key, shapes, { ...res.meta, filename: file.name });
+        setNotes((n) => ({
+          ...n,
+          [key]: res.meta.nDroppedGrades > 0
+            ? `${res.meta.nDroppedGrades.toLocaleString()} rows outside grades 3–8 were set aside.` : null,
+        }));
+        setStages((s) => ({ ...s, [key]: 'ready' }));
+        ctx.bumpDataRev();   // re-render the shell so the DatasetStrip & globals refresh now
+      } catch (err) {
+        setStages((s) => ({ ...s, [key]: 'idle' }));
+        setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+      }
+    } finally {
+      inFlight.current[key] = false;
     }
   };
   const setStage = (key, v) => setStages((s) => ({ ...s, [key]: v }));
+  // Really remove an upload: forget it in the store (figures fall back to the
+  // demo, or the subject disables), keep React's subject/subgroup in step, and
+  // clear the student-level rows out of DuckDB.
+  const onRemove = async (key) => {
+    setFiles((f) => ({ ...f, [key]: null }));
+    setStages((s) => ({ ...s, [key]: 'idle' }));
+    setErrors((e) => ({ ...e, [key]: null }));
+    setNotes((n) => ({ ...n, [key]: null }));
+    if (window.GLStore) {
+      window.GLStore.removeUploaded(key);
+      if (ctx.subject === key && !window.GLStore.available(key)) ctx.setSubject('math');
+      const avail = window.GLStore.availableSubgroups();
+      if (avail.length && !avail.includes(ctx.demo)) ctx.setDemo('frl');
+      ctx.bumpDataRev();
+    }
+    try {
+      if (window.GL) {
+        const conn = await window.GL.getConnection();
+        await conn.query(`DROP TABLE IF EXISTS t_${key}`);
+        await conn.query(`DROP TABLE IF EXISTS t_${key}_all`);
+        const db = await window.GL.getDB();
+        if (db.dropFile) await db.dropFile(`${key}.csv`);
+      }
+    } catch (err) {
+      console.warn('DuckDB cleanup after remove failed:', err);
+    }
+  };
   const bothReady = stages.ela === 'ready' && stages.math === 'ready';
   const anyReady = stages.ela === 'ready' || stages.math === 'ready';
   return (
@@ -486,7 +574,9 @@ function UploadPage({ ctx }) {
           setStage={(v) => setStage('ela', v)}
           filename={files.ela}
           onFile={onFile}
+          onRemove={onRemove}
           error={errors.ela}
+          note={notes.ela}
           placeholder="ELA growth file"
         />
         <SubjectDropZone
@@ -497,7 +587,9 @@ function UploadPage({ ctx }) {
           setStage={(v) => setStage('math', v)}
           filename={files.math}
           onFile={onFile}
+          onRemove={onRemove}
           error={errors.math}
+          note={notes.math}
           placeholder="Math growth file"
         />
       </div>
@@ -587,12 +679,16 @@ function UploadPage({ ctx }) {
   );
 }
 
-function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, error, placeholder }) {
+function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, onRemove, error, note, placeholder }) {
+  // Remember the last non-dragover stage so a drag that passes over (or misses)
+  // a loaded zone restores "ready" instead of clobbering it back to idle.
+  const lastStable = React.useRef('idle');
+  if (stage !== 'dragover') lastStable.current = stage;
   const onDrop = (e) => {
     e.preventDefault();
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) onFile(subjectKey, f);
-    else setStage('idle');
+    else setStage(lastStable.current);
   };
   const ready = stage === 'ready';
   const errMsg = !error ? null
@@ -600,12 +696,12 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
     : error.error === 'missing_columns' ? 'This file is missing a few columns we need: ' + (error.missing || []).join(', ') + '. Check the “What your file should include” list and try again.'
     : error.error === 'no_prefix' ? 'We couldn’t find a growth column (one ending in *_Z_RESIDUAL). This usually means it isn’t a DESE growth file — double-check the export.'
     : error.error === 'no_rows_latest' ? `We didn’t find any students for the most recent year (${error.latestYear ?? '—'}). Make sure that year’s data is included.`
-    : error.error === 'no_year' ? 'We couldn’t find a GROWTH_YEAR column, so we can’t tell which school year this is. Please add it and try again.'
+    : error.error === 'no_year' ? 'We couldn’t read any year values from the GROWTH_YEAR column, so we can’t tell which school year this is. Check that column’s values and try again.'
     : (error.message || 'We couldn’t read this file. Please double-check it’s the right export and try again.');
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setStage('dragover'); }}
-      onDragLeave={() => setStage(stage === 'dragover' ? 'idle' : stage)}
+      onDragOver={(e) => { e.preventDefault(); if (stage !== 'dragover') setStage('dragover'); }}
+      onDragLeave={() => { if (stage === 'dragover') setStage(lastStable.current); }}
       onDrop={onDrop}
       style={{
         background: stage === 'dragover' ? 'rgba(0, 61, 165, 0.04)'
@@ -639,8 +735,8 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
         {errMsg
           ? errMsg
           : ready
-          ? 'Looks good — your file checks out and is ready to explore.'
-          : `Drop a ${subjectLabel} file here, or click to choose one. One row per student, per grade, per year.`}
+          ? `Looks good — your file checks out and is ready to explore.${note ? ' ' + note : ''}`
+          : `Drop a ${subjectLabel} file here, or use Choose file below. One row per student, per grade, per year.`}
       </span>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <label style={{
@@ -652,14 +748,19 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
           fontSize: 12, fontWeight: 700, cursor: 'pointer',
         }}>
           {ready ? 'Replace' : 'Choose file'}
-          <input type="file" accept=".csv,text/csv" style={{ display: 'none' }}
+          {/* Visually hidden (not display:none) so keyboard users can Tab to it
+              and press Enter to open the file picker. */}
+          <input type="file" accept=".csv,text/csv"
+                 aria-label={`Choose ${subjectLabel} file`}
+                 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+                          overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}
                  onChange={(e) => {
                    const f = e.target.files && e.target.files[0];
                    if (f) onFile(subjectKey, f);
                  }} />
         </label>
         {ready && (
-          <button onClick={() => setStage('idle')} style={{
+          <button onClick={() => onRemove(subjectKey)} style={{
             padding: '7px 12px', borderRadius: 6,
             background: 'transparent', border: 'none',
             color: SLU.mute, fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -679,6 +780,7 @@ function FAQ({ items }) {
         return (
           <div key={i} style={{ borderTop: i === 0 ? 'none' : `1px solid ${SLU.rule2}` }}>
             <button onClick={() => setOpen(isOpen ? -1 : i)}
+                    aria-expanded={isOpen}
                     style={{
                       width: '100%', textAlign: 'left',
                       display: 'flex', alignItems: 'center', gap: 10,
@@ -727,7 +829,6 @@ function ColumnTable({ rows }) {
 }
 
 function GapPage({ sliceLabel, ctx }) {
-  // Subject is fixed to ELA while only ELA data exists — see SUBJECTS comment above.
   return (
     <>
       <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
@@ -788,6 +889,10 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
       onClick={collapsible ? toggle : undefined}
       role={collapsible ? 'button' : undefined}
       aria-expanded={collapsible ? open : undefined}
+      tabIndex={collapsible ? 0 : undefined}
+      onKeyDown={collapsible ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      } : undefined}
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {collapsible && (
@@ -989,7 +1094,7 @@ function DistributionStrip({ schools, districtGap, tauSD }) {
       ))}
       <text x={x(districtGap)} y={y - 14} fontSize={9} fontFamily={FONT} fill={SLU.gold}
             textAnchor="middle" fontWeight={600}>
-        district +{districtGap.toFixed(2)}
+        district {(districtGap >= 0 ? '+' : '−') + Math.abs(districtGap).toFixed(2)}
       </text>
       {schools.map(s => {
         const cx = Math.max(3, Math.min(width - 3, x(s.shrunk_gap)));
@@ -1058,15 +1163,13 @@ function OverviewCardScan() {
         <div style={{ flex: '1 1 520px', minWidth: 380 }}>
           <StatLabel>Average growth by grade <span style={{ textTransform: 'none', fontWeight: 500, color: SLU.mute }}>— compared with the district average (SD)</span></StatLabel>
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginTop: 8 }}>
-            {byGrade.map(({ g, n, schoolCount, mean }) => {
+            {/* Grades absent from the data would render misleading "▲0.00 · n=0" boxes. */}
+            {byGrade.filter((b) => b.n > 0).map(({ g, n, schoolCount, mean }) => {
               const abs = Math.abs(mean).toFixed(2);
               const above = mean >= 0;
-              // Same glyph-color rule as HeatmapH1: invert to white when the
-              // diverging fill is dark enough that the brand pos/neg ink loses
-              // contrast (past the heatmap's SCALE_DARK threshold).
-              const glyphColor = Math.abs(mean) > (window.HEATMAP_SCALE_DARK || 0.18)
-                ? '#fff'
-                : (above ? SLU.pos : SLU.neg);
+              // Same luminance-based ink rules as HeatmapH1's cells.
+              const glyphColor = window.heatGlyphInk ? window.heatGlyphInk(mean) : (above ? SLU.pos : SLU.neg);
+              const numColor = window.heatCellInk ? window.heatCellInk(mean) : SLU.ink;
               return (
                 <div key={g} style={{
                   flex: '1 1 0', minWidth: 60,
@@ -1083,7 +1186,7 @@ function OverviewCardScan() {
                   </div>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 600, fontFamily: MONO,
-                                   color: SLU.ink, letterSpacing: -0.5, lineHeight: 1,
+                                   color: numColor, letterSpacing: -0.5, lineHeight: 1,
                                    display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
                       <span style={{ color: glyphColor, fontSize: 14, lineHeight: 1 }}>
                         {above ? '▲' : '▼'}
@@ -1211,7 +1314,7 @@ function CSegmented({ value, onChange, options, label, hint, optionHints, disabl
     </div>
   );
 }
-function CSelect({ value, onChange, options, label }) {
+function CSelect({ value, onChange, options, label, disabledKeys = [], disabledHint }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <CLabel>{label}</CLabel>
@@ -1221,7 +1324,14 @@ function CSelect({ value, onChange, options, label }) {
                 border: `1px solid ${SLU.rule}`, borderRadius: 6, background: '#fff',
                 cursor: 'pointer', width: '100%',
               }}>
-        {Object.entries(options).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        {Object.entries(options).map(([k, v]) => {
+          const off = disabledKeys.includes(k);
+          return (
+            <option key={k} value={k} disabled={off}>
+              {v}{off && disabledHint ? ` ${disabledHint}` : ''}
+            </option>
+          );
+        })}
       </select>
     </div>
   );
@@ -1230,7 +1340,7 @@ function CSelect({ value, onChange, options, label }) {
 // Controls cards lay out their groups in a horizontal grid. Each group keeps
 // its label + a vertical stack of its individual controls. Wraps at narrow
 // widths so groups never crush into one another.
-function ControlsGrid({ children, columns = 3 }) {
+function ControlsGrid({ children }) {
   return (
     <div style={{
       display: 'grid',
@@ -1248,11 +1358,15 @@ const METHOD_OPT_HINTS = {
 };
 const UNIT_HINT = 'How to show the numbers. SD is a standard scale compared with the district average. Weeks converts that into about how many weeks of learning it represents, using Missouri MAP growth norms.';
 
+// Mirrors SORTS_FINAL in forest-final.jsx (the live source of options); only
+// used if that file failed to load. Keys must stay in sync — an unknown key
+// would crash the forest's sort lookup.
 const SORTS_FALLBACK = {
-  gap_desc: 'Gap (largest first)',
-  gap_asc:  'Gap (smallest first)',
-  alpha:    'School (A–Z)',
-  n_desc:   'Sample size',
+  gap_desc: 'Gap (largest →)',
+  gap_abs:  '|Gap| (largest →)',
+  alpha:    'School ID',
+  shrink:   'Nudged the most → least',
+  n:        'Total students (largest →)',
 };
 const THRESH_FALLBACK = {
   inline:  'Mark in place (dimmed)',
@@ -1275,7 +1389,8 @@ function GapControls({ ctx }) {
     <ControlsGrid>
       <CGroup title="Show">
         <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare" />
+        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare"
+                 disabledKeys={ctx.disabledDemos} disabledHint="(not in this data)" />
       </CGroup>
       <CGroup title="How it’s figured">
         <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
@@ -1316,9 +1431,7 @@ function ForestSlot({ ctx }) {
       estimate={ctx.estimate}
       unit={ctx.unit}
       sort={ctx.forestSort}
-      setSort={ctx.setForestSort}
       threshold={ctx.threshold}
-      setThreshold={ctx.setThreshold}
     />
   );
   return <PlaceholderCard label="Forest plot" h={680} />;

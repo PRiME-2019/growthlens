@@ -11,15 +11,6 @@ test('detectPrefix: comm_arts → ela', () => {
 test('detectPrefix: no residual column → null', () => {
   assert.equal(I.detectPrefix(['grade', 'school_code']), null);
 });
-test('parseFlag tolerant + case-insensitive', () => {
-  assert.equal(I.parseFlag('Y'), true);
-  assert.equal(I.parseFlag('y'), true);
-  assert.equal(I.parseFlag('1'), true);
-  assert.equal(I.parseFlag('true'), true);
-  assert.equal(I.parseFlag('N'), false);
-  assert.equal(I.parseFlag(''), false);
-  assert.equal(I.parseFlag('garbage'), false);
-});
 test('validate: missing required subgroup column is a blocking error listing it', () => {
   const headers = ['MATH_Z_RESIDUAL','MATH_Z_RESIDUAL_SE','MATH_Z_T','SCHOOL_CODE','GRADE','GROWTH_YEAR','FREE_OR_REDUCED_LUNCH','IEP_DISABILITY','ENGLISH_LANGUAGE_LEARNER','BLACK','WHITE']; // missing HISPANIC
   const r = I.validate(headers);

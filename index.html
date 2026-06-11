@@ -22,11 +22,6 @@
 <style>
   html, body, #root { height: 100%; margin: 0; }
   body { font-family: "Mulish", ui-sans-serif, system-ui, sans-serif; background: #F7F7F8; color: #1A1B1F; }
-  .frame-hatch {
-    background: repeating-linear-gradient(45deg, #ECECEE 0 1px, #F7F7F8 1px 8px);
-    border: 1px dashed #D9D9DD; color: #7B7E85;
-    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px;
-  }
   button { font-family: inherit; }
 
   /* Initial loader — shown until React mounts and replaces #root children. */
@@ -48,7 +43,7 @@
   }
   .gl-loader-label {
     font-family: "Archivo Narrow", "Mulish", system-ui, sans-serif;
-    font-size: 11px; color: #7B7E85;
+    font-size: 11px; color: #6F727A;
     text-transform: uppercase; letter-spacing: 1.6px; font-weight: 700;
   }
   @keyframes gl-pulse {
@@ -72,6 +67,7 @@
 { "imports": { "apache-arrow": "./vendor/duckdb/apache-arrow.mjs" } }
 </script>
 <script src="engine/stats.js"></script>
+<script src="engine/units.js"></script>
 <script src="engine/ingest.js"></script>
 <script src="engine/compute.js"></script>
 <script src="engine/store.js"></script>
@@ -82,7 +78,7 @@
 <script type="text/babel" src="app-shell.jsx"></script>
 <script type="text/babel" src="demographics.jsx"></script>
 <script type="text/babel" src="achievement.jsx"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js" integrity="sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ" crossorigin="anonymous"></script>
 <script type="text/babel" src="export.jsx"></script>
 </head>
 <body>
@@ -95,7 +91,7 @@
           <rect x="12" y="9" width="14" height="4" fill="#C8A84A" rx="1"></rect>
           <rect x="26" y="9" width="14" height="4" fill="#003DA5" rx="1"></rect>
           <line x1="26" y1="3" x2="26" y2="19" stroke="#1A1B1F" stroke-width="1.4"></line>
-          <line x1="12" y1="6" x2="12" y2="16" stroke="#7B7E85" stroke-width="1.2" stroke-dasharray="2 2"></line>
+          <line x1="12" y1="6" x2="12" y2="16" stroke="#6F727A" stroke-width="1.2" stroke-dasharray="2 2"></line>
         </svg>
         <div class="gl-loader-wordmark">GrowthLens</div>
       </div>
@@ -111,14 +107,24 @@
 // constant if the fetch fails so the app still renders sensibly.
 (async function bootstrap() {
   try {
-    const res = await fetch('reference/20260512_conversion_factors.json', { cache: 'no-store' });
+    const res = await fetch('reference/conversion_factors.json', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     window.CONVERSION_FACTORS = await res.json();
   } catch (e) {
     console.warn('Conversion factors load failed, using fallback:', e);
     window.CONVERSION_FACTORS = null;
   }
-  ReactDOM.createRoot(document.getElementById('root')).render(<window.AppBody />);
+  try {
+    if (!window.AppBody) throw new Error('app scripts failed to compile or load');
+    ReactDOM.createRoot(document.getElementById('root')).render(<window.AppBody />);
+  } catch (e) {
+    // Don't strand the user on the pulsing "Loading" loader forever.
+    console.error('GrowthLens failed to start:', e);
+    const label = document.querySelector('.gl-loader-label');
+    if (label) label.textContent = 'Something went wrong while loading — please reload the page';
+    const rule = document.querySelector('.gl-loader-rule');
+    if (rule) rule.style.animation = 'none';
+  }
 })();
 </script>
 </body>

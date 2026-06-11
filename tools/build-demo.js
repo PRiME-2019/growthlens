@@ -66,7 +66,10 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const rng = mulberry32(20260609);
+// Master seed: overridable for seed-searching (the self-check demands τ² > 0 on
+// all five comparisons, which with only 6 fit schools is luck-of-the-draw).
+const SEED = Number(process.env.DEMO_SEED || 20260627);
+const rng = mulberry32(SEED);
 function gauss() {
   let u = 0, v = 0;
   while (u === 0) u = rng();
@@ -118,15 +121,41 @@ const SCHOOLS = [
 const schoolU = {};
 for (const s of SCHOOLS) schoolU[s.id] = gauss();
 
+// Per-school multipliers on the demographic score gaps — without between-school
+// heterogeneity REML correctly finds τ² = 0 and every school's shrunken gap
+// collapses onto the pooled mean, which makes for a degenerate demo forest.
+const GAP_MULT = {};
+for (const s of SCHOOLS) {
+  GAP_MULT[s.id] = {
+    iep: 0.35 + 1.3 * rng(),
+    el:  0.35 + 1.3 * rng(),
+    b:   0.35 + 1.3 * rng(),
+    h:   0.35 + 1.3 * rng(),
+  };
+}
+
 // ---- generate one synthetic student dataset --------------------------------
+// Demographic score gaps (score-SD units); the residual gap for each emerges
+// as ≈ -0.30 × gap through the VAM construction below.
+const IEP_GAP = 0.70, EL_GAP = 0.55, B_GAP = 0.55, H_GAP = 0.30;
 const students = [];
 for (const sc of SCHOOLS) {
+  // Race mix loosely tracks the school's FRL share so demographics correlate
+  // plausibly; ~13% Hispanic and ~7% other/multiracial district-wide.
+  const blackShare = clamp(0.10 + (sc.frlShare - 0.45) * 0.6, 0.05, 0.40);
   for (const grade of (sc.band === 'elem' ? ELEM : MID)) {
     const n = Math.max(1, Math.round(sc.gradeSize * (0.9 + 0.2 * rng())));
     for (let i = 0; i < n; i++) {
+      const r = rng();
+      const race = r < blackShare ? 'black'
+                 : r < blackShare + 0.13 ? 'hispanic'
+                 : r < blackShare + 0.20 ? 'other' : 'white';
       students.push({
         school: sc, sid: sc.id, grade,
         frl: rng() < sc.frlShare,
+        iep: rng() < 0.13,
+        el:  rng() < 0.10,
+        race,
         scoreIdioRaw: mathRaw(),
         studentURaw: mathRaw(),
         residual_se: clamp(0.30 + gauss() * 0.05, 0.20, 0.50),
@@ -149,10 +178,16 @@ for (const g of GRADES) {
   const cell = students.filter(st => st.grade === g);
   if (cell.length < 2) continue;
 
-  // score_z = scoreLevel + (frl ? -frlScoreGap : 0) + SCORE_NOISE_SD * standardized-math-noise
+  // score_z = scoreLevel + demographic score gaps + SCORE_NOISE_SD * standardized-math-noise
   const idioStd = standardize(cell.map(st => st.scoreIdioRaw));
   cell.forEach((st, k) => {
-    st.score_z = st.school.scoreLevel + (st.frl ? -st.school.frlScoreGap : 0) + SCORE_NOISE_SD * idioStd[k];
+    const m = GAP_MULT[st.sid];
+    st.score_z = st.school.scoreLevel
+      + (st.frl ? -st.school.frlScoreGap : 0)
+      + (st.iep ? -IEP_GAP * m.iep : 0)
+      + (st.el ? -EL_GAP * m.el : 0)
+      + (st.race === 'black' ? -B_GAP * m.b : st.race === 'hispanic' ? -H_GAP * m.h : 0)
+      + SCORE_NOISE_SD * idioStd[k];
   });
   const cmean = mean(cell.map(st => st.score_z));
   cell.forEach(st => { st.y = st.score_z - cmean; });
@@ -198,7 +233,17 @@ function buildHeatmap() {
   return { meta: { subject: 'math' }, schools };
 }
 
-// ---- forest / FRL gap (mirror engine/compute.js buildGaps for the frl slice)
+// ---- gaps for all five DESE comparisons (mirror engine/compute.js buildGaps)
+// Same keys/labels as engine/ingest.js SUBGROUPS so the demo behaves exactly
+// like an upload — every "Groups to compare" option is real in demo mode.
+const COMPARISONS = [
+  { key: 'frl',     label: 'FRL · economically disadvantaged', aLabel: 'FRL',      bLabel: 'non-FRL', a: st => st.frl,  b: st => !st.frl },
+  { key: 'iep',     label: 'IEP · students with disabilities', aLabel: 'IEP',      bLabel: 'non-IEP', a: st => st.iep,  b: st => !st.iep },
+  { key: 'el',      label: 'EL · English learners',            aLabel: 'EL',       bLabel: 'non-EL',  a: st => st.el,   b: st => !st.el },
+  { key: 'race_bw', label: 'Race · Black vs. White',           aLabel: 'Black',    bLabel: 'White',   a: st => st.race === 'black',    b: st => st.race === 'white' },
+  { key: 'race_hw', label: 'Race · Hispanic vs. White',        aLabel: 'Hispanic', bLabel: 'White',   a: st => st.race === 'hispanic', b: st => st.race === 'white' },
+];
+
 function cellStats(rows) {
   const n = rows.length;
   const m = mean(rows.map(r => r.resid));
@@ -206,11 +251,11 @@ function cellStats(rows) {
   const ms2 = mean(rows.map(r => r.residual_se * r.residual_se));
   return { n, rbar: m, se: S.cellSE({ s2, ms2, n }) };
 }
-function buildGaps() {
+function buildGaps(cmp) {
   const rows = SCHOOLS.map(sc => {
     const mine = students.filter(st => st.sid === sc.id);
-    const a = cellStats(mine.filter(st => st.frl));      // focal = FRL
-    const b = cellStats(mine.filter(st => !st.frl));     // reference = non-FRL
+    const a = cellStats(mine.filter(cmp.a));             // focal
+    const b = cellStats(mine.filter(cmp.b));             // reference
     return {
       school_id: sc.id, n_a: a.n, n_b: b.n,
       raw_gap: a.rbar - b.rbar, raw_se: S.gapSE(a.se, b.se),
@@ -218,10 +263,13 @@ function buildGaps() {
     };
   });
   const fit = rows.filter(s => s.meets_min_cell).map(s => ({ gap: s.raw_gap, se: s.raw_se }));
-  const tau2 = S.remlTau2(fit);
+  const canShrink = fit.length >= 2;                     // same τ² guard as compute.js
+  const tau2 = canShrink ? S.remlTau2(fit) : 0;
   const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
   const schools = rows.map(s => {
-    const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu });
+    const sh = canShrink
+      ? S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu })
+      : { shrunkGap: s.raw_gap, shrunkSe: s.raw_se, B: 1 };
     return {
       school_id: s.school_id, n_a: s.n_a, n_b: s.n_b,
       raw_gap: round(s.raw_gap, 4), raw_se: round(s.raw_se, 4),
@@ -232,11 +280,80 @@ function buildGaps() {
     };
   }).sort((x, y) => x.shrunk_gap - y.shrunk_gap);
   const meta = {
-    subject: 'math', demographic: 'frl', groupA: 'FRL', groupB: 'non-FRL',
+    subject: 'math', demographic: cmp.key, groupA: cmp.aLabel, groupB: cmp.bLabel,
     districtGap: round(pooled.mu, 4), tauSquared: round(tau2, 4),
     nSchools: schools.length, nMeetingThreshold: rows.filter(s => s.meets_min_cell).length, minCellSize: MIN_N,
   };
   return { meta, schools };
+}
+
+// ---- demographics box plots (mirror engine/compute.js buildDemo) ------------
+function sampleOutliers(outliers, k = 8) {
+  if (!outliers || outliers.length <= k) return outliers || [];
+  const step = Math.ceil(outliers.length / k);
+  return outliers.filter((_, i) => i % step === 0);
+}
+function buildDemoData() {
+  const districtMean = round(mean(students.map(st => st.resid)), 4);
+  const demoData = {};
+  for (const cmp of COMPARISONS) {
+    const groups = [];
+    for (const [key, label, pred] of [['A', cmp.aLabel, cmp.a], ['B', cmp.bLabel, cmp.b]]) {
+      const stat = S.summarize(students.filter(pred).map(st => st.resid));
+      if (!stat) continue;
+      groups.push({
+        key, label, n: stat.n,
+        mean: round(stat.mean, 4), median: round(stat.median, 4),
+        q1: round(stat.q1, 4), q3: round(stat.q3, 4),
+        whiskerLo: round(stat.whiskerLo, 4), whiskerHi: round(stat.whiskerHi, 4),
+        min: round(stat.min, 4), max: round(stat.max, 4),
+        outliers: sampleOutliers(stat.outliers).map(v => round(v, 4)),
+      });
+    }
+    demoData[cmp.key] = { label: cmp.label, groups, districtMean };
+  }
+  return demoData;
+}
+
+// ---- achievement scatter (mirror engine/compute.js buildAchievement) --------
+const SCHOOL_NAMES = {
+  'Sch-1001': 'Lincoln Elementary', 'Sch-1002': 'Carver Elementary',
+  'Sch-1003': 'Riverside Elementary', 'Sch-1004': 'Oakwood Elementary',
+  'Sch-1005': 'Hillcrest Elementary', 'Sch-1006': 'Marshall Middle',
+  'Sch-1007': 'Truman Middle',
+};
+function buildAchievement() {
+  const agg = SCHOOLS.map(sc => {
+    const mine = students.filter(st => st.sid === sc.id);
+    const c = cellStats(mine);
+    return { sc, n: c.n, rbar: c.rbar, se: c.se, status: mean(mine.map(st => st.score_z)) };
+  });
+  const fit = agg.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
+  const canShrink = fit.length >= 2;
+  const tau2 = canShrink ? S.remlTau2(fit) : 0;
+  const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+  // Coherence: every shrunken value must sit between its raw value and the
+  // pooled mean actually used (B ∈ [0,1] guarantees this).
+  for (const s of agg) {
+    if (!canShrink) break;
+    const sh = S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap;
+    if ((sh - s.rbar) * (pooled.mu - s.rbar) < -1e-9) {
+      throw new Error(`shrunken school value not between raw and pooled mean (${s.sc.id})`);
+    }
+  }
+  const schoolPoints = agg.map((s, i) => ({
+    school_id: s.sc.id, school_name: SCHOOL_NAMES[s.sc.id] || s.sc.id,
+    school_idx: i, hue: Math.round((i * 360 / agg.length) % 360),
+    x: round(s.status, 4), y_raw: round(s.rbar, 4),
+    y_shrunk: round(canShrink ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap : s.rbar, 4),
+    n: s.n,
+  }));
+  const idx = Object.fromEntries(schoolPoints.map((s, i) => [s.school_id, i]));
+  const studentPoints = students.map(st => ({
+    school_id: st.sid, hue: schoolPoints[idx[st.sid]].hue,
+    x: round(st.score_z, 3), y_raw: round(st.resid, 3),
+  }));
+  return { student: { points: studentPoints }, school: { points: schoolPoints } };
 }
 
 // ---- serialize -------------------------------------------------------------
@@ -247,17 +364,35 @@ function fmtSchoolRow(s) {
     + `shrunk_gap: ${s.shrunk_gap}, shrunk_se: ${s.shrunk_se}, shrunk_ci95: ${ci(s.shrunk_ci95)}, `
     + `shrinkage_factor: ${s.shrinkage_factor}, meets_min_cell: ${s.meets_min_cell} },`;
 }
-function writeGaps(gaps) {
+function fmtGapSlice(gaps) {
   const m = gaps.meta;
-  const out = LICENSE
-    + '\n// Forest plot data — coherent small district, generated by tools/build-demo.js.\n'
-    + 'window.GAPS_DATA = {\n  meta: {\n'
+  return '{\n  meta: {\n'
     + `    subject: ${JSON.stringify(m.subject)},\n    demographic: ${JSON.stringify(m.demographic)},\n`
     + `    groupA: ${JSON.stringify(m.groupA)},\n    groupB: ${JSON.stringify(m.groupB)},\n`
     + `    districtGap: ${m.districtGap},\n    tauSquared: ${m.tauSquared},\n`
     + `    nSchools: ${m.nSchools},\n    nMeetingThreshold: ${m.nMeetingThreshold},\n    minCellSize: ${m.minCellSize},\n  },\n`
-    + '  schools: [\n' + gaps.schools.map(fmtSchoolRow).join('\n') + '\n  ],\n};\n';
+    + '  schools: [\n' + gaps.schools.map(fmtSchoolRow).join('\n') + '\n  ],\n}';
+}
+function writeGaps(gapsByDemo) {
+  const slices = Object.entries(gapsByDemo)
+    .map(([k, g]) => `${k}: ${fmtGapSlice(g).replace(/\n/g, '\n  ')},`)
+    .join('\n  ');
+  const out = LICENSE
+    + '\n// Forest plot data — all five DESE comparisons for the coherent small\n'
+    + '// district, generated by tools/build-demo.js. The demo behaves exactly like\n'
+    + '// an upload: every "Groups to compare" option is a real engine-computed slice.\n'
+    + 'window.GAPS_DATA_DEMO_ALL = {\n  ' + slices + '\n};\n'
+    + 'window.GAPS_DATA = window.GAPS_DATA_DEMO_ALL.frl;\n';
   fs.writeFileSync(path.join(ROOT, 'data.js'), out);
+}
+function writeDemoData(demoData, ach) {
+  fs.writeFileSync(path.join(ROOT, 'demo-data.js'),
+    LICENSE
+    + '\n// Demographics box plots + achievement scatter for the coherent small\n'
+    + '// district — generated by tools/build-demo.js through engine/stats.js,\n'
+    + '// the same math the upload pipeline uses.\n'
+    + 'window.DEMO_DATA = ' + JSON.stringify(demoData) + ';\n'
+    + 'window.ACH_DATA = ' + JSON.stringify(ach) + ';\n');
 }
 function writeHeatmap(heat) {
   fs.writeFileSync(path.join(ROOT, 'heatmap-data.js'),
@@ -267,13 +402,20 @@ function writeHeatmap(heat) {
 
 // ---- run + validation ------------------------------------------------------
 const heat = buildHeatmap();
-const gaps = buildGaps();
-writeGaps(gaps);
+const gapsByDemo = {};
+for (const cmp of COMPARISONS) gapsByDemo[cmp.key] = buildGaps(cmp);
+const gaps = gapsByDemo.frl;
+const demoData = buildDemoData();
+const ach = buildAchievement();
+writeGaps(gapsByDemo);
 writeHeatmap(heat);
+writeDemoData(demoData, ach);
 
 console.log('District:', gaps.meta.nSchools, 'schools,', students.length, 'students (Math, grades 3-8).');
-console.log('  district FRL gap', gaps.meta.districtGap, '| tau^2', gaps.meta.tauSquared,
-  '| meeting threshold', gaps.meta.nMeetingThreshold + '/' + gaps.meta.nSchools);
+for (const cmp of COMPARISONS) {
+  const g = gapsByDemo[cmp.key];
+  console.log(`  ${cmp.key.padEnd(8)} district gap ${String(g.meta.districtGap).padStart(8)} | tau^2 ${String(g.meta.tauSquared).padStart(7)} | meeting ${g.meta.nMeetingThreshold}/${g.meta.nSchools}`);
+}
 
 console.log('\nPer-cell residual checks (targets: mean ≈ grade offset, sd/sd_score 0.548, cor(r,score) 0.548, cor(fit,r) 0):');
 console.log('  grade    n   s    offset  mean   sd/s   cor_rY  cor_fR  skew    min     max');
@@ -303,9 +445,19 @@ const errs = [];
 if (gaps.meta.nSchools !== 7) errs.push('expected 7 schools');
 if (gaps.meta.nMeetingThreshold !== 6) errs.push('expected 6 meeting threshold, got ' + gaps.meta.nMeetingThreshold);
 if (!(gaps.meta.districtGap < 0)) errs.push('expected negative district FRL gap');
+for (const k of ['iep', 'el', 'race_bw', 'race_hw']) {
+  if (!(gapsByDemo[k].meta.districtGap < 0)) errs.push(`expected negative district ${k} gap`);
+}
+// Every slice needs real between-school spread — τ² = 0 collapses the shrunken
+// forest onto a single point with zero-width CIs (legitimate REML output, but
+// a degenerate demo). Re-tune GAP_MULT / the master seed if this trips.
+for (const k of Object.keys(gapsByDemo)) {
+  if (!(gapsByDemo[k].meta.tauSquared > 0)) errs.push(`tau^2 = 0 for ${k} slice`);
+}
 if (cellReport.some(c => Math.abs(c.sdRatio - 0.548) > 0.02)) errs.push('sd ratio off target');
 if (cellReport.some(c => Math.abs(c.corRY - 0.548) > 0.03)) errs.push('cor(resid,score) off target');
 if (cellReport.some(c => Math.abs(c.corFR) > 0.02)) errs.push('cor(fitted,resid) not ~0');
 if (sd(cellReport.map(c => c.offset)) < 0.03) errs.push('grade offsets too small to register');
+if (demoData.frl.groups.length !== 2 || demoData.race_bw.groups.length !== 2) errs.push('demo box-plot groups malformed');
 if (errs.length) { console.error('\nSELF-CHECK FAILED:', errs.join('; ')); process.exit(1); }
-console.log('\nSelf-check OK. Wrote data.js + heatmap-data.js.');
+console.log('\nSelf-check OK. Wrote data.js + heatmap-data.js + demo-data.js.');

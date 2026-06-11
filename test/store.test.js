@@ -11,7 +11,6 @@ function freshStore() {
     GAPS_DATA: { meta: { subject: 'math', nSchools: 30 }, schools: [] },
     HEATMAP_DATA: { meta: { subject: 'math' }, schools: [] },
     DEMO_DATA: { frl: { groups: [] } },
-    DEMO_DATA_BY_SCHOOL: {},
     ACH_DATA: { student: {}, school: {} },
   };
   const demoGaps = win.GAPS_DATA;
@@ -54,7 +53,7 @@ test('store: putUploaded(ela) makes ela available + active and shadows the right
   const { win, store } = freshStore();
   store.seedDemo();
   const elaFrl = { meta: { subject: 'ela', demographic: 'frl' }, schools: [] };
-  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: elaFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, DEMO_DATA_BY_SCHOOL: {}, ACH_DATA: {} };
+  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: elaFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
   store.putUploaded('ela', elaShapes, { subject: 'ela', nSchools: 5 });
   assert.equal(store.available('ela'), true);
   store.setActiveSubject('ela');
@@ -70,7 +69,7 @@ test('store: getActiveMeta returns the active source meta with source tag', () =
   const m = store.getActiveMeta();
   assert.equal(m.subject, 'math');
   assert.equal(m.source, 'demo');
-  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: {}, DEMO_DATA: {}, DEMO_DATA_BY_SCHOOL: {}, ACH_DATA: {} };
+  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
   store.putUploaded('ela', elaShapes, { subject: 'ela', nSchools: 7 });
   store.setActiveSubject('ela');
   assert.equal(store.getActiveMeta().source, 'uploaded'); // putUploaded tags source:'uploaded'
@@ -80,11 +79,71 @@ test('store: putUploaded(math) shadows the demo for the same subject (resolve pr
   const { win, store } = freshStore();
   store.seedDemo();
   const mathFrl = { meta: { subject: 'math', demographic: 'frl' }, schools: [] };
-  const mathShapes = { GAPS_DATA_BY_DEMO: { frl: mathFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, DEMO_DATA_BY_SCHOOL: {}, ACH_DATA: {} };
+  const mathShapes = { GAPS_DATA_BY_DEMO: { frl: mathFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
   store.putUploaded('math', mathShapes, { subject: 'math', nSchools: 99 });
   store.setActiveSubject('math');
   store.setActiveSubgroup('frl');
   assert.equal(win.GAPS_DATA, mathFrl);                   // uploaded shadows demo for the same subject
   assert.equal(store.getActiveMeta().source, 'uploaded');
   assert.equal(store.getActiveMeta().nSchools, 99);
+});
+
+test('store: removeUploaded(math) falls back to the demo and re-points the globals', () => {
+  const { win, store, demoGaps } = freshStore();
+  store.seedDemo();
+  const mathFrl = { meta: { subject: 'math', demographic: 'frl' }, schools: [] };
+  const mathShapes = { GAPS_DATA_BY_DEMO: { frl: mathFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('math', mathShapes, { subject: 'math', nSchools: 99 });
+  store.setActiveSubject('math');
+  store.setActiveSubgroup('frl');
+  assert.equal(win.GAPS_DATA, mathFrl);
+  store.removeUploaded('math');
+  assert.equal(store.available('math'), true);            // demo still backs math
+  assert.equal(store.getActiveMeta().source, 'demo');
+  assert.equal(win.GAPS_DATA, demoGaps);                  // globals re-pointed at the demo
+});
+
+test('store: removeUploaded(ela) disables ela and moves the active subject off it', () => {
+  const { win, store, demoGaps } = freshStore();
+  store.seedDemo();
+  const elaFrl = { meta: { subject: 'ela', demographic: 'frl' }, schools: [] };
+  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: elaFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('ela', elaShapes, { subject: 'ela', nSchools: 5 });
+  store.setActiveSubject('ela');
+  assert.equal(store.activeSubject(), 'ela');
+  store.removeUploaded('ela');
+  assert.equal(store.available('ela'), false);            // no demo backs ela
+  assert.equal(store.activeSubject(), 'math');            // fell back to an available subject
+  assert.equal(win.GAPS_DATA, demoGaps);
+});
+
+test('store: removeUploaded of a never-uploaded subject is a safe no-op', () => {
+  const { store } = freshStore();
+  store.seedDemo();
+  store.removeUploaded('ela');
+  assert.equal(store.activeSubject(), 'math');
+  assert.equal(store.available('math'), true);
+});
+
+test('store: getUploadedMeta returns the uploaded meta for that subject only', () => {
+  const { store } = freshStore();
+  store.seedDemo();
+  assert.equal(store.getUploadedMeta('math'), null);      // demo doesn't count
+  const shapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('math', shapes, { subject: 'math', filename: 'math.csv' });
+  assert.equal(store.getUploadedMeta('math').filename, 'math.csv');
+  store.removeUploaded('math');
+  assert.equal(store.getUploadedMeta('math'), null);
+});
+
+test('store: availableSubgroups reflects the active dataset (demo = frl only; upload = its keys)', () => {
+  const { store } = freshStore();
+  store.seedDemo();
+  store.setActiveSubject('math');
+  assert.deepEqual(store.availableSubgroups(), ['frl']);
+  const shapes = { GAPS_DATA_BY_DEMO: { frl: {}, iep: {}, el: {} }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('math', shapes, { subject: 'math' });
+  assert.deepEqual(store.availableSubgroups().sort(), ['el', 'frl', 'iep']);
+  store.removeUploaded('math');
+  assert.deepEqual(store.availableSubgroups(), ['frl']);  // back to the demo's keys
 });

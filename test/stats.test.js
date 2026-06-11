@@ -21,7 +21,7 @@ test('cellSE: n=0 → null', () => {
 test('gapSE combines in quadrature', () => {
   assert.ok(Math.abs(S.gapSE(0.3, 0.4) - 0.5) < 1e-9);
 });
-test('shrink matches data.js Sch-1013 (tau2=0.0309, mu=0.18)', () => {
+test('shrink: precision-weighted blend at a known fixed point (tau2=0.0309, mu=0.18)', () => {
   const r = S.shrink({ rawGap: 0.7314, rawSe: 0.2277, tau2: 0.0309, mu: 0.18 });
   assert.ok(Math.abs(r.B - 0.374) < 1e-3, `B=${r.B}`);
   assert.ok(Math.abs(r.shrunkGap - 0.3860) < 5e-4, `shrunkGap=${r.shrunkGap}`);
