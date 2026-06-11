@@ -10,12 +10,12 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
 
-// App body sketch v6 ----------------------------------------------------------
-// Major restructure: right rail dropped entirely. Slice context and Controls
-// now live in two stacked cards above the figure, full-width within the main
-// column. Each tab (Gap / Scan) gets its own Controls card composition.
+// App body sketch v7 ----------------------------------------------------------
+// Global analysis settings (subject / units / method) live in the sidebar's
+// Analysis panel and persist to localStorage; per-figure options (compare,
+// group, view, level) live on each figure card. There is no Controls card.
 //
-// Layout is now a simple two-column grid: LeftNav | main column.
+// Layout is a simple two-column grid: LeftNav | main column.
 
 // Subject toggle is live across all screens. Figure data is swapped behind the
 // window.* globals by engine/store.js (GLStore): the bundled fixtures are the
@@ -955,7 +955,7 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
 
 // ---- OVERVIEW CARD ----------------------------------------------------------
 // District-level numeric context for the current slice. Sits between the
-// Controls card and the figure — a quick "what does the district look like in
+// page header and the figure — a quick "what does the district look like in
 // aggregate" reference before drilling into school-level detail.
 function OverviewCardGap() {
   const data = window.GAPS_DATA;

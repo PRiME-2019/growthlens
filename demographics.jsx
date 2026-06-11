@@ -58,7 +58,7 @@ const DEMO_TRANSITION = {
 };
 
 // Inline group picker for the card header — options come from the active
-// dataset's comparisons (window.DEMO_SPECS), same source the Controls card used.
+// dataset's comparisons (window.DEMO_SPECS).
 function GroupSelect({ value, onChange }) {
   const SLU = window.SLU;
   const options = {};
