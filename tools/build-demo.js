@@ -220,6 +220,44 @@ for (const g of GRADES) {
   });
 }
 
+// ---- displayed same-year status (achievement scatter x-axis) ---------------
+// The VAM construction above makes resid a direct function of score_z, so
+// cor(growth, score_z) ≈ 0.55 at the student level and the school dots line up
+// along the diagonal — stronger than real data, where a school's status mostly
+// reflects prior attainment that the growth model already removed. The
+// *displayed* status therefore keeps each school's within-school score shape
+// but rebuilds the school-level status means with a CONTROLLED correlation to
+// school growth (Gram-Schmidt against the school growth means, the same trick
+// the cell loop uses for z ⊥ y — with 7 schools, free noise draws are too
+// luck-of-the-draw), plus independent student-level noise. Drawn AFTER every
+// other RNG draw so the residuals, gaps, and heatmap stay byte-identical.
+const STATUS_SCHOOL_COR = 0.35;  // target school-level status⇄growth correlation
+const STATUS_STUDENT_SD = 1.0;   // independent student-level status noise
+{
+  const ids = SCHOOLS.map(sc => sc.id);
+  const scoreMeanById = {}, residMeanById = {};
+  for (const sc of SCHOOLS) {
+    const mine = students.filter(st => st.sid === sc.id);
+    scoreMeanById[sc.id] = mean(mine.map(st => st.score_z));
+    residMeanById[sc.id] = mean(mine.map(st => st.resid));
+  }
+  const r = standardize(ids.map(id => residMeanById[id]));
+  const e0 = ids.map(() => gauss());
+  const rho = cor(e0, r);
+  const eperp = standardize(e0.map((e, i) => e - rho * sd(e0) * r[i]));
+  const level = mean(ids.map(id => scoreMeanById[id]));
+  const spread = sd(ids.map(id => scoreMeanById[id]));   // keep the x-axis spread natural
+  const statusMeanById = {};
+  ids.forEach((id, i) => {
+    statusMeanById[id] = level
+      + spread * (STATUS_SCHOOL_COR * r[i] + Math.sqrt(1 - STATUS_SCHOOL_COR ** 2) * eperp[i]);
+  });
+  students.forEach(st => {
+    st.status_z = (st.score_z - scoreMeanById[st.sid]) + statusMeanById[st.sid]
+      + gauss() * STATUS_STUDENT_SD;
+  });
+}
+
 // ---- heatmap (school x grade mean residual) --------------------------------
 function buildHeatmap() {
   const schools = SCHOOLS.map(sc => {
@@ -341,7 +379,7 @@ function buildAchievement() {
   const agg = SCHOOLS.map(sc => {
     const mine = students.filter(st => st.sid === sc.id);
     const c = cellStats(mine);
-    return { sc, n: c.n, rbar: c.rbar, se: c.se, status: mean(mine.map(st => st.score_z)) };
+    return { sc, n: c.n, rbar: c.rbar, se: c.se, status: mean(mine.map(st => st.status_z)) };
   });
   const fit = agg.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
   const canShrink = fit.length >= 2;
@@ -366,7 +404,7 @@ function buildAchievement() {
   const idx = Object.fromEntries(schoolPoints.map((s, i) => [s.school_id, i]));
   const studentPoints = students.map(st => ({
     school_id: st.sid, hue: schoolPoints[idx[st.sid]].hue,
-    x: round(st.score_z, 3), y_raw: round(st.resid, 3),
+    x: round(st.status_z, 3), y_raw: round(st.resid, 3),
   }));
   return { student: { points: studentPoints }, school: { points: schoolPoints } };
 }
@@ -456,6 +494,15 @@ for (const sc of SCHOOLS) {
 }
 console.log('  schools with persistent sign (>=2/3 grades):', persistOk + '/7');
 
+// Displayed status ⇄ growth: should be noticeably weaker than the VAM's
+// internal cor(resid, score_z) = 0.548, at both levels.
+const statusCorStudent = cor(students.map(st => st.resid), students.map(st => st.status_z));
+const schoolStatusMeans = SCHOOLS.map(sc => mean(students.filter(st => st.sid === sc.id).map(st => st.status_z)));
+const statusCorSchool = cor(schoolMeans, schoolStatusMeans);
+console.log('\nDisplayed status vs. growth:');
+console.log('  cor(resid, status) student-level:', round(statusCorStudent, 3), '(target ~0.25-0.45)');
+console.log('  cor(resid, status) school-level :', round(statusCorSchool, 3));
+
 const errs = [];
 if (gaps.meta.nSchools !== 7) errs.push('expected 7 schools');
 if (gaps.meta.nMeetingThreshold !== 6) errs.push('expected 6 meeting threshold, got ' + gaps.meta.nMeetingThreshold);
@@ -469,6 +516,7 @@ for (const k of ['iep', 'el', 'race_bw', 'race_hw']) {
 for (const k of Object.keys(gapsByDemo)) {
   if (!(gapsByDemo[k].meta.tauSquared > 0)) errs.push(`tau^2 = 0 for ${k} slice`);
 }
+if (statusCorStudent < 0.15 || statusCorStudent > 0.5) errs.push(`student status⇄growth cor ${round(statusCorStudent, 3)} outside 0.15-0.5`);
 if (cellReport.some(c => Math.abs(c.sdRatio - 0.548) > 0.02)) errs.push('sd ratio off target');
 if (cellReport.some(c => Math.abs(c.corRY - 0.548) > 0.03)) errs.push('cor(resid,score) off target');
 if (cellReport.some(c => Math.abs(c.corFR) > 0.02)) errs.push('cor(fitted,resid) not ~0');
