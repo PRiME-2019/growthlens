@@ -62,12 +62,26 @@ const PAGES = {
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
 };
 
+// Global analysis settings persist across sessions. UI preferences only —
+// no student data ever touches storage, so the privacy promise is intact.
+const ANALYSIS_PREFS_KEY = 'gl-analysis-v1';
+function loadAnalysisPrefs() {
+  try { return JSON.parse(localStorage.getItem(ANALYSIS_PREFS_KEY) || '{}') || {}; }
+  catch { return {}; }
+}
+
 function AppBody() {
   const [page, setPage]           = React.useState('landing');
-  const [subject, setSubjectState] = React.useState('math');
-  const [demo, setDemo]           = React.useState('frl');
-  const [estimate, setEstimate]   = React.useState('shrunk');
-  const [unit, setUnit]           = React.useState('z');
+  const [subject, setSubjectState] = React.useState(() =>
+    loadAnalysisPrefs().subject === 'ela' ? 'ela' : 'math');
+  const [demo, setDemo] = React.useState(() => {
+    const d = loadAnalysisPrefs().demo;
+    return DEMOS[d] ? d : 'frl';
+  });
+  const [estimate, setEstimate] = React.useState(() =>
+    loadAnalysisPrefs().estimate === 'raw' ? 'raw' : 'shrunk');
+  const [unit, setUnit] = React.useState(() =>
+    loadAnalysisPrefs().unit === 'weeks' ? 'weeks' : 'z');
   const [forestSort, setForestSort] = React.useState('gap_desc');
   // Default threshold mode: 'section' splits below-threshold schools into a labeled
   // group at the bottom of the forest. (Matches the Upload-page FAQ copy.)
@@ -111,6 +125,17 @@ function AppBody() {
     (s) => s !== subject && !(window.GLStore && window.GLStore.available(s)),
   );
 
+  // Persist the analysis settings; failure (private mode) just means no restore.
+  React.useEffect(() => {
+    try { localStorage.setItem(ANALYSIS_PREFS_KEY, JSON.stringify({ subject, unit, estimate, demo })); }
+    catch { /* ignore */ }
+  }, [subject, unit, estimate, demo]);
+  // A persisted subject the active store can't serve (e.g. 'ela' with the
+  // Math-only demo) snaps back instead of dead-ending on "No data".
+  React.useEffect(() => {
+    if (window.GLStore && !window.GLStore.available(subject)) setSubjectState('math');
+  });
+
   // Same idea for subgroups: the demo ships only the FRL slice, so the other
   // four "Groups to compare" options are disabled rather than silently showing
   // FRL data under the wrong header. Snap back if the active one vanishes
@@ -148,7 +173,7 @@ function AppBody() {
       background: SLU.bg,
       fontFamily: FONT,
     }}>
-      <LeftNav page={page} setPage={setPage} />
+      <LeftNav page={page} setPage={setPage} ctx={ctx} />
       <main style={{ minWidth: 0, padding: '22px 28px 40px', display: 'flex',
                      flexDirection: 'column', gap: 20 }}>
         {(page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'upload' || page === 'exportpg') && <DatasetStrip />}
@@ -171,7 +196,7 @@ function AppBody() {
 }
 
 // ---- LEFT NAV ---------------------------------------------------------------
-function LeftNav({ page, setPage }) {
+function LeftNav({ page, setPage, ctx }) {
   return (
     <aside style={{
       borderRight: `1px solid ${SLU.rule2}`, background: SLU.bg,
@@ -230,15 +255,38 @@ function LeftNav({ page, setPage }) {
         })}
       </div>
 
+      <AnalysisPanel ctx={ctx} />
+
       {/* Secondary nav */}
       <div style={{ padding: '12px 12px 0', display: 'flex', flexDirection: 'column', gap: 1,
                      borderTop: `1px solid ${SLU.rule2}`, marginTop: 8, paddingTop: 14 }}>
         <NavItem label="Methods note" href="methods.html" external />
-        <NavItem label="Settings" placeholder soon />
       </div>
 
       <span style={{ flex: 1 }} />
     </aside>
+  );
+}
+
+// Global analysis settings — subject, units, method — live in the sidebar so
+// the state that changes what every figure means is always visible. Per-figure
+// options live on the figure cards themselves.
+function AnalysisPanel({ ctx }) {
+  return (
+    <div style={{ padding: '14px 16px 4px', display: 'flex', flexDirection: 'column', gap: 12,
+                   borderTop: `1px solid ${SLU.rule2}`, marginTop: 8 }}>
+      <div style={{ fontSize: 10, fontFamily: LABEL, color: SLU.mute,
+                     textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>
+        Analysis
+      </div>
+      <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS}
+                  label="Subject" disabledKeys={ctx.disabledSubjects} />
+      <CSegmented value={ctx.unit} onChange={ctx.setUnit}
+                  options={{ z: 'SD', weeks: 'Weeks' }} label="Units" hint={UNIT_HINT} />
+      <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
+                  options={METHOD_OPTS} label="Method"
+                  hint={METHOD_HINT} optionHints={METHOD_OPT_HINTS} />
+    </div>
   );
 }
 
