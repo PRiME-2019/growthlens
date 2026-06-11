@@ -68,6 +68,16 @@
       const ds = resolve(activeSubject);
       return ds ? (ds.shapes.GAPS_DATA_BY_DEMO || {}) : {};
     },
+    // Gaps + heatmap for EVERY available subject — the Resources page spans
+    // subjects instead of following the Subject toggle.
+    allSubjectsData() {
+      const out = {};
+      for (const s of ['math', 'ela']) {
+        const ds = resolve(s);
+        if (ds) out[s] = { gaps: ds.shapes.GAPS_DATA_BY_DEMO || {}, heat: ds.shapes.HEATMAP_DATA || null };
+      }
+      return out;
+    },
     // Uploaded meta for one subject (null if only the demo backs it) — lets the
     // Upload page remember loaded files across remounts.
     getUploadedMeta(subject) { const ds = sources.uploaded[subject]; return ds ? ds.meta : null; },

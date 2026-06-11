@@ -58,6 +58,7 @@ const PAGES = {
   gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
   achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
   demographics: { label: 'Demographics',         hint: 'Growth by group' },
+  resources:    { label: 'Resources',            hint: 'Evidence for next steps' },
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
 };
 
@@ -173,7 +174,7 @@ function AppBody() {
       <LeftNav page={page} setPage={setPage} ctx={ctx} />
       <main style={{ minWidth: 0, padding: '22px 28px 40px', display: 'flex',
                      flexDirection: 'column', gap: 20 }}>
-        {(page === 'landing' || page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'exportpg') && <DatasetStrip />}
+        {(page === 'landing' || page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'resources' || page === 'exportpg') && <DatasetStrip />}
         {page === 'landing'      && <OverviewPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
           {page === 'scan'         && <ScanPage sliceLabel={subjectLabel} ctx={ctx} />}
@@ -184,6 +185,7 @@ function AppBody() {
             elements can tween between positions instead of re-mounting. */}
         {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={subjectLabel} ctx={ctx} />}
         {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={subjectLabel} ctx={ctx} />}
+        {page === 'resources'    && window.ResourcesPage    && <window.ResourcesPage    ctx={ctx} />}
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
     </div>

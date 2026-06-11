@@ -63,6 +63,18 @@ test('store: allGapSlices returns every comparison the active dataset carries', 
   assert.equal(store.allGapSlices().iep, iep);
 });
 
+test('store: allSubjectsData spans every available subject regardless of the active one', () => {
+  const { store } = freshStore();
+  store.seedDemo();
+  store.setActiveSubject('math');
+  assert.deepEqual(Object.keys(store.allSubjectsData()), ['math']);   // demo is Math-only
+  const elaShapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: { schools: [] }, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('ela', elaShapes, { subject: 'ela' });
+  const all = store.allSubjectsData();   // still active=math
+  assert.deepEqual(Object.keys(all).sort(), ['ela', 'math']);
+  assert.equal(all.ela.heat, elaShapes.HEATMAP_DATA);
+});
+
 test('store: putUploaded(ela) makes ela available + active and shadows the right gaps', () => {
   const { win, store } = freshStore();
   store.seedDemo();
