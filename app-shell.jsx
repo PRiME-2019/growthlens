@@ -53,8 +53,7 @@ const DEMOS = {
   race_hw: 'Race · Hispanic vs. White',
 };
 const PAGES = {
-  landing:      { label: 'Overview',             hint: 'Start here' },
-  upload:       { label: 'Upload data',          hint: 'Add your data file' },
+  landing:      { label: 'Overview',             hint: 'Start here · add data' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
   gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
   achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
@@ -170,10 +169,8 @@ function AppBody() {
       <LeftNav page={page} setPage={setPage} ctx={ctx} />
       <main style={{ minWidth: 0, padding: '22px 28px 40px', display: 'flex',
                      flexDirection: 'column', gap: 20 }}>
-        {(page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'upload' || page === 'exportpg') && <DatasetStrip />}
-        {page === 'landing'      && <DatasetStrip placeholder />}
-        {page === 'landing'      && <LandingPage ctx={ctx} />}
-        {page === 'upload'       && <UploadPage ctx={ctx} />}
+        {(page === 'landing' || page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'exportpg') && <DatasetStrip />}
+        {page === 'landing'      && <OverviewPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
           {page === 'scan'         && <ScanPage sliceLabel={subjectLabel} ctx={ctx} />}
           {page === 'gap'          && <GapPage sliceLabel={sliceLabel} ctx={ctx} />}
@@ -378,94 +375,9 @@ function BriefHeader({ slice, eyebrow, title, blurb }) {
 }
 
 // ---- PAGES ------------------------------------------------------------------
-function LandingPage({ ctx }) {
-  return (
-    <>
-      <header style={{ display: 'flex', flexDirection: 'column',
-                       alignItems: 'flex-start', gap: 10, paddingBottom: 4 }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '4px 9px', borderRadius: 4,
-          background: 'rgba(0, 61, 165, 0.08)', color: SLU.blue,
-          fontSize: 11, fontFamily: LABEL, fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: 1.0, whiteSpace: 'nowrap',
-        }}>GrowthLens · v0.4 preview</span>
-        <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: SLU.ink,
-                     letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance',
-                     maxWidth: 760 }}>
-          See where your students are growing — privately, in your browser.
-        </h1>
-        <p style={{ margin: '2px 0 0', maxWidth: 720,
-                    fontSize: 14.5, lineHeight: 1.55, color: SLU.ink2,
-                    textWrap: 'pretty' }}>
-          Upload one file from your assessment system and GrowthLens turns it
-          into a clear picture of how each school and student group is doing —
-          where growth is strong, where groups are falling behind, and which
-          results rest on too few students to lean on. Not one student record
-          ever leaves your browser tab.
-        </p>
-      </header>
-
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                        gap: 16 }}>
-        <LandingCard
-          eyebrow="01 · Bring data"
-          title="Upload your file"
-          body="One row per student, per subject, per year. We look for about a dozen columns; there’s a plain-language checklist waiting on the upload page."
-          cta="Go to upload →"
-          onClick={() => ctx.setPage('upload')}
-          accent={SLU.blue}
-        />
-        <LandingCard
-          eyebrow="02 · Triage"
-          title="System Scan"
-          body="A district-wide heat map of how each grade is doing at each school. Spot where growth is consistently strong or soft before you dig into any one group."
-          cta="Open System Scan →"
-          onClick={() => ctx.setPage('scan')}
-          accent={SLU.gold}
-        />
-        <LandingCard
-          eyebrow="03 · Drill in"
-          title="Gap Analysis"
-          body="Pick a subject and two student groups, and see the gap between them at every school — ranked, with the district average for context and small-sample schools clearly flagged."
-          cta="Open Gap Analysis →"
-          onClick={() => ctx.setPage('gap')}
-          accent={SLU.blue}
-        />
-      </section>
-
-      <section style={{ padding: '4px 4px 0' }}>
-        <h2 style={{
-          fontFamily: LABEL, fontSize: 11, fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: 1.4, color: SLU.ink2,
-          margin: '0 0 10px', paddingBottom: 6,
-          borderBottom: `1px solid ${SLU.rule2}`,
-        }}>What GrowthLens is — and isn’t</h2>
-        <FAQ items={[
-          {
-            q: 'What it does',
-            a: <>Shows how each school is doing compared with the district as a whole,
-                steadies the numbers for smaller schools so a few students can’t swing
-                the picture, and measures the gap between student groups school by school.</>,
-          },
-          {
-            q: 'How it stays private',
-            a: <>Everything is figured right here in your browser. Your file is never
-                uploaded to a server, and the methods note spells out exactly how the
-                numbers are made.</>,
-          },
-          {
-            q: 'What it isn’t',
-            a: <>It isn’t a way to evaluate individual teachers or students. Groups too
-                small to read reliably are flagged so you don’t over-interpret them. And
-                the numbers describe what’s happening, not why — use them to ask sharper
-                questions, not to assign blame.</>,
-          },
-        ]} />
-      </section>
-    </>
-  );
-}
+// Overview = the old landing + upload pages in one place: the pitch, the drop
+// zones, where to go next, and the file/privacy reference. Everything a first
+// visit needs without a second stop.
 
 function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
   return (
@@ -486,7 +398,7 @@ function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
   );
 }
 
-function UploadPage({ ctx }) {
+function OverviewPage({ ctx }) {
   // Seed from the store so navigating away and back doesn't show "Waiting for
   // file" over data that is still loaded and driving every figure.
   const upMeta = (k) => (window.GLStore && window.GLStore.getUploadedMeta) ? window.GLStore.getUploadedMeta(k) : null;
@@ -586,27 +498,43 @@ function UploadPage({ ctx }) {
   return (
     <>
       <header style={{ display: 'flex', flexDirection: 'column',
-                       alignItems: 'flex-start', gap: 8, paddingBottom: 2 }}>
+                       alignItems: 'flex-start', gap: 10, paddingBottom: 4 }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 9px', borderRadius: 4,
           background: 'rgba(0, 61, 165, 0.08)', color: SLU.blue,
           fontSize: 11, fontFamily: LABEL, fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: 1.0, whiteSpace: 'nowrap',
-        }}>Upload data</span>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: SLU.ink,
-                     letterSpacing: -0.3, lineHeight: 1.15, textWrap: 'balance' }}>
-          Bring one file per subject from your assessment system
+        }}>GrowthLens · v0.4 preview</span>
+        <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: SLU.ink,
+                     letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance',
+                     maxWidth: 760 }}>
+          See where your students are growing — privately, in your browser.
         </h1>
-        <p style={{ margin: '4px 0 0', maxWidth: 720,
-                    fontSize: 13.5, lineHeight: 1.55, color: SLU.ink2, textWrap: 'pretty' }}>
-          GrowthLens works with two files — one for reading (ELA) and one for
-          math. Both are read right here in your browser; nothing is uploaded.
-          You can start exploring a subject the moment its file loads cleanly,
-          and add the other whenever you’re ready.
+        <p style={{ margin: '2px 0 0', maxWidth: 720,
+                    fontSize: 14.5, lineHeight: 1.55, color: SLU.ink2,
+                    textWrap: 'pretty' }}>
+          Upload one file from your assessment system and GrowthLens turns it
+          into a clear picture of how each school and student group is doing —
+          where growth is strong, where groups are falling behind, and which
+          results rest on too few students to lean on. Not one student record
+          ever leaves your browser tab.
         </p>
       </header>
 
+      <section style={{ padding: '4px 4px 0' }}>
+        <h2 style={{
+          fontFamily: LABEL, fontSize: 11, fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: 1.4, color: SLU.ink2,
+          margin: '0 0 6px', paddingBottom: 6,
+          borderBottom: `1px solid ${SLU.rule2}`,
+        }}>Add your data — one file per subject</h2>
+        <p style={{ margin: '0 0 14px', maxWidth: 720,
+                    fontSize: 13, lineHeight: 1.55, color: SLU.mute, textWrap: 'pretty' }}>
+          One file for reading (ELA), one for math — both read right here in
+          your browser. You can start exploring a subject the moment its file
+          loads cleanly, and add the other whenever you’re ready.
+        </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         <SubjectDropZone
           subjectKey="ela"
@@ -635,6 +563,15 @@ function UploadPage({ ctx }) {
           placeholder="Math growth file"
         />
       </div>
+      {!anyReady && (
+        <p style={{ margin: '10px 2px 0', fontSize: 12.5, color: SLU.mute }}>
+          <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('scan'); }}
+             style={{ color: SLU.mute, textDecoration: 'underline' }}>
+            Skip for now and explore the sample math data
+          </a>
+        </p>
+      )}
+      </section>
 
       {anyReady && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12,
@@ -662,6 +599,33 @@ function UploadPage({ ctx }) {
         </div>
       )}
 
+      <section style={{ padding: '4px 4px 0' }}>
+        <h2 style={{
+          fontFamily: LABEL, fontSize: 11, fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: 1.4, color: SLU.ink2,
+          margin: '0 0 12px', paddingBottom: 6,
+          borderBottom: `1px solid ${SLU.rule2}`,
+        }}>Where to go next</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+          <LandingCard
+            eyebrow="Triage"
+            title="System Scan"
+            body="A district-wide heat map of how each grade is doing at each school. Spot where growth is consistently strong or soft before you dig into any one group."
+            cta="Open System Scan →"
+            onClick={() => ctx.setPage('scan')}
+            accent={SLU.gold}
+          />
+          <LandingCard
+            eyebrow="Drill in"
+            title="Gap Analysis"
+            body="Pick a subject and two student groups, and see the gap between them at every school — ranked, with the district average for context and small-sample schools clearly flagged."
+            cta="Open Gap Analysis →"
+            onClick={() => ctx.setPage('gap')}
+            accent={SLU.blue}
+          />
+        </div>
+      </section>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <AuxCard title="What your file should include" collapsible defaultOpen>
           <p style={{ margin: '0 0 10px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
@@ -688,6 +652,19 @@ function UploadPage({ ctx }) {
         <AuxCard title="Frequently asked" collapsible defaultOpen>
           <FAQ items={[
             {
+              q: 'What does GrowthLens do?',
+              a: <>Shows how each school is doing compared with the district as a whole,
+                  steadies the numbers for smaller schools so a few students can’t swing
+                  the picture, and measures the gap between student groups school by school.</>,
+            },
+            {
+              q: 'What isn’t it?',
+              a: <>It isn’t a way to evaluate individual teachers or students. Groups too
+                  small to read reliably are flagged so you don’t over-interpret them. And
+                  the numbers describe what’s happening, not why — use them to ask sharper
+                  questions, not to assign blame.</>,
+            },
+            {
               q: 'Where does my data go?',
               a: <>Nowhere. Your file is read and analyzed entirely in this browser tab — no row, name, or number ever leaves your computer. You can check this yourself: open your browser’s developer tools and you’ll see there’s no network traffic while you work.</>,
             },
@@ -709,13 +686,6 @@ function UploadPage({ ctx }) {
             },
           ]} />
         </AuxCard>
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: SLU.mute, flexWrap: 'wrap' }}>
-        <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('scan'); }}
-           style={{ color: SLU.mute, textDecoration: 'underline' }}>
-          Skip for now and explore the sample math data
-        </a>
       </div>
     </>
   );
