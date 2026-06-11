@@ -22,60 +22,35 @@ function AchievementPage({ sliceLabel, ctx }) {
       <window.BriefHeader eyebrow="Status & Growth" slice={sliceLabel}
         title="Where each school sits on both fronts"
         blurb={'Two views at once: where students scored this year along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that score lower but grow faster.'} />
-      <window.ControlsCard title="Controls"><AchievementControls ctx={ctx} /></window.ControlsCard>
       <AchievementFigure level={level} ctx={ctx} />
     </>
   );
 }
 
-function AchievementControls({ ctx }) {
-  return (
-    <window.ControlsGrid>
-      <window.CGroup title="Slice">
-        <window.CSegmented value={ctx.subject} onChange={ctx.setSubject} options={window.SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-      </window.CGroup>
-      <window.CGroup title="Estimate">
-        {(ctx.achLevel || 'school') === 'school' && (
-          <window.CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                    options={window.METHOD_OPTS} label="Method"
-                    hint={window.METHOD_HINT} optionHints={window.METHOD_OPT_HINTS} />
-        )}
-        <window.CSegmented value={ctx.unit} onChange={ctx.setUnit}
-                    options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
-                    hint={window.UNIT_HINT} />
-      </window.CGroup>
-      <window.CGroup title="View">
-        <window.CSegmented value={ctx.achLevel || 'school'} onChange={ctx.setAchLevel}
-                    options={{ school: 'School', student: 'Student' }} label="Level" />
-      </window.CGroup>
-    </window.ControlsGrid>
-  );
-}
-
-// Show/Hide pill for the district-average cross — lives on the figure card's
-// title row (same visual as the forest card's View toggle), since it only
-// affects this figure.
+// Two-option pill used on the figure card (same visual as the forest card's
+// View toggle): [['school','School'],['student','Student']] etc.
 const ACH_TWEEN = window.MOTION_OK === false ? '0ms' : '420ms cubic-bezier(0.32, 0.72, 0.24, 1)';
-function MeansToggle({ show, setShow }) {
+function PillToggle({ label, value, options, onChange }) {
   const SLU = window.SLU;
+  const idx = Math.max(0, options.findIndex(([k]) => k === value));
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
                       textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-        District average
+        {label}
       </span>
       <div style={{ position: 'relative', display: 'inline-flex', background: SLU.rule2, borderRadius: 999, padding: 3 }}>
         <div style={{
           position: 'absolute', top: 3, bottom: 3, width: 'calc(50% - 3px)',
-          left: show ? 3 : 'calc(50% + 0px)',
+          left: idx === 0 ? 3 : '50%',
           background: '#fff', borderRadius: 999,
           boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
           transition: `left ${ACH_TWEEN}`,
         }} />
-        {[['show', 'Show'], ['hide', 'Hide']].map(([k, label]) => {
-          const active = (k === 'show') === show;
+        {options.map(([k, text]) => {
+          const active = k === value;
           return (
-            <button key={k} onClick={() => setShow(k === 'show')}
+            <button key={k} onClick={() => onChange(k)}
                     aria-pressed={active}
                     style={{
                       position: 'relative', zIndex: 1, border: 'none', background: 'transparent',
@@ -83,7 +58,7 @@ function MeansToggle({ show, setShow }) {
                       fontSize: 12.5, fontWeight: active ? 600 : 500,
                       color: active ? SLU.ink : SLU.ink2, fontFamily: window.FONT,
                     }}>
-              {label}
+              {text}
             </button>
           );
         })}
@@ -224,7 +199,15 @@ function AchievementFigure({ level, ctx }) {
             four corners split at the district average
           </div>
         </div>
-        <MeansToggle show={ctx.achShowMeans !== false} setShow={ctx.setAchShowMeans} />
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap',
+                       rowGap: 10, justifyContent: 'flex-end' }}>
+          <PillToggle label="View" value={level}
+                      options={[['school', 'School'], ['student', 'Student']]}
+                      onChange={ctx.setAchLevel} />
+          <PillToggle label="District average" value={ctx.achShowMeans !== false ? 'show' : 'hide'}
+                      options={[['show', 'Show'], ['hide', 'Hide']]}
+                      onChange={(v) => ctx.setAchShowMeans(v === 'show')} />
+        </div>
       </div>
 
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
