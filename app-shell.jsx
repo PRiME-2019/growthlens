@@ -57,7 +57,7 @@ const PAGES = {
   upload:       { label: 'Upload data',          hint: 'Add your data file' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
   gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
-  achievement:  { label: 'Status & Growth',      hint: 'Start vs. growth' },
+  achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
   demographics: { label: 'Demographics',         hint: 'Growth by group' },
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
 };
@@ -76,6 +76,11 @@ function AppBody() {
   const [demoVar, setDemoVar]     = React.useState('frl');
   const [achLevel, setAchLevel]   = React.useState('school');
   const [achShowMeans, setAchShowMeans] = React.useState(true);
+  // Bumped by the Upload page when data lands or is removed, so the shell
+  // (DatasetStrip, store re-pointing, availability) refreshes without waiting
+  // for a navigation.
+  const [, setDataRev] = React.useState(0);
+  const bumpDataRev = React.useCallback(() => setDataRev((r) => r + 1), []);
 
   // Seed the bundled Math demo once (reads the window.* fixtures), then point
   // the well-known window.* globals at the active (subject, subgroup) via the
@@ -106,16 +111,34 @@ function AppBody() {
     (s) => s !== subject && !(window.GLStore && window.GLStore.available(s)),
   );
 
+  // Same idea for subgroups: the demo ships only the FRL slice, so the other
+  // four "Groups to compare" options are disabled rather than silently showing
+  // FRL data under the wrong header. Snap back if the active one vanishes
+  // (e.g. removing an upload returns to the FRL-only demo).
+  const availableDemos = (window.GLStore && window.GLStore.availableSubgroups()) || Object.keys(DEMOS);
+  const disabledDemos = Object.keys(DEMOS).filter(
+    (k) => k !== demo && availableDemos.length > 0 && !availableDemos.includes(k),
+  );
+  React.useEffect(() => {
+    if (!window.GLStore) return;
+    const avail = window.GLStore.availableSubgroups();
+    if (avail.length && !avail.includes(demo)) setDemo(avail.includes('frl') ? 'frl' : avail[0]);
+  });
+
   const ctx = {
-    page, setPage, subject, setSubject, disabledSubjects, demo, setDemo,
+    page, setPage, subject, setSubject, disabledSubjects, demo, setDemo, disabledDemos,
     estimate, setEstimate, unit, setUnit, forestSort, setForestSort,
     threshold, setThreshold,
     demoVar, setDemoVar,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
+    bumpDataRev,
   };
 
   const sliceLabel = `${SUBJECTS[subject]} · ${DEMOS[demo].split(' · ')[0]}`;
+  // Scan / Demographics / Status & Growth don't slice by subgroup, so their
+  // headers show the subject only — the full slice label belongs to Gap Analysis.
+  const subjectLabel = SUBJECTS[subject];
 
   return (
     <div style={{
@@ -133,14 +156,14 @@ function AppBody() {
         {page === 'landing'      && <LandingPage ctx={ctx} />}
         {page === 'upload'       && <UploadPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
-          {page === 'scan'         && <ScanPage sliceLabel={sliceLabel} ctx={ctx} />}
+          {page === 'scan'         && <ScanPage sliceLabel={subjectLabel} ctx={ctx} />}
           {page === 'gap'          && <GapPage sliceLabel={sliceLabel} ctx={ctx} />}
         </div>
         {/* Achievement & Demographics render OUTSIDE the subject-keyed wrapper
             so their SVG geometry stays mounted across ELA↔Math toggles and
             elements can tween between positions instead of re-mounting. */}
-        {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={sliceLabel} ctx={ctx} />}
-        {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={sliceLabel} ctx={ctx} />}
+        {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={subjectLabel} ctx={ctx} />}
+        {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={subjectLabel} ctx={ctx} />}
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
     </div>
@@ -422,9 +445,28 @@ function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
 }
 
 function UploadPage({ ctx }) {
-  const [files, setFiles] = React.useState({ ela: null, math: null });
-  const [stages, setStages] = React.useState({ ela: 'idle', math: 'idle' });
+  // Seed from the store so navigating away and back doesn't show "Waiting for
+  // file" over data that is still loaded and driving every figure.
+  const upMeta = (k) => (window.GLStore && window.GLStore.getUploadedMeta) ? window.GLStore.getUploadedMeta(k) : null;
+  const [files, setFiles] = React.useState(() => ({
+    ela: (upMeta('ela') || {}).filename || null,
+    math: (upMeta('math') || {}).filename || null,
+  }));
+  const [stages, setStages] = React.useState(() => ({
+    ela: upMeta('ela') ? 'ready' : 'idle',
+    math: upMeta('math') ? 'ready' : 'idle',
+  }));
   const [errors, setErrors] = React.useState({ ela: null, math: null });
+  // Per-zone note shown under the "Looks good" line (e.g. rows outside grades
+  // 3–8 that were set aside). Seeded from the store like files/stages.
+  const [notes, setNotes] = React.useState(() => {
+    const note = (k) => {
+      const m = upMeta(k);
+      return m && m.nDroppedGrades > 0
+        ? `${m.nDroppedGrades.toLocaleString()} rows outside grades 3–8 were set aside.` : null;
+    };
+    return { ela: note('ela'), math: note('math') };
+  });
   // Ignore a second file dropped on a slot while its first is still parsing —
   // two computeSlice runs racing on the same t_<subject> table would interleave.
   const inFlight = React.useRef({ ela: false, math: false });
@@ -453,8 +495,14 @@ function UploadPage({ ctx }) {
         const res = await window.GLIngest.loadSubjectFile(file, conn, key);
         if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
         const shapes = await window.GLCompute.computeSlice(key);
-        window.GLStore.putUploaded(key, shapes, res.meta);
+        window.GLStore.putUploaded(key, shapes, { ...res.meta, filename: file.name });
+        setNotes((n) => ({
+          ...n,
+          [key]: res.meta.nDroppedGrades > 0
+            ? `${res.meta.nDroppedGrades.toLocaleString()} rows outside grades 3–8 were set aside.` : null,
+        }));
         setStages((s) => ({ ...s, [key]: 'ready' }));
+        ctx.bumpDataRev();   // re-render the shell so the DatasetStrip & globals refresh now
       } catch (err) {
         setStages((s) => ({ ...s, [key]: 'idle' }));
         setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
@@ -464,6 +512,33 @@ function UploadPage({ ctx }) {
     }
   };
   const setStage = (key, v) => setStages((s) => ({ ...s, [key]: v }));
+  // Really remove an upload: forget it in the store (figures fall back to the
+  // demo, or the subject disables), keep React's subject/subgroup in step, and
+  // clear the student-level rows out of DuckDB.
+  const onRemove = async (key) => {
+    setFiles((f) => ({ ...f, [key]: null }));
+    setStages((s) => ({ ...s, [key]: 'idle' }));
+    setErrors((e) => ({ ...e, [key]: null }));
+    setNotes((n) => ({ ...n, [key]: null }));
+    if (window.GLStore) {
+      window.GLStore.removeUploaded(key);
+      if (ctx.subject === key && !window.GLStore.available(key)) ctx.setSubject('math');
+      const avail = window.GLStore.availableSubgroups();
+      if (avail.length && !avail.includes(ctx.demo)) ctx.setDemo('frl');
+      ctx.bumpDataRev();
+    }
+    try {
+      if (window.GL) {
+        const conn = await window.GL.getConnection();
+        await conn.query(`DROP TABLE IF EXISTS t_${key}`);
+        await conn.query(`DROP TABLE IF EXISTS t_${key}_all`);
+        const db = await window.GL.getDB();
+        if (db.dropFile) await db.dropFile(`${key}.csv`);
+      }
+    } catch (err) {
+      console.warn('DuckDB cleanup after remove failed:', err);
+    }
+  };
   const bothReady = stages.ela === 'ready' && stages.math === 'ready';
   const anyReady = stages.ela === 'ready' || stages.math === 'ready';
   return (
@@ -499,7 +574,9 @@ function UploadPage({ ctx }) {
           setStage={(v) => setStage('ela', v)}
           filename={files.ela}
           onFile={onFile}
+          onRemove={onRemove}
           error={errors.ela}
+          note={notes.ela}
           placeholder="ELA growth file"
         />
         <SubjectDropZone
@@ -510,7 +587,9 @@ function UploadPage({ ctx }) {
           setStage={(v) => setStage('math', v)}
           filename={files.math}
           onFile={onFile}
+          onRemove={onRemove}
           error={errors.math}
+          note={notes.math}
           placeholder="Math growth file"
         />
       </div>
@@ -600,7 +679,7 @@ function UploadPage({ ctx }) {
   );
 }
 
-function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, error, placeholder }) {
+function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, filename, onFile, onRemove, error, note, placeholder }) {
   // Remember the last non-dragover stage so a drag that passes over (or misses)
   // a loaded zone restores "ready" instead of clobbering it back to idle.
   const lastStable = React.useRef('idle');
@@ -656,8 +735,8 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
         {errMsg
           ? errMsg
           : ready
-          ? 'Looks good — your file checks out and is ready to explore.'
-          : `Drop a ${subjectLabel} file here, or click to choose one. One row per student, per grade, per year.`}
+          ? `Looks good — your file checks out and is ready to explore.${note ? ' ' + note : ''}`
+          : `Drop a ${subjectLabel} file here, or use Choose file below. One row per student, per grade, per year.`}
       </span>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <label style={{
@@ -681,7 +760,7 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
                  }} />
         </label>
         {ready && (
-          <button onClick={() => setStage('idle')} style={{
+          <button onClick={() => onRemove(subjectKey)} style={{
             padding: '7px 12px', borderRadius: 6,
             background: 'transparent', border: 'none',
             color: SLU.mute, fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -701,6 +780,7 @@ function FAQ({ items }) {
         return (
           <div key={i} style={{ borderTop: i === 0 ? 'none' : `1px solid ${SLU.rule2}` }}>
             <button onClick={() => setOpen(isOpen ? -1 : i)}
+                    aria-expanded={isOpen}
                     style={{
                       width: '100%', textAlign: 'left',
                       display: 'flex', alignItems: 'center', gap: 10,
@@ -809,6 +889,10 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
       onClick={collapsible ? toggle : undefined}
       role={collapsible ? 'button' : undefined}
       aria-expanded={collapsible ? open : undefined}
+      tabIndex={collapsible ? 0 : undefined}
+      onKeyDown={collapsible ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      } : undefined}
       >
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {collapsible && (
@@ -1233,7 +1317,7 @@ function CSegmented({ value, onChange, options, label, hint, optionHints, disabl
     </div>
   );
 }
-function CSelect({ value, onChange, options, label }) {
+function CSelect({ value, onChange, options, label, disabledKeys = [], disabledHint }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <CLabel>{label}</CLabel>
@@ -1243,7 +1327,14 @@ function CSelect({ value, onChange, options, label }) {
                 border: `1px solid ${SLU.rule}`, borderRadius: 6, background: '#fff',
                 cursor: 'pointer', width: '100%',
               }}>
-        {Object.entries(options).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        {Object.entries(options).map(([k, v]) => {
+          const off = disabledKeys.includes(k);
+          return (
+            <option key={k} value={k} disabled={off}>
+              {v}{off && disabledHint ? ` ${disabledHint}` : ''}
+            </option>
+          );
+        })}
       </select>
     </div>
   );
@@ -1301,7 +1392,8 @@ function GapControls({ ctx }) {
     <ControlsGrid>
       <CGroup title="Show">
         <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare" />
+        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare"
+                 disabledKeys={ctx.disabledDemos} disabledHint="(not in this data)" />
       </CGroup>
       <CGroup title="How it’s figured">
         <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
@@ -1342,9 +1434,7 @@ function ForestSlot({ ctx }) {
       estimate={ctx.estimate}
       unit={ctx.unit}
       sort={ctx.forestSort}
-      setSort={ctx.setForestSort}
       threshold={ctx.threshold}
-      setThreshold={ctx.setThreshold}
     />
   );
   return <PlaceholderCard label="Forest plot" h={680} />;

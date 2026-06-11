@@ -8,7 +8,49 @@ product or design decision.
 
 ---
 
-## Open — high priority
+## Status update (same day, follow-up session)
+
+All three high-priority items and the medium tier are now **fixed**, except two that are
+bigger than bugfixes and remain open:
+
+- **Open → #7 (demo Raw/Shrunken backwards on Status & Growth)** — the real fix is the README
+  roadmap item: regenerate the achievement/demographics demo fixtures through the engine.
+- **Open → #14 (weeks-of-learning methodology)** — the methodology note content is research
+  writing for the PRiME team, not a code change.
+
+Decisions made with the user along the way: slide 03 widest = most negative; slide 04 shows
+parity-or-better only (honest empty state); the Demographics page dropped the do-nothing
+"Groups to compare" select; Gap sorts rank by the displayed estimate; Z_T relabeled
+"this year's score"; shrinkage falls back to raw when τ² can't be fit (<2 schools);
+ingest filters to grades 3–8 with a visible "rows set aside" note; deck uses rust for
+negative gaps. Also fixed in the same pass: Remove now truly removes (store API +
+DuckDB cleanup + tests), unavailable subgroup options disable instead of silently
+falling back to FRL, the Upload page remembers loaded files across navigation, the
+DatasetStrip refreshes immediately on upload/remove, Demographics flags below-min-n
+groups, the student scatter stride-samples above 2,000 dots, and subgroup-independent
+pages (Scan/Demographics/Status & Growth) show subject-only headers.
+
+**Low-tier sweep (same day, third session):** dead seams dropped (DEMO_DATA_BY_SCHOOL from
+fixture/engine/store/tests, OLS reg fits, demo y_shrunk, DEMO_SPECS.short, cells() status,
+parseFlag, HeatmapH1 controlled-sort mode, ForestFinal setter props, .frame-hatch,
+reference/20260512_prior_va.json deleted); SLU.mute darkened to #6F727A (≥4.5:1 AA) across
+app/methods/deck; prefers-reduced-motion now gates all chart transitions; collapsible card
+headers and FAQ accordions are keyboard-operable with aria-expanded; ViewToggle exposes
+aria-pressed; invalid aria-sort dropped in favor of richer header labels; chart SVGs have
+accessible names; demographics outliers got 9px hit targets and uploads get a compact
+tooltip (no "student" placeholder); demoVar clamp writes back; forest + heatmap scroll
+horizontally at narrow widths; demo fixture aligned to engine (focal-first order, matching
+labels); methods.html links the real repo. Verified by a 17-step browser smoke across all
+pages in demo + uploaded states, zero console errors.
+
+**Still open (consciously deferred):** full table/grid semantics for the heatmap; a school
+legend for the hue-only scatter encoding; sticky heatmap header on long lists; heatmap
+mid-band glyph contrast tuning; heatmap cell keyboard focus; ControlsCard auto-vs-manual
+collapse interplay; quadrant counts when the mean cross is hidden (intentional per blurb);
+compute.js / weeksPerSD test coverage; regenerating the demo achievement/demographics
+fixtures through the engine; the weeks-of-learning methodology note.
+
+## Open — high priority (all FIXED — see status update)
 
 1. **The Upload page "Remove" button doesn't remove anything** — `app-shell.jsx` (≈664),
    `engine/store.js`. It only resets the dropzone's local stage; the store has no removal API, so
@@ -33,7 +75,7 @@ product or design decision.
    Suggested: `GLStore.availableSubgroups()` + `disabledKeys` on the select (exactly how the ELA
    toggle is greyed), or a visible "showing FRL sample" notice when the fallback fires.
 
-## Open — medium
+## Open — medium (FIXED except #7 and #14 — see status update)
 
 4. **Upload page forgets loaded files when you navigate away and back** — `app-shell.jsx` (≈427).
    `files`/`stages` are component-local, so after Upload → Scan → Upload the zones say "Waiting for

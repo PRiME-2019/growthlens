@@ -26,11 +26,16 @@ function ExportPage({ ctx }) {
   // Slice + summary stats reused on multiple slides.
   const summary = React.useMemo(() => {
     const eligible = schools.filter(s => s.meets_min_cell !== false);
-    const sorted = [...eligible].sort((a, b) => b.shrunk_gap - a.shrunk_gap);
-    const top    = sorted.slice(0, 5);
-    const bottom = sorted.slice(-3).reverse();
+    // Gaps are focal − reference: negative = the focal group (A) trails.
+    // Ascending puts the widest deficits first.
+    const sorted = [...eligible].sort((a, b) => a.shrunk_gap - b.shrunk_gap);
+    // Slide 03: actual deficits only, worst first (up to 5). Slide 04: schools
+    // at or above parity, best first (up to 3). Disjoint by construction —
+    // a least-bad deficit is never relabeled as a bright spot.
+    const widest   = sorted.filter(s => s.shrunk_gap < 0).slice(0, 5);
+    const atParity = sorted.filter(s => s.shrunk_gap >= 0).reverse().slice(0, 3);
     const meetingThreshold = eligible.length;
-    return { sorted, top, bottom, meetingThreshold };
+    return { sorted, widest, atParity, meetingThreshold };
   }, [schools]);
   const [busy, setBusy] = React.useState(false);
 
@@ -65,14 +70,16 @@ function ExportPage({ ctx }) {
       ],
     },
     {
-      n: '03', kind: 'top-gaps',
+      n: '03', kind: 'widest-gaps',
       title: 'Schools with the widest gaps',
-      rows: summary.top,
+      rows: summary.widest,
+      empty: `No school shows a measurable ${meta.groupA} − ${meta.groupB} deficit.`,
     },
     {
-      n: '04', kind: 'negative-gaps',
-      title: `Where ${meta.groupB} is ahead of ${meta.groupA}`,
-      rows: summary.bottom,
+      n: '04', kind: 'parity',
+      title: `Where ${meta.groupA} students are keeping pace`,
+      rows: summary.atParity,
+      empty: `No school reached parity this year — every measured gap leans toward ${meta.groupB}.`,
     },
     {
       n: '05', kind: 'hotspots',
@@ -219,23 +226,29 @@ function SlideBody({ slide, meta, sliceText, today, summary }) {
       </div>
     );
   }
-  if (slide.kind === 'top-gaps' || slide.kind === 'negative-gaps') {
+  if (slide.kind === 'widest-gaps' || slide.kind === 'parity') {
     return (
       <div style={{ position: 'absolute', inset: 0, padding: '8% 6% 6%', fontFamily: FONT }}>
         <div style={{ fontFamily: SERIF, fontSize: 11, fontWeight: 600, color: SLU.ink }}>{slide.title}</div>
         <div style={{ height: 1, background: SLU.rule2, marginTop: 4 }} />
-        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {slide.rows.map((s, i) => (
-            <div key={s.school_id} style={{ display: 'flex', alignItems: 'baseline', gap: 6,
-                                              fontFamily: MONO, fontSize: 8 }}>
-              <span style={{ width: 36, color: SLU.ink2 }}>{s.school_id}</span>
-              <span style={{ flex: 1, color: s.shrunk_gap >= 0 ? SLU.blue : SLU.gold, fontWeight: 600 }}>
-                {fmt2(s.shrunk_gap)}
-              </span>
-              <span style={{ color: SLU.mute }}>n={s.n_a + s.n_b}</span>
-            </div>
-          ))}
-        </div>
+        {slide.rows.length === 0 ? (
+          <div style={{ marginTop: 12, fontFamily: SERIF, fontSize: 9, fontStyle: 'italic', color: SLU.mute }}>
+            {slide.empty}
+          </div>
+        ) : (
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {slide.rows.map((s, i) => (
+              <div key={s.school_id} style={{ display: 'flex', alignItems: 'baseline', gap: 6,
+                                                fontFamily: MONO, fontSize: 8 }}>
+                <span style={{ width: 36, color: SLU.ink2 }}>{s.school_id}</span>
+                <span style={{ flex: 1, color: s.shrunk_gap >= 0 ? SLU.blue : SLU.neg, fontWeight: 600 }}>
+                  {fmt2(s.shrunk_gap)}
+                </span>
+                <span style={{ color: SLU.mute }}>n={s.n_a + s.n_b}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -254,7 +267,7 @@ function SlideBody({ slide, meta, sliceText, today, summary }) {
               </div>
               {h[k].map((c, i) => (
                 <div key={i} style={{ fontFamily: MONO, fontSize: 8, color: SLU.ink2, marginTop: 2 }}>
-                  {c.school} · G{c.grade} <span style={{ color: c.r >= 0 ? SLU.blue : SLU.gold, fontWeight: 600 }}>{fmt2(c.r)}</span>
+                  {c.school} · G{c.grade} <span style={{ color: c.r >= 0 ? SLU.blue : SLU.neg, fontWeight: 600 }}>{fmt2(c.r)}</span>
                 </div>
               ))}
             </div>
@@ -296,8 +309,10 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
   pres.author = 'GrowthLens';
   pres.title  = 'GrowthLens District Report';
 
-  const BLUE = '003DA5', INK = '1A1B1F', MUTE = '7B7E85', GOLD = '9A7611',
-        GOLD_LIGHT = 'C8A84A', RULE = 'EDEDEF', BG = 'FAFAFB';
+  // RUST = negative gaps (matches the figures); GOLD stays reserved for
+  // district-reference marks.
+  const BLUE = '003DA5', INK = '1A1B1F', MUTE = '6F727A', GOLD = '9A7611',
+        GOLD_LIGHT = 'C8A84A', RUST = '7C3A12', RULE = 'EDEDEF', BG = 'FAFAFB';
   const FONT_FACE = 'Mulish';
   const SERIF_FACE = 'Crimson Pro';
   const MONO_FACE = 'JetBrains Mono';
@@ -352,17 +367,33 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
     x: 0.7, y: 5.7, w: 12, h: 0.3, fontFace: FONT_FACE, fontSize: 10, color: MUTE, italic: true,
   });
 
-  // ---- 03 top gaps
+  // ---- 03 widest gaps (most negative — focal group trails the furthest)
   const s3 = pres.addSlide();
-  s3.addNotes(`The five schools with the widest gap, ${meta.groupA} ahead of ${meta.groupB}. When the likely range doesn’t cross zero, the gap is probably real and not just a quirk of a small sample. Schools with too few students to read reliably aren’t shown here.`);
-  addHeader(s3, '03 · Schools with the widest gaps', 'The five widest gaps, with each number nudged toward the district average and the range it most likely falls in. Schools with too few students to read reliably aren’t shown.');
-  addGapTable(s3, pres, summary.top, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+  if (summary.widest.length) {
+    s3.addNotes(`The schools with the widest gaps — where ${meta.groupA} students trail ${meta.groupB} the furthest. When the likely range doesn’t cross zero, the gap is probably real and not just a quirk of a small sample. Schools with too few students to read reliably aren’t shown here.`);
+    addHeader(s3, '03 · Schools with the widest gaps', `Where ${meta.groupA} students trail ${meta.groupB} the furthest, with each number nudged toward the district average and the range it most likely falls in.`);
+    addGapTable(s3, pres, summary.widest, BLUE, RUST, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+  } else {
+    s3.addNotes(`No school shows a measurable ${meta.groupA} deficit in this slice — a result worth saying out loud.`);
+    addHeader(s3, '03 · Schools with the widest gaps', null);
+    s3.addText(`No school shows a measurable ${meta.groupA} − ${meta.groupB} deficit.`, {
+      x: 0.7, y: 3, w: 12, h: 0.5, fontFace: SERIF_FACE, fontSize: 16, italic: true, color: MUTE,
+    });
+  }
 
-  // ---- 04 reversed gaps
+  // ---- 04 parity or better (gap ≥ 0 — focal group keeping pace or ahead)
   const s4 = pres.addSlide();
-  s4.addNotes(`The three schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA} — the rare bright spots worth studying for whatever they’re doing well.`);
-  addHeader(s4, `04 · Where ${meta.groupB} is ahead of ${meta.groupA}`, `Schools where ${meta.groupB} students are growing as fast as or faster than ${meta.groupA}.`);
-  addGapTable(s4, pres, summary.bottom, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+  if (summary.atParity.length) {
+    s4.addNotes(`Schools whose measured gap is at or above zero — ${meta.groupA} students growing as fast as or faster than ${meta.groupB}. Worth studying for whatever they’re doing well.`);
+    addHeader(s4, `04 · Where ${meta.groupA} students are keeping pace`, `Schools whose measured gap is at or above zero — ${meta.groupA} students growing as fast as or faster than ${meta.groupB}.`);
+    addGapTable(s4, pres, summary.atParity, BLUE, RUST, MUTE, RULE, INK, FONT_FACE, MONO_FACE);
+  } else {
+    s4.addNotes(`No school reached parity this year — every measured gap leans toward ${meta.groupB}. Use the widest-gaps slide to target support, and revisit this slide next year.`);
+    addHeader(s4, `04 · Where ${meta.groupA} students are keeping pace`, null);
+    s4.addText(`No school reached parity this year — every measured gap leans toward ${meta.groupB}.`, {
+      x: 0.7, y: 3, w: 12, h: 0.5, fontFace: SERIF_FACE, fontSize: 16, italic: true, color: MUTE,
+    });
+  }
 
   // ---- 05 system scan hotspots
   const s5 = pres.addSlide();
@@ -372,7 +403,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
   if (hs) {
     const cols = [
       { title: 'Above district average', list: hs.hot,  color: BLUE },
-      { title: 'Below district average', list: hs.cold, color: GOLD },
+      { title: 'Below district average', list: hs.cold, color: RUST },
     ];
     cols.forEach((c, i) => {
       const x = 0.7 + i * 6.2;
@@ -426,7 +457,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
 }
 
 function addHeader(slide, eyebrow, blurb) {
-  slide.addText(eyebrow, { x: 0.7, y: 0.6, w: 12, h: 0.4, fontFace: 'Mulish', fontSize: 11, color: '7B7E85', bold: true, charSpacing: 4 });
+  slide.addText(eyebrow, { x: 0.7, y: 0.6, w: 12, h: 0.4, fontFace: 'Mulish', fontSize: 11, color: '6F727A', bold: true, charSpacing: 4 });
   // eslint-disable-next-line no-unused-expressions
   slide.addShape('rect', { x: 0.7, y: 1.05, w: 12, h: 0.02, fill: { color: 'EDEDEF' }, line: { color: 'EDEDEF' } });
   if (blurb) {
@@ -434,7 +465,7 @@ function addHeader(slide, eyebrow, blurb) {
   }
 }
 
-function addGapTable(slide, pres, rows, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, MONO_FACE) {
+function addGapTable(slide, pres, rows, BLUE, RUST, MUTE, RULE, INK, FONT_FACE, MONO_FACE) {
   const head = [
     { text: 'School',     options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3 } },
     { text: 'Gap',        options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
@@ -444,7 +475,7 @@ function addGapTable(slide, pres, rows, BLUE, GOLD, MUTE, RULE, INK, FONT_FACE, 
   ];
   const body = rows.map(r => [
     { text: r.school_id, options: { fontFace: MONO_FACE, fontSize: 14, color: INK } },
-    { text: fmt2(r.shrunk_gap), options: { fontFace: MONO_FACE, fontSize: 14, color: r.shrunk_gap >= 0 ? BLUE : GOLD, bold: true, align: 'right' } },
+    { text: fmt2(r.shrunk_gap), options: { fontFace: MONO_FACE, fontSize: 14, color: r.shrunk_gap >= 0 ? BLUE : RUST, bold: true, align: 'right' } },
     { text: `[${fmt2(r.shrunk_ci95[0])}, ${fmt2(r.shrunk_ci95[1])}]`, options: { fontFace: MONO_FACE, fontSize: 12, color: '3F4147', align: 'right' } },
     { text: String(r.n_a + r.n_b), options: { fontFace: MONO_FACE, fontSize: 13, color: '3F4147', align: 'right' } },
     { text: r.shrinkage_factor.toFixed(2), options: { fontFace: MONO_FACE, fontSize: 13, color: MUTE, align: 'right' } },

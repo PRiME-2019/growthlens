@@ -28,10 +28,10 @@
     return { prefix, subject: PREFIX_TO_SUBJECT[prefix] || null };
   }
 
-  function parseFlag(v) {
-    const s = String(v == null ? '' : v).trim().toLowerCase();
-    return s === 'y' || s === '1' || s === 't' || s === 'true' || s === 'yes';
-  }
+  // Flag normalization happens in SQL inside loadSubjectFile:
+  //   lower(trim(col)) IN ('y','1','t','true','yes')
+  // A NULL flag yields NULL (not FALSE), so students with a missing flag are
+  // excluded from BOTH sides of a comparison rather than counted as "non-".
 
   function requiredColumns(prefix) {
     return [`${prefix}_Z_RESIDUAL`, `${prefix}_Z_RESIDUAL_SE`, `${prefix}_Z_T`, ...STRUCT_COLS, ...FLAG_COLS];
@@ -91,7 +91,18 @@
       FROM ${table}_all
       WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
         AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("GRADE" AS INTEGER) BETWEEN 3 AND 8
     `);
+
+    // Rows from the latest year that fell outside grades 3–8 (the only grades
+    // every page renders) — surfaced on the dropzone so the cut isn't silent.
+    const gradeDropRow = (await conn.query(`
+      SELECT count(*) AS n FROM ${table}_all
+      WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
+        AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
+        AND (TRY_CAST("GRADE" AS INTEGER) IS NULL OR TRY_CAST("GRADE" AS INTEGER) NOT BETWEEN 3 AND 8)
+    `)).toArray()[0];
+    const nDroppedGrades = Number(gradeDropRow.n);
 
     const stat = (await conn.query(`
       SELECT count(*) AS n, count(DISTINCT school_id) AS schools FROM ${table}
@@ -105,10 +116,11 @@
       meta: {
         subject: v.subject, prefix: P, latestYear,
         nSchools: Number(stat.schools), nRowsLatest, nDropped: totalAll - nRowsLatest,
+        nDroppedGrades,
         districtCode: null,
       },
     };
   }
 
-  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, parseFlag, requiredColumns, validate, loadSubjectFile };
+  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, requiredColumns, validate, loadSubjectFile };
 });

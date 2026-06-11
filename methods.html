@@ -27,7 +27,7 @@
     --gold-light: #C8A84A;
     --ink: #1A1B1F;
     --ink-2: #3F4147;
-    --mute: #7B7E85;
+    --mute: #6F727A;
     --rule: #D9D9DD;
     --rule-2: #EDEDEF;
     --bg: #F7F7F8;
@@ -205,7 +205,7 @@
 
   <h2>7 · Privacy and data handling</h2>
   <p>The short version: your data never leaves your browser tab, and you can check that yourself. All computation runs right in your browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — so loading a data file makes no third-party or CDN request, and once the page itself has opened, the analysis needs no further network access. (The app shell — React and fonts — does load from CDNs when the page first opens; your data is never part of any request.) Your CSV is parsed and queried entirely in the tab; it's never uploaded to a server, and no identifier, aggregate, or partial result is sent off the device. Want to confirm it? Open your browser's developer tools and watch the Network panel — you'll see no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and stores no student records in cookies or local storage.</p>
-  <p>The published methods, fixtures, and code are at <a href="https://github.com/SLU-PRiME/GrowthLens" target="_blank" rel="noopener">SLU-PRiME/GrowthLens</a> (link placeholder).</p>
+  <p>The published methods, fixtures, and code are at <a href="https://github.com/andrewmcamp/growthlens" target="_blank" rel="noopener">andrewmcamp/growthlens</a>.</p>
 
   <h2>8 · Recommended citation</h2>
   <p>If you cite GrowthLens in a report or presentation, here's the form we suggest:</p>

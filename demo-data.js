@@ -70,18 +70,19 @@
   // ---- DEMOGRAPHICS ----------------------------------------------------------
   // For each demographic variable, define groups with target (mean, sd, n).
   // We sample, summarize, and stash the box-plot stats.
+  // Binary comparisons list the focal group first (FRL, EL, IEP, …) to match
+  // the engine's focal − reference convention, and labels mirror the engine's
+  // wording where the same comparison exists in both.
   const DEMO_SPECS = {
     frl: {
-      label: 'FRL · Free / Reduced Lunch',
-      short: 'FRL',
+      label: 'FRL · economically disadvantaged',
       groups: [
-        { key: 'non_frl', label: 'non-FRL',   mean:  0.07,  sd: 0.49, n:  920 },
         { key: 'frl',     label: 'FRL',       mean: -0.07,  sd: 0.55, n: 1080 },
+        { key: 'non_frl', label: 'non-FRL',   mean:  0.07,  sd: 0.49, n:  920 },
       ],
     },
     race: {
       label: 'Race / Ethnicity',
-      short: 'Race',
       groups: [
         { key: 'white',     label: 'White',            mean:  0.07, sd: 0.49, n:  980 },
         { key: 'asian',     label: 'Asian',            mean:  0.10, sd: 0.46, n:   80 },
@@ -91,40 +92,35 @@
       ],
     },
     ell: {
-      label: 'EL · English Language Learner',
-      short: 'EL',
+      label: 'EL · English learners',
       groups: [
-        { key: 'non_el', label: 'non-EL', mean:  0.02, sd: 0.49, n: 1740 },
         { key: 'el',     label: 'EL',     mean: -0.10, sd: 0.55, n:  260 },
+        { key: 'non_el', label: 'non-EL', mean:  0.02, sd: 0.49, n: 1740 },
       ],
     },
     iep: {
-      label: 'IEP / SPED',
-      short: 'IEP',
+      label: 'IEP · students with disabilities',
       groups: [
-        { key: 'non_iep', label: 'non-IEP', mean:  0.02, sd: 0.48, n: 1760 },
         { key: 'iep',     label: 'IEP',     mean: -0.14, sd: 0.60, n:  240 },
+        { key: 'non_iep', label: 'non-IEP', mean:  0.02, sd: 0.48, n: 1760 },
       ],
     },
     gifted: {
       label: 'Gifted',
-      short: 'Gifted',
       groups: [
-        { key: 'non_gifted', label: 'non-Gifted', mean: -0.01, sd: 0.50, n: 1850 },
         { key: 'gifted',     label: 'Gifted',     mean:  0.19, sd: 0.42, n:  150 },
+        { key: 'non_gifted', label: 'non-Gifted', mean: -0.01, sd: 0.50, n: 1850 },
       ],
     },
     migrant: {
       label: 'Migrant',
-      short: 'Migrant',
       groups: [
-        { key: 'non_migrant', label: 'non-Migrant', mean:  0.01, sd: 0.49, n: 1950 },
         { key: 'migrant',     label: 'Migrant',     mean: -0.05, sd: 0.54, n:   50 },
+        { key: 'non_migrant', label: 'non-Migrant', mean:  0.01, sd: 0.49, n: 1950 },
       ],
     },
     gender: {
       label: 'Gender',
-      short: 'Gender',
       groups: [
         { key: 'female', label: 'Female', mean:  0.01, sd: 0.49, n: 1000 },
         { key: 'male',   label: 'Male',   mean: -0.01, sd: 0.51, n: 1000 },
@@ -188,42 +184,9 @@
     demoData[key] = { ...spec, key, groups, districtMean };
   });
 
-  // Per-school variant: same demographic specs, but sampled school-by-school
-  // with school-level random effects so the boxes differ per school.
   const SCHOOLS = (window.HEATMAP_DATA && window.HEATMAP_DATA.schools) || [];
-  const demoBySchool = {};
-  Object.entries(DEMO_SPECS).forEach(([demoKey, spec]) => {
-    demoBySchool[demoKey] = {};
-    SCHOOLS.forEach((s, si) => {
-      const rng = seeded(2000 + si * 17 + demoKey.length);
-      const schoolEffect = (gauss(rng) * 0.12); // school-level shift (residual scale)
-      const groups = spec.groups.map((g, gi) => {
-        const r = seeded(5000 + si * 31 + gi * 7 + demoKey.length);
-        const sampleN = 50 + Math.floor(r() * 70); // 50–120
-        const vals = [];
-        const groupShift = (gauss(r) * 0.05); // small per-group jitter
-        for (let i = 0; i < sampleN; i++) {
-          vals.push(g.mean + schoolEffect + groupShift + g.sd * mathDraw(r));
-        }
-        const stats = summarize(vals);
-        const outliers = stats.outliers.length > 8
-          ? stats.outliers.filter((_, i) => i % Math.ceil(stats.outliers.length / 8) === 0)
-          : stats.outliers;
-        return {
-          key: g.key, label: g.label, n: sampleN,
-          mean: stats.mean, median: stats.median,
-          q1: stats.q1, q3: stats.q3,
-          whiskerLo: stats.whiskerLo, whiskerHi: stats.whiskerHi,
-          min: stats.min, max: stats.max,
-          outliers,
-        };
-      });
-      demoBySchool[demoKey][s.school_id] = { groups };
-    });
-  });
 
   window.DEMO_DATA = demoData;
-  window.DEMO_DATA_BY_SCHOOL = demoBySchool;
   window.DEMO_SPECS = DEMO_SPECS;
 
   // ---- ACHIEVEMENT vs GROWTH -------------------------------------------------
@@ -249,8 +212,7 @@
         school_idx: si,
         hue,
         x: ach,
-        y_raw: gr,
-        y_shrunk: gr * 0.7 + schoolMean * 0.3, // toy shrinkage toward school
+        y_raw: gr,   // student level has no shrinkage; the figure forces raw here
       });
     }
   });
@@ -295,35 +257,8 @@
     };
   });
 
-  // OLS regression helper
-  function regression(points, yKey) {
-    const n = points.length;
-    let sx = 0, sy = 0, sxy = 0, sxx = 0, syy = 0;
-    points.forEach(p => {
-      sx += p.x; sy += p[yKey]; sxy += p.x * p[yKey]; sxx += p.x * p.x; syy += p[yKey] * p[yKey];
-    });
-    const mx = sx / n, my = sy / n;
-    const slope = (sxy - n * mx * my) / (sxx - n * mx * mx);
-    const intercept = my - slope * mx;
-    const ssTot = syy - n * my * my;
-    const ssRes = points.reduce((acc, p) => {
-      const yhat = intercept + slope * p.x;
-      return acc + (p[yKey] - yhat) ** 2;
-    }, 0);
-    const r2 = 1 - ssRes / ssTot;
-    return { slope, intercept, r2 };
-  }
-
   window.ACH_DATA = {
-    student: {
-      points: studentPoints,
-      reg_raw: regression(studentPoints, 'y_raw'),
-      reg_shrunk: regression(studentPoints, 'y_shrunk'),
-    },
-    school: {
-      points: schoolPoints,
-      reg_raw: regression(schoolPoints, 'y_raw'),
-      reg_shrunk: regression(schoolPoints, 'y_shrunk'),
-    },
+    student: { points: studentPoints },
+    school: { points: schoolPoints },
   };
 })();

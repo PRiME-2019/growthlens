@@ -115,7 +115,6 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
   const HCell = ({ children, descKey, ascKey, width, align = 'center', uppercase = false, grow = false }) => {
     const active = sort === descKey || sort === ascKey;
     const dir = sort === ascKey ? '▲' : sort === descKey ? '▼' : '';
-    const ariaSort = sort === ascKey ? 'ascending' : sort === descKey ? 'descending' : (sortable ? 'none' : undefined);
     const sharedStyle = {
       width, boxSizing: 'border-box', padding: '0 10px',
       ...(grow ? { flex: '1 1 0', minWidth: width } : {}),
@@ -136,8 +135,7 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
     return (
       <button type="button"
               onClick={() => cycle(descKey, ascKey)}
-              aria-sort={ariaSort}
-              aria-label={`${typeof children === 'string' ? children : 'Column'} — sort ${active ? (sort === ascKey ? 'ascending' : 'descending') : 'descending'}`}
+              aria-label={`${typeof children === 'string' ? children : 'Column'} — ${active ? `sorted ${sort === ascKey ? 'ascending' : 'descending'}, activate to flip` : 'activate to sort descending'}`}
               style={{
                 ...sharedStyle,
                 cursor: 'pointer',
@@ -208,12 +206,9 @@ function formatUnit(r, unit, opts) {
   return `${sign}${Math.abs(r).toFixed(2)}`;
 }
 
-function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}) {
+function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
   const data = window.HEATMAP_DATA;
-  // Controlled when the shell passes in setSortKey; uncontrolled otherwise.
-  const [sortLocal, setSortLocal] = React.useState(sortKey || 'mean_desc');
-  const sort    = setSortKey ? (sortKey || 'mean_desc') : sortLocal;
-  const setSort = setSortKey || setSortLocal;
+  const [sort, setSort] = React.useState('mean_desc');
   const [nMode, setNMode] = React.useState('hover');
   const [hover, setHover] = React.useState(null);
   const sorted = [...data.schools].sort(ROW_SORTS[sort].fn);
@@ -235,6 +230,10 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
         </div>
       }
     >
+      {/* Scrolls horizontally at narrow widths instead of crushing the grid. */}
+      <div style={{ overflowX: 'auto' }} role="group"
+           aria-label="Growth by school and grade, compared with the district average">
+      <div style={{ minWidth: idW + 7 * cellW }}>
       <ColumnHeader cellW={cellW} idW={idW} sort={sort} setSort={setSort} showOverall stretch />
       {sorted.map((s, i) => (
         <div key={s.school_id} style={{
@@ -327,6 +326,8 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z', sortKey, setSortKey } = {}
           })()}
         </div>
       ))}
+      </div>
+      </div>
     </HeatmapShell>
   );
 }

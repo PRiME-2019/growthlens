@@ -21,7 +21,7 @@ const SLU = {
   bg: '#F7F7F8',
   ink: '#1A1B1F',
   ink2: '#3F4147',
-  mute: '#7B7E85',
+  mute: '#6F727A',    // ≥4.5:1 on white — this gray carries lots of 11–12px labels
   rule: '#D9D9DD',
   rule2: '#EDEDEF',
   // Diverging dot fills (avoid color-only encoding; we always pair with shape/text)
@@ -40,6 +40,9 @@ const FONT  = '"Mulish", ui-sans-serif, system-ui, -apple-system, sans-serif';
 const SERIF = '"Crimson Pro", ui-serif, Georgia, "Times New Roman", serif';
 const LABEL = '"Archivo Narrow", "Mulish", ui-sans-serif, sans-serif';
 const MONO  = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+
+// Respect prefers-reduced-motion: chart files gate their CSS transitions on this.
+const MOTION_OK = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 // Domain extents derived from data (stable axis across variants).
 const AXIS = {
@@ -178,7 +181,7 @@ function SectionDivider({ label, count }) {
 }
 
 Object.assign(window, {
-  SLU, FONT, MONO, LABEL, SERIF, AXIS, xScale,
+  SLU, FONT, MONO, LABEL, SERIF, AXIS, xScale, MOTION_OK,
   fmt2, fmt2plain, weeksPerSD, wolFactorYear, zToWeeks, fmtVal, fmtCI,
   Select, SectionDivider,
 });

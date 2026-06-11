@@ -12,7 +12,7 @@ GrowthLens shows how each school is doing compared with the district as a whole,
 2. **Upload data** — drop in your reading (ELA) and math files from your assessment system. Each file is read and checked right here in your browser; nothing is uploaded. If something's off — a file dropped in the wrong subject slot, or a missing column — GrowthLens tells you on the spot so you can fix it.
 3. **System Scan** — a district-wide heat map of how each grade is doing at each school, with an overall column. Click any column header to re-sort. Scan it to spot where growth is consistently strong or soft before you dig into any one group.
 4. **Gap Analysis** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Switch between each school's own number and a steadied version, show results on a standard scale or as weeks of learning, and choose how to handle schools with too few students to read reliably.
-5. **Status & Growth** — two views at once: where students started along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
+5. **Status & Growth** — two views at once: where students scored this year along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
 6. **Demographics** — side-by-side box plots that compare growth from one student group to the next. The bundled demo shows seven groups; an uploaded file opens up five comparisons (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
 7. **Export** — builds a board-ready PowerPoint deck of what you're currently looking at, ready to edit.
 
@@ -69,7 +69,7 @@ vendor/duckdb/           pinned @duckdb/duckdb-wasm (EH single-thread) + apache-
 test/                    node --test specs for stats.js, the ingest helpers, and the store.
 ```
 
-The pipeline is upload → `ingest.loadSubjectFile` → `compute.computeSlice` → `store.putUploaded`, which swaps the `window.GAPS_DATA` / `HEATMAP_DATA` / `DEMO_DATA` / `DEMO_DATA_BY_SCHOOL` / `ACH_DATA` globals the figures already read. Figure render logic is unchanged; only the data behind those globals is now real.
+The pipeline is upload → `ingest.loadSubjectFile` → `compute.computeSlice` → `store.putUploaded`, which swaps the `window.GAPS_DATA` / `HEATMAP_DATA` / `DEMO_DATA` / `ACH_DATA` globals the figures already read. Figure render logic is unchanged; only the data behind those globals is now real.
 
 Run the tests:
 

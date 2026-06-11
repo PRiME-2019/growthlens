@@ -17,11 +17,14 @@
 // they consult window.WOL_OPTS (year + subject) and the loaded conversion-
 // factors JSON for grade × subject × year-aware weeks-of-learning.
 
-const TRANSITION = '420ms cubic-bezier(0.32, 0.72, 0.24, 1)';
+const TRANSITION = MOTION_OK ? '420ms cubic-bezier(0.32, 0.72, 0.24, 1)' : '0ms';
 
+// Gap sorts rank by whichever estimate is displayed (gapKey = raw_gap or
+// shrunk_gap), so Raw mode never shows visibly out-of-order rows — rows
+// re-order on the Method toggle and the position animation covers the move.
 const SORTS_FINAL = {
-  gap_desc:  { label: 'Gap (largest →)', fn: (a, b) => b.shrunk_gap - a.shrunk_gap },
-  gap_abs:   { label: '|Gap| (largest →)', fn: (a, b) => Math.abs(b.shrunk_gap) - Math.abs(a.shrunk_gap) },
+  gap_desc:  { label: 'Gap (largest →)', fn: (a, b, k) => b[k] - a[k] },
+  gap_abs:   { label: '|Gap| (largest →)', fn: (a, b, k) => Math.abs(b[k]) - Math.abs(a[k]) },
   alpha:     { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
   shrink:    { label: 'Nudged the most → least', fn: (a, b) => a.shrinkage_factor - b.shrinkage_factor },
   n:         { label: 'Total students (largest →)', fn: (a, b) => (b.n_a + b.n_b) - (a.n_a + a.n_b) },
@@ -33,22 +36,18 @@ const THRESHOLD_MODES = {
   hide:   { label: 'Hide' },
 };
 
-function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSortProp,
-                       threshold: thresholdProp, setThreshold: setThresholdProp } = {}) {
+function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thresholdProp } = {}) {
   const data = window.GAPS_DATA;
   const mode = estimate || 'shrunk';
   const unit = unitProp || 'z';
   const [view, setView] = React.useState('chart');          // 'chart' | 'table'
-  // Sort + Threshold are controlled from the shared Controls card when the
-  // parent passes them in; fall back to local state if used standalone.
-  const [sortLocal, setSortLocal] = React.useState('gap_desc');
-  const [thresholdLocal, setThresholdLocal] = React.useState('inline');
-  const sort = sortProp || sortLocal;
-  const setSort = setSortProp || setSortLocal;
-  const threshold = thresholdProp || thresholdLocal;
-  const setThreshold = setThresholdProp || setThresholdLocal;
+  // Sort + Threshold are owned by the shared Controls card; the defaults only
+  // matter if the figure is ever mounted standalone.
+  const sort = sortProp || 'gap_desc';
+  const threshold = thresholdProp || 'section';
 
-  const all = [...data.schools].sort(SORTS_FINAL[sort].fn);
+  const gapKey = mode === 'raw' ? 'raw_gap' : 'shrunk_gap';
+  const all = [...data.schools].sort((a, b) => SORTS_FINAL[sort].fn(a, b, gapKey));
   const meets = all.filter(s => s.meets_min_cell);
   const below = all.filter(s => !s.meets_min_cell);
   const visible = threshold === 'hide' ? meets : all;
@@ -108,18 +107,15 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
           </div>
         </div>
 
-        {/* Header row */}
-        {view === 'chart' && (
-          <HeaderRow plotW={PLOT_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
-        )}
-
-        {/* Body */}
+        {/* Body — chart scrolls horizontally at narrow widths instead of crushing */}
         {view === 'table' ? (
           <ForestTable schools={visible} meets={meets} below={below}
                        threshold={threshold} mode={mode} unit={unit}
                        districtGap={data.meta.districtGap} />
         ) : (
-          <div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 86 + 60 + 60 + PLOT_W }}>
+            <HeaderRow plotW={PLOT_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
             {threshold === 'section' ? (
               <>
                 {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotW={PLOT_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
@@ -136,6 +132,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, setSort: setSor
                             stripe={i % 2 === 1} dimmed={threshold === 'inline' && !s.meets_min_cell} />
               ))
             )}
+            </div>
           </div>
         )}
 
@@ -182,6 +179,7 @@ function ViewToggle({ view, setView }) {
         }} />
         {[['chart', 'Chart'], ['table', 'Table']].map(([k, label]) => (
           <button key={k} onClick={() => setView(k)}
+                  aria-pressed={view === k}
                   style={{
                     position: 'relative', zIndex: 1, border: 'none', background: 'transparent',
                     padding: '6px 14px', borderRadius: 999, cursor: 'pointer',
