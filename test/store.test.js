@@ -49,6 +49,20 @@ test('store: an unknown subgroup falls back to frl on the demo', () => {
   assert.equal(win.GAPS_DATA, demoGaps);
 });
 
+test('store: allGapSlices returns every comparison the active dataset carries', () => {
+  const { win, store, demoGaps } = freshStore();
+  store.seedDemo();
+  store.setActiveSubject('math');
+  const slices = store.allGapSlices();
+  assert.deepEqual(Object.keys(slices), ['frl']);   // mock demo ships frl only
+  assert.equal(slices.frl, demoGaps);
+  const iep = { meta: { subject: 'ela', demographic: 'iep' }, schools: [] };
+  store.putUploaded('ela', { GAPS_DATA_BY_DEMO: { frl: {}, iep }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} }, { subject: 'ela' });
+  store.setActiveSubject('ela');
+  assert.deepEqual(Object.keys(store.allGapSlices()).sort(), ['frl', 'iep']);
+  assert.equal(store.allGapSlices().iep, iep);
+});
+
 test('store: putUploaded(ela) makes ela available + active and shadows the right gaps', () => {
   const { win, store } = freshStore();
   store.seedDemo();

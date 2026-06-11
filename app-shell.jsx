@@ -954,6 +954,34 @@ function AuxCard({ title, children, padTop, collapsible, defaultOpen = true, hea
 }
 
 // ---- OVERVIEW CARD ----------------------------------------------------------
+// Plain-language bullets generated from the data (engine/insights.js) —
+// **bold** markers render as emphasis; caveat items render muted/italic.
+function KeyTakeaways({ items }) {
+  if (!items || items.length === 0) return null;
+  const renderMd = (text) => text.split('**').map((seg, i) =>
+    i % 2 === 1
+      ? <strong key={i} style={{ color: SLU.ink, fontWeight: 600 }}>{seg}</strong>
+      : seg);
+  return (
+    <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${SLU.rule2}` }}>
+      <StatLabel>Key takeaways</StatLabel>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none',
+                   display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ display: 'flex', gap: 9, alignItems: 'baseline',
+                               fontSize: 12, lineHeight: 1.5, maxWidth: 880,
+                               color: it.caveat ? SLU.mute : SLU.ink2,
+                               fontStyle: it.caveat ? 'italic' : 'normal' }}>
+            <span aria-hidden="true" style={{ color: it.caveat ? SLU.mute : SLU.gold,
+                                               fontSize: 10, lineHeight: 1.8 }}>▪</span>
+            <span>{renderMd(it.text)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // District-level numeric context for the current slice. Sits between the
 // page header and the figure — a quick "what does the district look like in
 // aggregate" reference before drilling into school-level detail.
@@ -974,8 +1002,19 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
   };
   const unitTag = isWk ? 'wk' : 'SD';
 
+  // Generated takeaways follow the global subject/units/method, but read
+  // across every comparison the dataset carries, not just the one on screen.
+  const takeaways = (window.GLInsights && window.GLStore)
+    ? window.GLInsights.gapTakeaways({
+        slices: window.GLStore.allGapSlices(),
+        activeKey: meta.demographic,
+        mode: estimate,
+        fmt: { val: (v) => `${fmtBig(v)} ${unitTag}` },
+      })
+    : [];
+
   return (
-    <AuxCard collapsible title={`Overview · ${meta.subject.toUpperCase()} · ${meta.groupA} − ${meta.groupB} · ${yr}`}>
+    <AuxCard title={`Overview · ${meta.subject.toUpperCase()} · ${meta.groupA} − ${meta.groupB} · ${yr}`}>
       <div style={{
         display: 'flex', flexWrap: 'wrap',
         gap: '20px 32px', alignItems: 'flex-start',
@@ -1052,6 +1091,7 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
           </div>
         </div>
       </div>
+      <KeyTakeaways items={takeaways} />
     </AuxCard>
   );
 }
@@ -1135,6 +1175,19 @@ function OverviewCardScan({ unit = 'z' }) {
   // they always match the heatmap legend.
   const isWk = unit === 'weeks';
 
+  // Generated takeaways follow the global units; per-grade values convert
+  // through the same { grade } context the heatmap cells use.
+  const takeaways = window.GLInsights
+    ? window.GLInsights.scanTakeaways({
+        heat: data,
+        fmt: { val: (v, o) => {
+          if (!isWk) return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' SD';
+          const w = Math.round(window.zToWeeks(v, o));
+          return (w >= 0 ? '+' : '−') + Math.abs(w) + ' wk';
+        } },
+      })
+    : [];
+
   const color = window.divColor || (() => '#fff');
   const byGrade = grades.map(g => {
     const cells = data.schools
@@ -1155,7 +1208,7 @@ function OverviewCardScan({ unit = 'z' }) {
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
 
   return (
-    <AuxCard collapsible title={`Overview · ${data.meta.subject.toUpperCase()} · how each grade is doing · ${yr}`}>
+    <AuxCard title={`Overview · ${data.meta.subject.toUpperCase()} · how each grade is doing · ${yr}`}>
       <div style={{
         display: 'flex', flexWrap: 'wrap',
         gap: '20px 36px', alignItems: 'flex-start',
@@ -1222,6 +1275,7 @@ function OverviewCardScan({ unit = 'z' }) {
           </div>
         </div>
       </div>
+      <KeyTakeaways items={takeaways} />
     </AuxCard>
   );
 }

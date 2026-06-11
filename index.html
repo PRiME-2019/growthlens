@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <!--
   GrowthLens - district-facing value-added interpretation tool
   Copyright (C) 2026 Andrew Camp
@@ -24,7 +24,7 @@
   body { font-family: "Mulish", ui-sans-serif, system-ui, sans-serif; background: #F7F7F8; color: #1A1B1F; }
   button { font-family: inherit; }
 
-  /* Initial loader — shown until React mounts and replaces #root children. */
+  /* Initial loader â€” shown until React mounts and replaces #root children. */
   #initial-loader {
     position: fixed; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -61,13 +61,14 @@
 <script src="heatmap-data.js"></script>
 <script src="demo-data.js"></script>
 <!-- Real ingestion engine. The import map resolves DuckDB-WASM's apache-arrow peer dependency
-     same-origin (there is no build step). The loader module attaches window.GL lazily — importing it
+     same-origin (there is no build step). The loader module attaches window.GL lazily â€” importing it
      only parses ~236 KB of JS; the 34 MB WASM + worker don't load until the first upload. -->
 <script type="importmap">
 { "imports": { "apache-arrow": "./vendor/duckdb/apache-arrow.mjs" } }
 </script>
 <script src="engine/stats.js"></script>
 <script src="engine/units.js"></script>
+<script src="engine/insights.js"></script>
 <script src="engine/ingest.js"></script>
 <script src="engine/compute.js"></script>
 <script src="engine/store.js"></script>
@@ -101,7 +102,7 @@
   </div>
 </div>
 <script type="text/babel">
-// Load grade × subject × year conversion factors before the first render so
+// Load grade Ã— subject Ã— year conversion factors before the first render so
 // the weeks-of-learning unit toggle has real data to look up. The initial
 // loader stays visible until this finishes; fallback to a typical MAP
 // constant if the fetch fails so the app still renders sensibly.
@@ -121,7 +122,7 @@
     // Don't strand the user on the pulsing "Loading" loader forever.
     console.error('GrowthLens failed to start:', e);
     const label = document.querySelector('.gl-loader-label');
-    if (label) label.textContent = 'Something went wrong while loading — please reload the page';
+    if (label) label.textContent = 'Something went wrong while loading â€” please reload the page';
     const rule = document.querySelector('.gl-loader-rule');
     if (rule) rule.style.animation = 'none';
   }

@@ -62,6 +62,12 @@
       const ds = resolve(activeSubject);
       return ds ? Object.keys(ds.shapes.GAPS_DATA_BY_DEMO || {}) : [];
     },
+    // Every comparison slice the active dataset carries — the key-takeaways
+    // generator reads across comparisons, not just the one on screen.
+    allGapSlices() {
+      const ds = resolve(activeSubject);
+      return ds ? (ds.shapes.GAPS_DATA_BY_DEMO || {}) : {};
+    },
     // Uploaded meta for one subject (null if only the demo backs it) — lets the
     // Upload page remember loaded files across remounts.
     getUploadedMeta(subject) { const ds = sources.uploaded[subject]; return ds ? ds.meta : null; },
