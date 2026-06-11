@@ -362,6 +362,32 @@ function AchievementFigure({ level, ctx }) {
           Growth vs. expected ({unitLabel})
         </text>
       </svg>
+
+      {/* School color legend — hue was the only school encoding, which left
+          non-hovering (and colorblind) users with nothing to read. */}
+      {(() => {
+        const sps = (window.ACH_DATA && window.ACH_DATA.school && window.ACH_DATA.school.points) || [];
+        if (!sps.length) return null;
+        const MAX_CHIPS = 24;
+        const shown = sps.slice(0, MAX_CHIPS);
+        return (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${SLU.rule2}`,
+                        display: 'flex', flexWrap: 'wrap', gap: '6px 14px',
+                        fontSize: 11, color: SLU.ink2, fontFamily: window.FONT }}>
+            {shown.map((p) => (
+              <span key={p.school_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%',
+                               background: `hsl(${p.hue}, 62%, 48%)`,
+                               boxShadow: '0 0 0 1px rgba(0,0,0,0.18)' }} />
+                {p.school_name && p.school_name !== p.school_id ? p.school_name : p.school_id}
+              </span>
+            ))}
+            {sps.length > MAX_CHIPS && (
+              <span style={{ color: SLU.mute }}>+ {sps.length - MAX_CHIPS} more — hover a dot for its name</span>
+            )}
+          </div>
+        );
+      })()}
     </section>
   );
 }

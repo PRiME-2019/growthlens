@@ -13,7 +13,7 @@ GrowthLens shows how each school is doing compared with the district as a whole,
 3. **System Scan** — a district-wide heat map of how each grade is doing at each school, with an overall column. Click any column header to re-sort. Scan it to spot where growth is consistently strong or soft before you dig into any one group.
 4. **Gap Analysis** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Switch between each school's own number and a steadied version, show results on a standard scale or as weeks of learning, and choose how to handle schools with too few students to read reliably.
 5. **Status & Growth** — two views at once: where students scored this year along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
-6. **Demographics** — side-by-side box plots that compare growth from one student group to the next. The bundled demo shows seven groups; an uploaded file opens up five comparisons (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
+6. **Demographics** — side-by-side box plots that compare growth from one student group to the next, across the same five comparisons in demo and uploaded data alike (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
 7. **Export** — builds a board-ready PowerPoint deck of what you're currently looking at, ready to edit.
 
 Want the details on how the numbers are made? The methods note lives in [methods.html](methods.html), linked from the sidebar and the FAQ.
@@ -86,7 +86,6 @@ The data layer is **real**: a district drops its own DESE files and every page r
 - **Settings / configurable min-n** — the threshold stays at the default (10); the Settings page remains a placeholder.
 - **Expanded subgroups** — the subgroup config is data-driven; v1 ships the five DESE comparisons.
 - **Shrunken-heatmap / shrunken-demographics variants.**
-- **Regenerating the bundled demo through the engine** — the forest and heatmap fixtures are now generated from one synthetic student dataset through the engine's stats module (`tools/build-demo.js`); the demographics and achievement fixtures (`demo-data.js`) are still procedurally sampled.
 
 **Roadmap:**
 - Production build (Vite + bundled production React) to replace in-browser Babel.
@@ -107,14 +106,16 @@ achievement.jsx         Status & Growth — achievement vs. growth scatter
 export.jsx              Export page — PPTX generation via PptxGenJS
 
 engine/                 real ingestion + computation engine (see Architecture)
-tools/build-demo.js     regenerates data.js + heatmap-data.js from synthetic students via engine/stats.js
+tools/build-demo.js     regenerates ALL demo fixtures (data.js + heatmap-data.js + demo-data.js)
+                        from one synthetic student dataset via engine/stats.js
 vendor/duckdb/          vendored DuckDB-WASM + Apache Arrow, same-origin (has its own README)
 test/                   node --test specs (stats, ingest helpers, store)
 
-data.js                 bundled Math demo (generated): 7 grade-banded schools, FRL gaps/CIs/B,
-                        engine-computed district gap + τ² (focal − reference signs)
+data.js                 bundled Math demo (generated): 7 grade-banded schools, all five DESE
+                        gap slices with CIs/B, engine-computed district gaps + τ² (focal − reference)
 heatmap-data.js         demo school × grade residual cells (3–5 elementary, 6–8 middle) + ok flags
-demo-data.js            demo demographics box-plots + achievement scatter (procedurally sampled)
+demo-data.js            demo demographics box-plots + achievement scatter (generated through
+                        engine/stats.js — raw/shrunken coherent by construction)
 
 methods.html            stand-alone methods note (linked from sidebar)
 prime-logo.png          asset; not currently referenced (final lockup is text-only)

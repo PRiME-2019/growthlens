@@ -75,7 +75,8 @@ const fmt2plain = (x) => x.toFixed(2);
 // district-pooled box plots) pass no grade and get the year × subject average
 // across grades 3–8.
 
-const FALLBACK_WEEKS_PER_SD = 132; // ≈ 38 / 0.29 — typical MAP convention if factors unavailable
+// The conversion math lives in engine/units.js (pure, Node-tested); these thin
+// wrappers resolve the app-state defaults (window.WOL_OPTS + the loaded factors).
 const DEFAULT_WOL_YEAR = 2025;
 
 function wolDefaults(opts = {}) {
@@ -85,50 +86,20 @@ function wolDefaults(opts = {}) {
         : (defaults.year != null ? defaults.year : DEFAULT_WOL_YEAR),
     subject: String(opts.subject != null ? opts.subject
         : (defaults.subject || 'ela')).toLowerCase(),
+    grade: opts.grade != null ? opts.grade : null,
   };
 }
 
-// The factor year actually used for (year, subject): the requested year when
-// factors exist, else the nearest year at or before it, else the earliest
-// available — far better than the crude constant. Null when no factors are
-// loaded at all. Exposed (as wolFactorYear) so footnotes can name the real
-// year instead of claiming the requested one after a silent fallback.
-function resolveFactorYear(year, subject) {
-  const cf = window.CONVERSION_FACTORS;
-  if (!cf || !Array.isArray(cf.factors)) return null;
-  if (cf.factors.some(f => f.year === year && f.subject === subject)) return year;
-  const years = [...new Set(cf.factors.filter(f => f.subject === subject).map(f => f.year))];
-  if (years.length === 0) return null;
-  const prior = years.filter(y => y <= year);
-  return prior.length ? Math.max(...prior) : Math.min(...years);
-}
-
+// The factor year actually used (after units.js's nearest-year fallback) — so
+// footnotes can name the real year instead of the requested one. Null when no
+// factors are loaded at all.
 function wolFactorYear(opts = {}) {
   const { year, subject } = wolDefaults(opts);
-  return resolveFactorYear(year, subject);
+  return window.GLUnits.resolveFactorYear(window.CONVERSION_FACTORS, year, subject);
 }
 
 function weeksPerSD(opts = {}) {
-  const { year, subject } = wolDefaults(opts);
-  const grade = opts.grade != null ? opts.grade : null;
-
-  const cf = window.CONVERSION_FACTORS;
-  if (!cf || !Array.isArray(cf.factors)) return FALLBACK_WEEKS_PER_SD;
-  const base = typeof cf.base_weeks === 'number' ? cf.base_weeks : 38;
-  const useYear = resolveFactorYear(year, subject);
-  if (useYear == null) return FALLBACK_WEEKS_PER_SD;
-  const matches = cf.factors.filter(f => f.year === useYear && f.subject === subject);
-
-  let es = null;
-  if (grade != null) {
-    const exact = matches.find(f => f.grade === grade);
-    if (exact) es = exact.annual_growth_effect_size;
-  }
-  if (es == null) {
-    es = matches.reduce((s, f) => s + f.annual_growth_effect_size, 0) / matches.length;
-  }
-  if (!es || !isFinite(es) || es <= 0) return FALLBACK_WEEKS_PER_SD;
-  return base / es;
+  return window.GLUnits.weeksPerSD(window.CONVERSION_FACTORS, wolDefaults(opts));
 }
 
 function zToWeeks(z, opts) { return z * weeksPerSD(opts); }

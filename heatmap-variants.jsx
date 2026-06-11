@@ -51,10 +51,28 @@ const N_MODES = {
 };
 
 // Diverging color scale. SCALE_MAX is where the color saturates — the residuals
-// are tight first-stage VAM residuals, so ±0.3 SD makes the school pattern pop;
-// SCALE_DARK is where a cell reads as a dark fill and wants a white glyph/number.
+// are tight first-stage VAM residuals, so ±0.3 SD makes the school pattern pop.
 const SCALE_MAX = 0.3;
-const SCALE_DARK = 0.18;
+
+// Ink selection by actual background luminance instead of a fixed |r| threshold —
+// the old cutoff left a mid-band (|r| ≈ 0.12–0.18) where dark brand glyphs sat on
+// medium fills with marginal contrast.
+function relLum(rgbStr) {
+  const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(rgbStr);
+  if (!m) return 1;
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(+m[1]) + 0.7152 * f(+m[2]) + 0.0722 * f(+m[3]);
+}
+// Number ink: white or near-black, whichever contrasts more with the fill.
+function cellInk(r) {
+  const L = relLum(divColor(r));
+  return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.0605) ? '#fff' : SLU.ink;
+}
+// Glyph ink: brand pos/neg only on light fills; otherwise follow the number ink.
+function glyphInk(r) {
+  if (cellInk(r) === '#fff') return '#fff';
+  return relLum(divColor(r)) > 0.6 ? (r >= 0 ? SLU.pos : SLU.neg) : SLU.ink;
+}
 
 // Diverging interpolator: residual ∈ [-SCALE_MAX, SCALE_MAX] → blue / white / rust.
 // Pair with shape (▲/▼) elsewhere so we never encode by color alone.
@@ -133,7 +151,7 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
       return <div style={sharedStyle}><span>{children}</span></div>;
     }
     return (
-      <button type="button"
+      <button type="button" role="columnheader"
               onClick={() => cycle(descKey, ascKey)}
               aria-label={`${typeof children === 'string' ? children : 'Column'} — ${active ? `sorted ${sort === ascKey ? 'ascending' : 'descending'}, activate to flip` : 'activate to sort descending'}`}
               style={{
@@ -152,8 +170,9 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
     );
   };
   return (
-    <div style={{ display: 'flex', width: stretch ? '100%' : 'auto',
-                  borderBottom: `1px solid ${SLU.rule}`, paddingBottom: 4, marginBottom: 2 }}>
+    <div role="row" style={{ display: 'flex', width: stretch ? '100%' : 'auto',
+                  borderBottom: `1px solid ${SLU.rule}`, paddingBottom: 4, marginBottom: 2,
+                  position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}>
       <HCell width={idW} align="left" uppercase descKey="alpha" ascKey="alpha_rev">School</HCell>
       {GRADES.map(g => (
         <HCell key={g} width={cellW} grow={stretch} descKey={`g${g}_desc`} ascKey={`g${g}_asc`}>{`Grade ${g}`}</HCell>
@@ -214,6 +233,33 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
   const sorted = [...data.schools].sort(ROW_SORTS[sort].fn);
   const cellW = 100, idW = 80;
 
+  // Keyboard grid: Tab enters at the first cell, arrows move cell-to-cell,
+  // focus reveals the student count (same affordance as hover).
+  const cellRefs = React.useRef({});
+  const focusPos = React.useRef({ r: 0, c: 0 });
+  const onGridKey = (e) => {
+    let { r, c } = focusPos.current;
+    if (e.key === 'ArrowRight') c++;
+    else if (e.key === 'ArrowLeft') c--;
+    else if (e.key === 'ArrowDown') r++;
+    else if (e.key === 'ArrowUp') r--;
+    else return;
+    e.preventDefault();
+    r = Math.max(0, Math.min(sorted.length - 1, r));
+    c = Math.max(0, Math.min(GRADES.length, c));   // GRADES.length = Overall column
+    const el = cellRefs.current[`${r}-${c}`];
+    if (el) { focusPos.current = { r, c }; el.focus(); }
+  };
+  const gridCellProps = (r, c, hoverKey, label) => ({
+    tabIndex: r === 0 && c === 0 ? 0 : -1,
+    ref: (el) => { cellRefs.current[`${r}-${c}`] = el; },
+    onKeyDown: onGridKey,
+    onFocus: () => { focusPos.current = { r, c }; setHover(hoverKey); },
+    onBlur: () => setHover(null),
+    role: 'gridcell',
+    'aria-label': label,
+  });
+
   return (
     <HeatmapShell
       title="How each grade is doing, school by school"
@@ -230,28 +276,38 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
         </div>
       }
     >
-      {/* Scrolls horizontally at narrow widths instead of crushing the grid. */}
-      <div style={{ overflowX: 'auto' }} role="group"
+      {/* Scrolls (both axes) at narrow widths / long school lists; the header
+          row stays pinned while rows scroll under it. */}
+      <div style={{ overflow: 'auto', maxHeight: '72vh' }}>
+      <div style={{ minWidth: idW + 7 * cellW }} role="grid"
            aria-label="Growth by school and grade, compared with the district average">
-      <div style={{ minWidth: idW + 7 * cellW }}>
       <ColumnHeader cellW={cellW} idW={idW} sort={sort} setSort={setSort} showOverall stretch />
       {sorted.map((s, i) => (
-        <div key={s.school_id} style={{
+        <div key={s.school_id} role="row" style={{
           display: 'flex', alignItems: 'stretch', height: 26, width: '100%',
           background: i % 2 === 0 ? '#fff' : '#FAFAFB',
         }}>
-          <div style={{ width: idW, boxSizing: 'border-box', padding: '0 10px', display: 'flex', alignItems: 'center',
+          <div role="rowheader" style={{ width: idW, boxSizing: 'border-box', padding: '0 10px', display: 'flex', alignItems: 'center',
                         fontFamily: MONO, fontSize: 12, color: SLU.ink2 }}>
             {s.school_id}
           </div>
-          {GRADES.map(g => {
+          {GRADES.map((g, gi) => {
             const raw = getResidual(s, g);
-            if (!raw) return <div key={g} style={{ width: cellW, boxSizing: 'border-box', flex: '1 1 0', minWidth: cellW, background: '#fff', border: `1px solid ${SLU.rule2}` }} />;
+            if (!raw) return (
+              <div key={g} {...gridCellProps(i, gi, null, `${s.school_id}, grade ${g}: grade not served`)}
+                   style={{ width: cellW, boxSizing: 'border-box', flex: '1 1 0', minWidth: cellW,
+                            background: '#fff', border: `1px solid ${SLU.rule2}`, outline: 'none' }} />
+            );
             const c = transformR(raw, estimate);
-            const showN = nMode === 'inline' || (nMode === 'hover' && hover === `${s.school_id}-${g}`);
+            const hoverKey = `${s.school_id}-${g}`;
+            const showN = nMode === 'inline' || (nMode === 'hover' && hover === hoverKey);
+            const label = c.ok
+              ? `${s.school_id}, grade ${g}: ${formatUnit(c.r, unit, { grade: g })}${unit === 'weeks' ? ' weeks' : ' SD'}, ${c.n} students`
+              : `${s.school_id}, grade ${g}: too few students to read reliably (${c.n})`;
             return (
-              <div key={g} onMouseEnter={() => setHover(`${s.school_id}-${g}`)}
+              <div key={g} onMouseEnter={() => setHover(hoverKey)}
                             onMouseLeave={() => setHover(null)}
+                            {...gridCellProps(i, gi, hoverKey, label)}
                             style={{
                               width: cellW, boxSizing: 'border-box', flex: '1 1 0', minWidth: cellW, position: 'relative',
                               background: c.ok ? divColor(c.r) : '#fff',
@@ -259,18 +315,20 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
                               borderBottom: '1px solid rgba(255,255,255,0.6)',
                               backgroundImage: c.ok ? 'none' : `repeating-linear-gradient(45deg, ${SLU.rule} 0 1px, transparent 1px 6px)`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontFamily: MONO, fontSize: 11, color: Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.ink,
+                              fontFamily: MONO, fontSize: 11, color: c.ok ? cellInk(c.r) : SLU.ink,
+                              outline: 'none',
+                              boxShadow: hover === hoverKey ? `inset 0 0 0 2px ${SLU.blue}` : 'none',
                             }}>
                 {c.ok ? (
                   <>
                     <span style={{ position: 'relative' }}>
-                      <span style={{ marginRight: 3, color: c.r >= 0 ? (Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.pos) : (Math.abs(c.r) > SCALE_DARK ? '#fff' : SLU.neg) }}>
+                      <span style={{ marginRight: 3, color: glyphInk(c.r) }}>
                         {c.r >= 0 ? '▲' : '▼'}
                       </span>
                       {formatUnit(c.r, unit, { grade: g })}
                     </span>
                     {showN && (
-                      <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9, color: Math.abs(c.r) > SCALE_DARK ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
+                      <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9, color: cellInk(c.r) === '#fff' ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
                         n={c.n}
                       </span>
                     )}
@@ -294,11 +352,15 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
                   return a + r * c.n;
                 }, 0) / totalN
               : 0;
-            const dark = Math.abs(overall) > SCALE_DARK;
             const above = overall >= 0;
+            const hoverKey = `${s.school_id}-overall`;
+            const label = totalN > 0
+              ? `${s.school_id}, overall: ${formatUnit(overall, unit)}${unit === 'weeks' ? ' weeks' : ' SD'}, ${totalN} students`
+              : `${s.school_id}, overall: no reliable cells`;
             return (
-              <div onMouseEnter={() => setHover(`${s.school_id}-overall`)}
+              <div onMouseEnter={() => setHover(hoverKey)}
                    onMouseLeave={() => setHover(null)}
+                   {...gridCellProps(i, GRADES.length, hoverKey, label)}
                    style={{
                 width: cellW, boxSizing: 'border-box', position: 'relative',
                 background: divColor(overall),
@@ -306,18 +368,20 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
                 borderBottom: '1px solid rgba(255,255,255,0.6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: MONO, fontSize: 11, fontWeight: 600,
-                color: dark ? '#fff' : SLU.ink,
+                color: cellInk(overall),
                 flex: '1 1 0', minWidth: cellW,
+                outline: 'none',
+                boxShadow: hover === hoverKey ? `inset 0 0 0 2px ${SLU.blue}` : 'none',
               }}>
                 <span style={{ position: 'relative' }}>
-                  <span style={{ marginRight: 3, color: above ? (dark ? '#fff' : SLU.pos) : (dark ? '#fff' : SLU.neg) }}>
+                  <span style={{ marginRight: 3, color: glyphInk(overall) }}>
                     {above ? '▲' : '▼'}
                   </span>
                   {formatUnit(overall, unit)}
                 </span>
-                {(nMode === 'inline' || (nMode === 'hover' && hover === `${s.school_id}-overall`)) && totalN > 0 && (
+                {(nMode === 'inline' || (nMode === 'hover' && hover === hoverKey)) && totalN > 0 && (
                   <span style={{ position: 'absolute', right: 4, top: 1, fontSize: 9,
-                                  color: dark ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
+                                  color: cellInk(overall) === '#fff' ? 'rgba(255,255,255,0.85)' : SLU.mute }}>
                     n={totalN}
                   </span>
                 )}
@@ -345,4 +409,5 @@ function SuppressedSwatch() {
 
 window.HeatmapH1 = HeatmapH1;
 window.divColor = divColor;
-window.HEATMAP_SCALE_DARK = SCALE_DARK;
+window.heatCellInk = cellInk;
+window.heatGlyphInk = glyphInk;

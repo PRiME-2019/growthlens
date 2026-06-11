@@ -43,12 +43,25 @@ horizontally at narrow widths; demo fixture aligned to engine (focal-first order
 labels); methods.html links the real repo. Verified by a 17-step browser smoke across all
 pages in demo + uploaded states, zero console errors.
 
-**Still open (consciously deferred):** full table/grid semantics for the heatmap; a school
-legend for the hue-only scatter encoding; sticky heatmap header on long lists; heatmap
-mid-band glyph contrast tuning; heatmap cell keyboard focus; ControlsCard auto-vs-manual
-collapse interplay; quadrant counts when the mean cross is hidden (intentional per blurb);
-compute.js / weeksPerSD test coverage; regenerating the demo achievement/demographics
-fixtures through the engine; the weeks-of-learning methodology note.
+**Fourth session — backlog closed out:** the demo is now fully engine-generated
+(tools/build-demo.js emits data.js with ALL five gap slices, heatmap-data.js, and
+demo-data.js; every "Groups to compare" option is real in demo mode; raw/shrunken coherent
+by construction; seed 20260627 chosen so every slice has τ² > 0). Heatmap upgraded:
+role=grid semantics with per-cell aria-labels, roving-tabindex arrow-key navigation
+(focus reveals n), sticky header inside a 72vh scroll region, and luminance-computed
+cell/glyph inks replacing the fixed dark threshold (Scan overview included). Status &
+Growth gained a school color legend (chips, capped at 24). Unit conversion extracted to
+engine/units.js (pure, 10 tests incl. the year-fallback matrix); compute.js gets 4 tests
+via a fake DuckDB connection (five comparisons + signs, districtMean + both-tail
+outliers, the τ² raw fallback, the null-status filter) — suite now 52/52.
+data-prep/notes/methodology.md drafted (marked DRAFT) from the R script's actual
+behavior. Verified by a 19-step browser smoke incl. Weeks-toggle (GLUnits delegation)
+and keyboard-grid probes, zero console errors.
+
+**Remaining (intentional/by design):** ControlsCard auto-vs-manual collapse interplay
+(documented behavior); quadrant counts when the mean cross is hidden (matches the blurb);
+the methodology DRAFT needs PRiME review and the methods note still doesn't explain the
+weeks conversion to end users.
 
 ## Open — high priority (all FIXED — see status update)
 

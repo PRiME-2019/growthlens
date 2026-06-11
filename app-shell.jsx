@@ -1167,12 +1167,9 @@ function OverviewCardScan() {
             {byGrade.filter((b) => b.n > 0).map(({ g, n, schoolCount, mean }) => {
               const abs = Math.abs(mean).toFixed(2);
               const above = mean >= 0;
-              // Same glyph-color rule as HeatmapH1: invert to white when the
-              // diverging fill is dark enough that the brand pos/neg ink loses
-              // contrast (past the heatmap's SCALE_DARK threshold).
-              const glyphColor = Math.abs(mean) > (window.HEATMAP_SCALE_DARK || 0.18)
-                ? '#fff'
-                : (above ? SLU.pos : SLU.neg);
+              // Same luminance-based ink rules as HeatmapH1's cells.
+              const glyphColor = window.heatGlyphInk ? window.heatGlyphInk(mean) : (above ? SLU.pos : SLU.neg);
+              const numColor = window.heatCellInk ? window.heatCellInk(mean) : SLU.ink;
               return (
                 <div key={g} style={{
                   flex: '1 1 0', minWidth: 60,
@@ -1189,7 +1186,7 @@ function OverviewCardScan() {
                   </div>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 600, fontFamily: MONO,
-                                   color: SLU.ink, letterSpacing: -0.5, lineHeight: 1,
+                                   color: numColor, letterSpacing: -0.5, lineHeight: 1,
                                    display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
                       <span style={{ color: glyphColor, fontSize: 14, lineHeight: 1 }}>
                         {above ? '▲' : '▼'}

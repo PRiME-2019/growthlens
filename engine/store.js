@@ -9,10 +9,12 @@
     sources.demo.math = {
       meta: { subject: 'math', source: 'demo', label: 'bundled demo data', nSchools: (window.GAPS_DATA?.meta?.nSchools) || 30, year: '2024–25' },
       shapes: {
-        GAPS_DATA_BY_DEMO: { frl: window.GAPS_DATA },   // demo only ships FRL; others fall back to it
+        // The generated demo ships all five comparisons (GAPS_DATA_DEMO_ALL);
+        // the frl-only fallback covers older fixtures and test mocks.
+        GAPS_DATA_BY_DEMO: window.GAPS_DATA_DEMO_ALL || { frl: window.GAPS_DATA },
         HEATMAP_DATA: window.HEATMAP_DATA, DEMO_DATA: window.DEMO_DATA,
         ACH_DATA: window.ACH_DATA,
-        DEMO_SPECS: window.DEMO_SPECS,                   // demo's rich variable specs; uploads derive theirs
+        DEMO_SPECS: window.DEMO_SPECS,                   // optional; derived from DEMO_DATA when absent
       },
     };
   }
