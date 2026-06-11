@@ -19,56 +19,32 @@
 
 const TRANSITION = MOTION_OK ? '420ms cubic-bezier(0.32, 0.72, 0.24, 1)' : '0ms';
 
-// Gap sorts rank by whichever estimate is displayed (gapKey = raw_gap or
-// shrunk_gap), so Raw mode never shows visibly out-of-order rows — rows
-// re-order on the Method toggle and the position animation covers the move.
-const SORTS_FINAL = {
-  gap_desc:  { label: 'Gap (largest →)', fn: (a, b, k) => b[k] - a[k] },
-  gap_abs:   { label: '|Gap| (largest →)', fn: (a, b, k) => Math.abs(b[k]) - Math.abs(a[k]) },
-  alpha:     { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
-  shrink:    { label: 'Nudged the most → least', fn: (a, b) => a.shrinkage_factor - b.shrinkage_factor },
-  n:         { label: 'Total students (largest →)', fn: (a, b) => (b.n_a + b.n_b) - (a.n_a + a.n_b) },
-};
-
-const THRESHOLD_MODES = {
-  inline: { label: 'Mark in place (dimmed)' },
-  section: { label: 'Group at the bottom' },
-  hide:   { label: 'Hide' },
-};
-
-function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thresholdProp } = {}) {
+function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}, disabledDemos = [] } = {}) {
   const data = window.GAPS_DATA;
   const mode = estimate || 'shrunk';
   const unit = unitProp || 'z';
   const [view, setView] = React.useState('chart');          // 'chart' | 'table'
-  // Sort + Threshold are owned by the shared Controls card; the defaults only
-  // matter if the figure is ever mounted standalone.
-  const sort = sortProp || 'gap_desc';
-  const threshold = thresholdProp || 'section';
 
   const gapKey = mode === 'raw' ? 'raw_gap' : 'shrunk_gap';
-  // Zero-side schools carry null estimates — they always sort last, since
-  // every comparator reads numeric fields they don't have.
-  const cmpFn = SORTS_FINAL[sort].fn;
+  // Fixed order: largest gap first by the displayed estimate (rows re-sort on
+  // the Method toggle and the position animation covers the move). Zero-side
+  // schools carry null estimates and always sort last.
   const all = [...data.schools].sort((a, b) => {
     const an = a[gapKey] == null, bn = b[gapKey] == null;
     if (an || bn) return an === bn ? 0 : (an ? 1 : -1);
-    return cmpFn(a, b, gapKey);
+    return b[gapKey] - a[gapKey];
   });
   const meets = all.filter(s => s.meets_min_cell);
   const below = all.filter(s => !s.meets_min_cell);
-  const visible = threshold === 'hide' ? meets : all;
 
   // Axis domain — symmetric around zero, so the favors-A and favors-B halves
   // of the plot are the same size and zero sits at the center. The extent
-  // auto-ranges from what's actually displayed: the active method's CIs (raw
-  // OR shrunken, not their union), minus any schools the threshold control
-  // hides, plus the district line. Toggling Method re-scales the axis — ticks
-  // jump to the new domain while the bars' CSS transitions tween into the
-  // new projection.
+  // auto-ranges from the active method's CIs (raw OR shrunken, not their union)
+  // plus the district line. Toggling Method re-scales the axis — ticks jump to
+  // the new domain while the bars' CSS transitions tween into the new projection.
   const axis = React.useMemo(() => {
     const ciKey = mode === 'raw' ? 'raw_ci95' : 'shrunk_ci95';
-    const pool = threshold === 'hide' ? data.schools.filter(s => s.meets_min_cell) : data.schools;
+    const pool = data.schools;
     // Zero-side schools carry null CIs, and non-finite bounds (a degenerate
     // cell that slipped into the data) are excluded — a single NaN would
     // otherwise NaN the whole scale and pile every marker onto one spot.
@@ -89,7 +65,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
       ticks.push(Math.round(t * 100) / 100);
     }
     return { min, max, ticks };
-  }, [data, mode, threshold]);
+  }, [data, mode]);
 
   // Plot column is fluid — it absorbs whatever width the card has beyond the
   // fixed label/n columns — with a floor below which the chart scrolls
@@ -107,8 +83,7 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
       boxShadow: '0 1px 2px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.04)',
       padding: 24, fontFamily: FONT,
     }}>
-        {/* Title row — figure title + view toggle. Sort & threshold live in the
-            shared Controls card above. */}
+        {/* Title row — figure title + Compare select + view toggle. */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
                       flexWrap: 'wrap', gap: 12, rowGap: 14, marginBottom: 14 }}>
           <div style={{ flex: '1 1 280px', minWidth: 0 }}>
@@ -122,16 +97,17 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
               {data.meta.nMeetingThreshold}/{data.meta.nSchools} schools meet n≥{data.meta.minCellSize}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap',
                          rowGap: 10, justifyContent: 'flex-end' }}>
+            {setDemo && <CompareSelect value={demo} onChange={setDemo}
+                                       options={demoOptions} disabledKeys={disabledDemos} />}
             <ViewToggle view={view} setView={setView} />
           </div>
         </div>
 
         {/* Body — chart scrolls horizontally at narrow widths instead of crushing */}
         {view === 'table' ? (
-          <ForestTable schools={visible} meets={meets} below={below}
-                       threshold={threshold} mode={mode} unit={unit}
+          <ForestTable meets={meets} below={below} mode={mode} unit={unit}
                        districtGap={data.meta.districtGap}
                        districtCi={data.meta.districtCi95 || null}
                        groupA={data.meta.groupA} groupB={data.meta.groupB} />
@@ -140,21 +116,12 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
             <div style={{ minWidth: MIN_CHART_W }}>
             <HeaderRow plotMinW={PLOT_MIN_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
             <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} />
-            {threshold === 'section' ? (
+            {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
+            {below.length > 0 && (
               <>
-                {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} />)}
-                {below.length > 0 && (
-                  <>
-                    <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
-                    {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
-                  </>
-                )}
+                <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
+                {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed />)}
               </>
-            ) : (
-              visible.map((s, i) => (
-                <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H}
-                            stripe={i % 2 === 1} dimmed={threshold === 'inline' && !s.meets_min_cell} />
-              ))
             )}
             </div>
           </div>
@@ -182,6 +149,29 @@ function ForestFinal({ estimate, unit: unitProp, sort: sortProp, threshold: thre
           )}
         </div>
     </div>
+  );
+}
+
+// Which comparison this figure (and the Export deck) slices by. Lives on the
+// card because it defines what the figure compares; subject/units/method are
+// global in the sidebar panel.
+function CompareSelect({ value, onChange, options, disabledKeys = [] }) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 11, fontFamily: LABEL, color: SLU.mute,
+                      textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
+        Compare
+      </span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+        fontFamily: FONT, fontSize: 12.5, color: SLU.ink, padding: '7px 26px 7px 12px',
+        border: `1px solid ${SLU.rule}`, borderRadius: 999, background: '#fff', cursor: 'pointer',
+      }}>
+        {Object.entries(options).map(([k, v]) => {
+          const off = disabledKeys.includes(k);
+          return <option key={k} value={k} disabled={off}>{v}{off ? ' (not in this data)' : ''}</option>;
+        })}
+      </select>
+    </label>
   );
 }
 
@@ -219,11 +209,9 @@ function ViewToggle({ view, setView }) {
 // ---- TABLE VIEW -------------------------------------------------------------
 // Same data as the forest rows, in a plain dense table. Most useful for export
 // and for users who'd rather scan numbers than aim at dots.
-function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap, districtCi, groupA, groupB }) {
-  const rows = threshold === 'section'
-    ? [...meets, ...below]
-    : schools;
-  const dividerAt = threshold === 'section' ? meets.length : -1;
+function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA, groupB }) {
+  const rows = [...meets, ...below];
+  const dividerAt = meets.length;
   // Pooled Ns mirror the chart's District panel: only schools meeting the
   // cell-size floor feed the pooled mean.
   const dNa = meets.reduce((t, s) => t + s.n_a, 0);
@@ -263,9 +251,8 @@ function ForestTable({ schools, meets, below, threshold, mode, unit, districtGap
             const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
             const ci  = mode === 'raw' ? s.raw_ci95 : s.shrunk_ci95;
             const noEst = gap == null || ci == null;   // zero-side school
-            const dimmed = threshold === 'inline' && !s.meets_min_cell
-                          || (threshold === 'section' && i >= dividerAt);
-            const sectionStart = i === dividerAt && threshold === 'section' && below.length > 0;
+            const dimmed = i >= dividerAt;
+            const sectionStart = i === dividerAt && below.length > 0;
             const vs = noEst ? null : gap - districtGap;
             const isNeg = !noEst && gap < 0;
             return (
@@ -712,5 +699,3 @@ function LegendSwatch({ groupA, groupB }) {
 }
 
 window.ForestFinal = ForestFinal;
-window.SORTS_FINAL = SORTS_FINAL;
-window.THRESHOLD_MODES = THRESHOLD_MODES;

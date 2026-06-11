@@ -82,10 +82,6 @@ function AppBody() {
     loadAnalysisPrefs().estimate === 'raw' ? 'raw' : 'shrunk');
   const [unit, setUnit] = React.useState(() =>
     loadAnalysisPrefs().unit === 'weeks' ? 'weeks' : 'z');
-  const [forestSort, setForestSort] = React.useState('gap_desc');
-  // Default threshold mode: 'section' splits below-threshold schools into a labeled
-  // group at the bottom of the forest. (Matches the Upload-page FAQ copy.)
-  const [threshold, setThreshold] = React.useState('section');
   // scanSort is no longer in ctx — HeatmapH1 manages its own column-click sort.
   const [demoVar, setDemoVar]     = React.useState('frl');
   const [achLevel, setAchLevel]   = React.useState('school');
@@ -152,8 +148,7 @@ function AppBody() {
 
   const ctx = {
     page, setPage, subject, setSubject, disabledSubjects, demo, setDemo, disabledDemos,
-    estimate, setEstimate, unit, setUnit, forestSort, setForestSort,
-    threshold, setThreshold,
+    estimate, setEstimate, unit, setUnit,
     demoVar, setDemoVar,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
@@ -882,7 +877,6 @@ function GapPage({ sliceLabel, ctx }) {
       <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
                    title="Where the gap lives, school by school"
                    blurb={'For the two groups you choose, GrowthLens measures the gap between them at every school and lines the schools up from largest to smallest. You’ll see how big each gap is and which way it leans, the district-wide average for context, and which schools have too few students to read reliably. Use it to tell whether a gap shows up across the system or sits in just a few schools.'} />
-      <ControlsCard title="Controls" slice={sliceLabel}><GapControls ctx={ctx} /></ControlsCard>
       <OverviewCardGap />
       <ForestSlot ctx={ctx} />
     </>
@@ -1408,57 +1402,6 @@ const METHOD_OPT_HINTS = {
 };
 const UNIT_HINT = 'How to show the numbers. SD is a standard scale compared with the district average. Weeks converts that into about how many weeks of learning it represents, using Missouri MAP growth norms.';
 
-// Mirrors SORTS_FINAL in forest-final.jsx (the live source of options); only
-// used if that file failed to load. Keys must stay in sync — an unknown key
-// would crash the forest's sort lookup.
-const SORTS_FALLBACK = {
-  gap_desc: 'Gap (largest →)',
-  gap_abs:  '|Gap| (largest →)',
-  alpha:    'School ID',
-  shrink:   'Nudged the most → least',
-  n:        'Total students (largest →)',
-};
-const THRESH_FALLBACK = {
-  inline:  'Mark in place (dimmed)',
-  section: 'Group at the bottom',
-  hide:    'Hide',
-};
-
-function flattenOptionMap(map, fallback) {
-  if (!map) return fallback;
-  const out = {};
-  for (const [k, v] of Object.entries(map)) {
-    out[k] = (v && typeof v === 'object') ? (v.label ?? String(k)) : v;
-  }
-  return out;
-}
-function GapControls({ ctx }) {
-  const sortOpts   = flattenOptionMap(window.SORTS_FINAL,     SORTS_FALLBACK);
-  const threshOpts = flattenOptionMap(window.THRESHOLD_MODES, THRESH_FALLBACK);
-  return (
-    <ControlsGrid>
-      <CGroup title="Show">
-        <CSegmented value={ctx.subject} onChange={ctx.setSubject} options={SUBJECTS} label="Subject" disabledKeys={ctx.disabledSubjects} />
-        <CSelect value={ctx.demo} onChange={ctx.setDemo} options={DEMOS} label="Groups to compare"
-                 disabledKeys={ctx.disabledDemos} disabledHint="(not in this data)" />
-      </CGroup>
-      <CGroup title="How it’s figured">
-        <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                    options={METHOD_OPTS} label="Method"
-                    hint={METHOD_HINT} optionHints={METHOD_OPT_HINTS} />
-        <CSegmented value={ctx.unit} onChange={ctx.setUnit}
-                    options={{ z: 'SD', weeks: 'Weeks' }} label="Units"
-                    hint={UNIT_HINT} />
-      </CGroup>
-      <CGroup title="Order">
-        <CSelect value={ctx.forestSort} onChange={ctx.setForestSort}
-                 options={sortOpts} label="Sort" />
-        <CSelect value={ctx.threshold} onChange={ctx.setThreshold}
-                 options={threshOpts} label="Small groups" />
-      </CGroup>
-    </ControlsGrid>
-  );
-}
 function ScanControls({ ctx }) {
   return (
     <ControlsGrid>
@@ -1480,8 +1423,8 @@ function ForestSlot({ ctx }) {
     <window.ForestFinal
       estimate={ctx.estimate}
       unit={ctx.unit}
-      sort={ctx.forestSort}
-      threshold={ctx.threshold}
+      demo={ctx.demo} setDemo={ctx.setDemo}
+      demoOptions={DEMOS} disabledDemos={ctx.disabledDemos}
     />
   );
   return <PlaceholderCard label="Forest plot" h={680} />;
