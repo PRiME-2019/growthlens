@@ -198,7 +198,7 @@ function ScaleLegend({ unit = 'z' }) {
       <span style={{ marginLeft: 12 }}>−{SCALE_MAX} ··· 0 ··· +{SCALE_MAX} SD</span>
       {unit === 'weeks' && (
         <span style={{ color: SLU.mute, fontFamily: FONT }}>
-          — cells show weeks, but shades stay keyed to SD so colors compare across views
+          — numbers are in weeks of learning; the colors always follow the SD scale above
         </span>
       )}
     </div>

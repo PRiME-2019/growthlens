@@ -101,7 +101,7 @@ function OverviewCardDemo({ data, label, ctx }) {
           </div>
         )}
         <div style={{ minWidth: 180 }}>
-          <window.StatLabel>Students in view</window.StatLabel>
+          <window.StatLabel>Students included</window.StatLabel>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
             <span style={big}>{totalN.toLocaleString()}</span>
           </div>

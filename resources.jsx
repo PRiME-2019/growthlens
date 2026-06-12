@@ -77,7 +77,7 @@ function ResourcesPage({ ctx }) {
   if (csvs.status === 'loading') {
     body = <StateCard>Loading the resource library…</StateCard>;
   } else if (csvs.status === 'error') {
-    body = <StateCard>The resource library didn’t load (reference/*.csv). Check the files are being served and revisit this page to retry.</StateCard>;
+    body = <StateCard>The resource library didn’t load. Check your internet connection, then come back to this page to try again.</StateCard>;
   } else {
     const bySubject = window.GLStore ? window.GLStore.allSubjectsData() : {};
     const findings = window.GLResources.detectFindings({ bySubject });
@@ -88,19 +88,18 @@ function ResourcesPage({ ctx }) {
       <>
         {sections.length === 0 && (
           <StateCard>
-            None of the patterns this page watches for — subgroup gaps clear of
-            zero, grade bands growing below expectations — stand out from noise
-            in the loaded data. That’s good news. The broad-evidence resources
-            below apply all the same.
+            No clear patterns stand out in your data right now — no group gap
+            that’s clearly more than chance, and no grade span growing well
+            below expectations. That’s good news. The resources below are
+            still worth knowing.
           </StateCard>
         )}
         {sections.map((sec, i) => <FindingCard key={i} section={sec} fmtV={fmtV} />)}
         {general.length > 0 && (
           <window.AuxCard title="Worth knowing regardless">
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5, maxWidth: 720 }}>
-              Broad evidence on accelerating learning — not tied to any one
-              pattern above, but the strongest general playbook for districts
-              moving growth.
+              Broad evidence on accelerating student learning — not tied to
+              any one pattern above, and useful almost anywhere.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {general.map((r) => <ResourceRow key={r.resource_id} resource={r} />)}
@@ -109,8 +108,8 @@ function ResourcesPage({ ctx }) {
         )}
         <window.AuxCard title="How to read this page">
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: SLU.ink2, lineHeight: 1.6, maxWidth: 760 }}>
-            <li>These are matched starting points, not endorsements or prescriptions — the match says “districts with this pattern have found this evidence useful,” nothing more.</li>
-            <li>Patterns describe what’s happening in your data, not why. None of this establishes a cause.</li>
+            <li>These are starting points matched to patterns in your data — not endorsements, and not a prescription.</li>
+            <li>The patterns describe what’s happening, not why — none of this establishes a cause.</li>
             <li><b style={{ fontWeight: 600 }}>Synthesis</b> badges mark reviews of many studies; <b style={{ fontWeight: 600 }}>single study</b> badges mark findings from one context that may not travel.</li>
             <li>Links open external sites (EdResearch for Action, EdWorkingPapers, EdInstruments) in a new tab.</li>
           </ul>
@@ -123,7 +122,7 @@ function ResourcesPage({ ctx }) {
     <>
       <window.BriefHeader eyebrow="Resources"
         title="Evidence matched to your data"
-        blurb={'GrowthLens looks for clear patterns in the loaded data — gaps between student groups that stand apart from noise, and grade bands growing below expectations — and matches each one to research syntheses, working papers, and practitioner tools. This page covers every loaded subject (math and ELA), whatever the sidebar toggle says.'} />
+        blurb={'GrowthLens looks for clear patterns in your data — gaps between student groups that stand apart from chance, and grade spans growing below expectations — and matches each one to research syntheses, working papers, and practitioner tools. Findings cover both math and ELA whenever both are available.'} />
       {body}
     </>
   );
@@ -163,7 +162,7 @@ function FindingCard({ section, fmtV }) {
       + ' — intervals clear of zero, so these gaps are unlikely to be chance.';
   } else {
     heading = `${BAND_LABEL[f.gradeBand] || f.gradeBand} is growing below expectations`;
-    detail = `Average growth ${fmtV(f.mean, f.subject)} across ${f.n.toLocaleString()} students in this band.`;
+    detail = `Average growth ${fmtV(f.mean, f.subject)} across ${f.n.toLocaleString()} students in these grades.`;
   }
 
   return (
@@ -192,7 +191,7 @@ function FindingCard({ section, fmtV }) {
         </div>
       ) : (
         <div style={{ fontSize: 12, color: SLU.mute, marginTop: 12, fontStyle: 'italic' }}>
-          No matched resources for this pattern in the current library.
+          No matched resources for this pattern yet.
         </div>
       )}
     </section>

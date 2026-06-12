@@ -153,7 +153,7 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
               {showDistrict && (
                 <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold diamond &amp; dashed line</span> = the district-wide average.</span>
               )}
-              <span>Hover (or tab to) any row for its exact numbers.</span>
+              <span>Hover any row for its exact numbers.</span>
               {anyClipped && (
                 <span>A bar that fades at the chart’s edge keeps going — hover the school for its full range.</span>
               )}

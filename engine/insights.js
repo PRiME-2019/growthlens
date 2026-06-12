@@ -260,7 +260,7 @@
       const p = brights[0];
       bright = {
         text: `**${name(p)}** breaks the pattern: it scores below the district average but grows `
-          + `faster than expected (${fmt.val(y(p))}) — growth worth understanding.`,
+          + `faster than expected (${fmt.val(y(p))}) — worth a closer look at what’s working there.`,
       };
     }
 

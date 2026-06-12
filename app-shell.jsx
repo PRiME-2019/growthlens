@@ -1033,7 +1033,7 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
-                  mean({meta.groupA}) − mean({meta.groupB}) · average gap across schools, giving steadier schools more weight
+                  {meta.groupA} average minus {meta.groupB} average · across schools, giving steadier schools more weight
                 </div>
               </>
             );
@@ -1071,8 +1071,8 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
             </>
           ) : (
             <div style={{ fontSize: 12, color: SLU.mute, lineHeight: 1.5, maxWidth: 420 }}>
-              Fewer than two schools here have enough students to compare, so
-              between-school spread doesn’t apply to this data.
+              Fewer than two schools have enough students to compare, so
+              between-school spread doesn’t apply.
             </div>
           )}
         </div>
