@@ -12,7 +12,7 @@
 
 // Demographics box-plot page.
 // EVERY demographic group at once, in labeled sections on one shared x axis —
-// the district-level companion to Gap Analysis's school-by-school view (the
+// the district-level companion to the gap page's school-by-school view (the
 // intro points there for the drill-down). The two race comparisons share a
 // White reference group with identical numbers, so they merge into one Race
 // section. District reference line at the pooled mean; n per group; outlier
@@ -66,7 +66,7 @@ function DemographicsPage({ sliceLabel, ctx }) {
 
   return (
     <>
-      <window.BriefHeader eyebrow="Demographics" slice={sliceLabel}
+      <window.BriefHeader eyebrow="Growth by student group" slice={sliceLabel}
                    title="How growth varies from group to group"
                    blurb={<>For each group, the box shows the middle of the pack and the line shows
                      the typical student; the whiskers and dots show the full spread. Compare the
@@ -74,7 +74,7 @@ function DemographicsPage({ sliceLabel, ctx }) {
                      the middle or out in the tails. To see how any of these gaps plays out school
                      by school, open{' '}
                      <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('gap'); }}
-                        style={{ color: window.SLU.blue, fontWeight: 600 }}>Gap Analysis</a>.</>} />
+                        style={{ color: window.SLU.blue, fontWeight: 600 }}>Group gaps by school</a>.</>} />
       <OverviewCardDemo groups={allGroups} ctx={ctx} />
       <DemographicsFigure sections={sections} districtMean={districtMean} ctx={ctx} />
     </>

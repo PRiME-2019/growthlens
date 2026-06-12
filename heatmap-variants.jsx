@@ -10,7 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
 
-// Heatmap — School × grade residual matrix for System Scan.
+// Heatmap — school × grade residual matrix for the Growth by school & grade page.
 // Single direction (diverging color + ▲/▼ glyph + number) after design review.
 // Previous H2 (sequential) and H3 (cell-bar) variants were dropped in cleanup.
 
@@ -360,7 +360,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
           })}
           {(() => {
             // Overall column: the data-shipped school-level value — the SAME
-            // shrinkage Status & Growth uses, so the two figures always agree.
+            // shrinkage the scores-vs-growth scatter uses, so the two always agree.
             // Fallback (older fixtures): n-weighted mean of the displayed cells.
             const ov = s.overall;
             const cells = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok);

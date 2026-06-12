@@ -10,7 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
 
-// District Report — where the district's schools land in the statewide PRiME
+// Statewide comparison — where the district's schools land in the statewide PRiME
 // growth distribution, and how they've moved over time. Built on the bundled
 // reference/prime_growth_database.csv (public data, fetched same-origin so no
 // request ever reveals which district someone is looking at). Shows both
@@ -149,7 +149,7 @@ function DistrictReportPage({ ctx }) {
 
   return (
     <>
-      <BriefHeader eyebrow="District Report" slice={report ? report.name : 'Statewide'}
+      <BriefHeader eyebrow="Statewide comparison" slice={report ? report.name : 'Statewide'}
                    title="How your schools compare statewide"
                    blurb={'Every Missouri public school gets a growth score each year — how much its students learned compared with students who started at the same place. These charts show where each of your schools lands among all schools statewide, and how that has moved over time. A score of 0 means a typical year of growth; this is the state’s scale, separate from the subject, units, and group settings used elsewhere in this tool.'} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

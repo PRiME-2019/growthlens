@@ -149,11 +149,11 @@
     <li><code>B_i = 1</code> &mdash; the school's raw data is fully trusted; the estimate stays exactly at the raw value. This happens only in the limit of zero within-school sampling error.</li>
     <li><code>B_i = 0</code> &mdash; the school's data is set aside entirely in favor of the district mean. You approach this when the within-school SE is much larger than the between-school SD.</li>
   </ul>
-  <p>Most schools in a typical district land between 0.6 and 0.9. In Gap Analysis, the hover tooltip shows each school's B on the chart, and the Table view includes it as a column.</p>
+  <p>Most schools in a typical district land between 0.6 and 0.9. On the Group gaps by school page, the hover tooltip shows each school's B on the chart, and the Table view includes it as a column.</p>
 
   <p>The shrunken estimate's standard error is <code>SE(r̂_i) = √(B_i) · SE_i</code> — the spread that remains once we treat the district mean <code>μ̂</code> as <em>known</em>. The fuller empirical-Bayes version, which also folds in the uncertainty about <code>μ̂</code> itself, runs about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
 
-  <aside class="note"><strong>Important and a little counter-intuitive.</strong> Shrinkage nudges every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD, in a district whose gap is −0.20 SD, will end up with a shrunken estimate that is slightly negative. That's mathematically correct under the model — with limited data, our best guess for the school sits somewhere between its own (noisy) number and the district norm — but it can look as if the model "invented" a gap. When a school is small, lean on the credible interval (the range the real number most likely falls in) rather than the single point estimate, and use the Raw / Shrunken toggle in Gap Analysis to see both side by side.</aside>
+  <aside class="note"><strong>Important and a little counter-intuitive.</strong> Shrinkage nudges every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD, in a district whose gap is −0.20 SD, will end up with a shrunken estimate that is slightly negative. That's mathematically correct under the model — with limited data, our best guess for the school sits somewhere between its own (noisy) number and the district norm — but it can look as if the model "invented" a gap. When a school is small, lean on the credible interval (the range the real number most likely falls in) rather than the single point estimate, and use the Raw / Shrunken toggle on the Group gaps by school page to see both side by side.</aside>
 
   <h2 id="variance">3 · Variance components and τ²</h2>
   <p>This section is about uncertainty — separating two kinds of "wiggle" in the numbers. Some spread comes from having only so many students in a school (sampling noise), and some comes from schools genuinely being different from one another. Telling these apart is what lets us shrink the right amount and draw honest intervals. <code>τ²</code> below is just our measure of how much schools truly differ.</p>
@@ -175,7 +175,7 @@
   <p>Under the hood, <code>τ²</code> is found by a bounded one-dimensional maximization of the REML profile log-likelihood over <code>τ² ≥ 0</code> (a golden-section search, anchored by the closed-form DerSimonian–Laird estimate — a fast, classic formula for this same quantity). Schools whose cells fall below the minimum-n threshold (§4) are <em>left out</em> of the <code>τ²</code> fit and the pooled mean — their gaps are too noisy to inform the variance component — but they still show up in the figures, shrunk toward <code>μ̂</code>. Dropping that high-SE tail can pull <code>τ²</code> slightly low; this is a known, documented limitation.</p>
 
   <h2>4 · Minimum-n threshold</h2>
-  <p>Some groups simply have too few students to read reliably, and we flag those rather than letting them mislead you. Every cell (a school × subgroup cell in Gap Analysis, a school × grade cell in System Scan) is checked against a minimum sample size, <code>n_min</code>, which is fixed at <strong>10</strong> in this build. A configurable threshold is planned for a future release, so you'll be able to match it to your district's student-privacy and small-cell-suppression policies.</p>
+  <p>Some groups simply have too few students to read reliably, and we flag those rather than letting them mislead you. Every cell (a school × subgroup cell on the Group gaps by school page, a school × grade cell on Growth by school & grade) is checked against a minimum sample size, <code>n_min</code>, which is fixed at <strong>10</strong> in this build. A configurable threshold is planned for a future release, so you'll be able to match it to your district's student-privacy and small-cell-suppression policies.</p>
   <table class="compact">
     <thead><tr><th>Threshold mode</th><th>What it does</th></tr></thead>
     <tbody>
@@ -188,10 +188,10 @@
 
   <h2>5 · The two figures</h2>
   <p>GrowthLens gives you two main views: one to drill into a single gap school by school, and one to scan the whole district at a glance. Here's how to read each.</p>
-  <h3>Gap Analysis (forest plot)</h3>
+  <h3>Group gaps by school (forest plot)</h3>
   <p>One row per school for a single subject and subgroup pair, showing the point estimate, the 95% credible interval (the range the real number most likely falls in), and the shrinkage factor. The district-wide gap sits on top as a vertical reference line. Reach for this when you want to know whether a gap concentrates in a few schools or shows up across the whole system.</p>
 
-  <h3>System Scan (heatmap)</h3>
+  <h3>Growth by school & grade (heatmap)</h3>
   <p>A school × grade grid of standardized residuals, colored on a diverging scale around zero (blue above expectation, rust below). Start here <em>before</em> you drill into a specific gap — to spot schools and grades that are consistently above or below expectation, and to see whether the district shows a coherent pattern (say, 4th-grade weakness across the board).</p>
 
   <h2>6 · What GrowthLens is not</h2>

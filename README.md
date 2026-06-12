@@ -6,15 +6,16 @@ Upload one file from your assessment system and GrowthLens turns it into a clear
 
 ## What it does
 
-GrowthLens shows how each school is doing compared with the district as a whole, steadies the numbers for smaller schools so a few students can't swing the picture, and measures the gap between student groups school by school. The numbers describe what's happening, not why — use them to ask sharper questions, not to assign blame. There are seven pages, reached from the left rail:
+GrowthLens shows how each school is doing compared with the district as a whole, steadies the numbers for smaller schools so a few students can't swing the picture, and measures the gap between student groups school by school. The numbers describe what's happening, not why — use them to ask sharper questions, not to assign blame. There are eight pages, reached from the left rail:
 
-1. **Overview** (landing) — a quick tour of what GrowthLens does, three click-through cards, and a short explainer of what the tool is and isn't.
-2. **Upload data** — drop in your reading (ELA) and math files from your assessment system. Each file is read and checked right here in your browser; nothing is uploaded. If something's off — a file dropped in the wrong subject slot, or a missing column — GrowthLens tells you on the spot so you can fix it.
-3. **System Scan** — a district-wide heat map of how each grade is doing at each school, with an overall column. Click any column header to re-sort. Scan it to spot where growth is consistently strong or soft before you dig into any one group.
-4. **Gap Analysis** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Switch between each school's own number and a steadied version, show results on a standard scale or as weeks of learning, and choose how to handle schools with too few students to read reliably.
-5. **Status & Growth** — two views at once: where students scored this year along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
-6. **Demographics** — side-by-side box plots that compare growth from one student group to the next, across the same five comparisons in demo and uploaded data alike (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
+1. **Home** — the pitch, the upload zones (one file per subject, read and checked entirely in your browser — nothing is uploaded), where to go next, and a short file/privacy reference. If something's off — a file dropped in the wrong subject slot, or a missing column — GrowthLens tells you on the spot so you can fix it.
+2. **Statewide comparison** — where each of your schools lands in the statewide distribution of school-level growth (PRiME database bundled with the app), as tile histograms per school type and subject, plus growth over time with a school overlay picker.
+3. **Growth by school & grade** — a district-wide heat map of how each grade is doing at each school, with an overall column. Click any column header to re-sort. Scan it to spot where growth is consistently strong or soft before you dig into any one group.
+4. **Scores vs. growth** — two views at once: where students scored this year along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
+5. **Growth by student group** — side-by-side box plots that compare growth from one student group to the next, across the same five comparisons in demo and uploaded data alike (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
+6. **Group gaps by school** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Show results on a standard scale or as weeks of learning, with schools that have too few students to read reliably set apart.
 7. **Export** — builds a board-ready PowerPoint deck of what you're currently looking at, ready to edit.
+8. **Resources** — research syntheses, working papers, and practitioner tools matched to clear patterns GrowthLens detects in your data.
 
 Want the details on how the numbers are made? The methods note lives in [methods.html](methods.html), linked from the sidebar and the FAQ.
 
@@ -99,10 +100,11 @@ index.html              entry — import map + engine scripts + React/Babel/pptx
 favicon.svg             SLU measurement-bar brand glyph
 app-shell.jsx           LeftNav, Controls/Overview cards, page router, ctx state, Upload wiring
 forest-shared.jsx       SLU colors, fonts, scales, unit helpers (weeksPerSD, fmtVal, fmtCI)
-forest-final.jsx        Gap Analysis — animated forest plot
-heatmap-variants.jsx    System Scan — H1 diverging heatmap (sortable columns)
-demographics.jsx        Demographics — box-and-whisker by subgroup
-achievement.jsx         Status & Growth — achievement vs. growth scatter
+forest-final.jsx        Group gaps by school — animated forest plot
+heatmap-variants.jsx    Growth by school & grade — H1 diverging heatmap (sortable columns)
+demographics.jsx        Growth by student group — box-and-whisker by subgroup
+achievement.jsx         Scores vs. growth — achievement vs. growth scatter
+district-report.jsx     Statewide comparison — PRiME tile histograms + trends
 export.jsx              Export page — PPTX generation via PptxGenJS
 
 engine/                 real ingestion + computation engine (see Architecture)

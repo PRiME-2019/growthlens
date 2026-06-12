@@ -52,15 +52,17 @@ const DEMOS = {
   race_bw: 'Race · Black vs. White',
   race_hw: 'Race · Hispanic vs. White',
 };
+// Nav labels name the content (direct descriptions, sentence case); the hint
+// underneath carries the use. Page H1s restate the content as a sentence.
 const PAGES = {
-  landing:      { label: 'Overview',             hint: 'Start here · add data' },
-  report:       { label: 'District Report',      hint: 'Your schools statewide' },
-  scan:         { label: 'System Scan',          hint: 'Where to look first' },
-  achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
-  demographics: { label: 'Demographics',         hint: 'Growth by group' },
-  gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
-  exportpg:     { label: 'Export',               hint: 'Download a deck' },
-  resources:    { label: 'Resources',            hint: 'Evidence for next steps' },
+  landing:      { label: 'Home',                     hint: 'Start here · add your data' },
+  report:       { label: 'Statewide comparison',     hint: 'Your schools vs. the state' },
+  scan:         { label: 'Growth by school & grade', hint: 'Where to look first' },
+  achievement:  { label: 'Scores vs. growth',        hint: 'Both measures, every school' },
+  demographics: { label: 'Growth by student group',  hint: 'Every group, district-wide' },
+  gap:          { label: 'Group gaps by school',     hint: 'Two groups, school by school' },
+  exportpg:     { label: 'Export',                   hint: 'Board-ready PowerPoint' },
+  resources:    { label: 'Resources',                hint: 'Evidence for next steps' },
 };
 
 // Global analysis settings persist across sessions. UI preferences only —
@@ -167,8 +169,8 @@ function AppBody() {
   };
 
   const sliceLabel = `${SUBJECTS[subject]} · ${DEMOS[demo].split(' · ')[0]}`;
-  // Scan / Demographics / Status & Growth don't slice by subgroup, so their
-  // headers show the subject only — the full slice label belongs to Gap Analysis.
+  // The scan / demographics / scatter pages don't slice by subgroup, so their
+  // headers show the subject only — the full slice label belongs to the gap page.
   const subjectLabel = SUBJECTS[subject];
 
   return (
@@ -617,7 +619,7 @@ function OverviewPage({ ctx }) {
                       border: `1px solid ${bothReady ? 'rgba(31, 138, 91, 0.25)' : 'rgba(154, 118, 17, 0.25)'}` }}>
           <span style={{ fontSize: 13.5, color: SLU.ink2, flex: 1 }}>
             {bothReady
-              ? 'Both subjects are loaded. You’re ready to open System Scan or jump straight to a Gap Analysis.'
+              ? 'Both subjects are loaded. Start with growth by school & grade, or jump straight to the gaps between student groups.'
               : `${stages.ela === 'ready' ? 'ELA' : 'Math'} is loaded — you can start exploring that subject now, or add the other file before continuing.`}
           </span>
           <button onClick={() => {
@@ -631,7 +633,7 @@ function OverviewPage({ ctx }) {
             background: SLU.blue, color: '#fff', border: 'none',
             fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
           }}>{bothReady
-              ? 'Continue to System Scan →'
+              ? 'See growth by school & grade →'
               : `Continue with ${stages.ela === 'ready' ? 'ELA' : 'Math'} →`}</button>
         </div>
       )}
@@ -646,17 +648,17 @@ function OverviewPage({ ctx }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
           <LandingCard
             eyebrow="Triage"
-            title="System Scan"
+            title="Growth by school & grade"
             body="A district-wide heat map of how each grade is doing at each school. Spot where growth is consistently strong or soft before you dig into any one group."
-            cta="Open System Scan →"
+            cta="See the whole district →"
             onClick={() => ctx.setPage('scan')}
             accent={SLU.gold}
           />
           <LandingCard
             eyebrow="Drill in"
-            title="Gap Analysis"
+            title="Group gaps by school"
             body="Pick a subject and two student groups, and see the gap between them at every school — ranked, with the district average for context and small-sample schools clearly flagged."
-            cta="Open Gap Analysis →"
+            cta="Compare two groups →"
             onClick={() => ctx.setPage('gap')}
             accent={SLU.blue}
           />
@@ -880,8 +882,8 @@ function ColumnTable({ rows }) {
 function GapPage({ sliceLabel, ctx }) {
   return (
     <>
-      <BriefHeader eyebrow="Gap Analysis" slice={sliceLabel}
-                   title="Where the gap lives, school by school"
+      <BriefHeader eyebrow="Group gaps by school" slice={sliceLabel}
+                   title="The gap between two groups, at every school"
                    blurb={'For the two groups you choose, GrowthLens measures the gap between them at every school and lines the schools up from largest to smallest. You’ll see how big each gap is and which way it leans, the district-wide average for context, and which schools have too few students to read reliably. Use it to tell whether a gap shows up across the system or sits in just a few schools.'} />
       <OverviewCardGap unit={ctx.unit} estimate={ctx.estimate} />
       <ForestSlot ctx={ctx} />
@@ -891,9 +893,9 @@ function GapPage({ sliceLabel, ctx }) {
 function ScanPage({ sliceLabel, ctx }) {
   return (
     <>
-      <BriefHeader eyebrow="System Scan" slice={sliceLabel}
-                   title="Where to look first"
-                   blurb={'A district-wide view of how each grade is doing at each school, compared with what the district average would predict. Blue cells are growing faster than expected, rust cells slower. Scan the rows for schools that are consistently strong or soft, and the columns for grades where the whole district is ahead or behind — then dig into a specific subject and group in Gap Analysis.'} />
+      <BriefHeader eyebrow="Growth by school & grade" slice={sliceLabel}
+                   title="How every grade at every school is growing"
+                   blurb={'A district-wide view of how each grade is doing at each school, compared with what the district average would predict. Blue cells are growing faster than expected, rust cells slower. Scan the rows for schools that are consistently strong or soft, and the columns for grades where the whole district is ahead or behind — then dig into a specific comparison in Group gaps by school.'} />
       <OverviewCardScan unit={ctx.unit} />
       <HeatmapSlot ctx={ctx} />
     </>

@@ -83,7 +83,7 @@ function ExportPage({ ctx }) {
     },
     {
       n: '05', kind: 'hotspots',
-      title: 'System Scan · standout spots',
+      title: 'Standout spots · school & grade',
       hot: scanHotspots(heat),
     },
     {
@@ -111,7 +111,7 @@ function ExportPage({ ctx }) {
     <>
       <BriefHeader eyebrow="Export" slice={String(yearLabel)}
         title="Download a board-ready deck"
-        blurb={'Six slides covering the headline numbers, the schools at each end of the gap, the standout spots from System Scan, and a short methods recap. It’s real, editable PowerPoint — text, tables, and shapes, not flattened screenshots.'} />
+        blurb={'Six slides covering the headline numbers, the schools at each end of the gap, the standout school-and-grade spots, and a short methods recap. It’s real, editable PowerPoint — text, tables, and shapes, not flattened screenshots.'} />
 
       <section style={{
         background: '#fff', borderRadius: 8, border: `1px solid ${SLU.rule2}`,
@@ -401,8 +401,8 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
 
   // ---- 05 system scan hotspots
   const s5 = pres.addSlide();
-  s5.addNotes('The standout spots from System Scan — a good place to start. The ones above the district average are worth studying for practices you could share; the ones below are where extra support is most needed.');
-  addHeader(s5, '05 · System Scan standout spots', 'The three school-and-grade cells growing fastest, and the three growing slowest, compared with the district average.');
+  s5.addNotes('The standout spots from the school-by-grade view — a good place to start. The ones above the district average are worth studying for practices you could share; the ones below are where extra support is most needed.');
+  addHeader(s5, '05 · Standout spots by school & grade', 'The three school-and-grade cells growing fastest, and the three growing slowest, compared with the district average.');
   const hs = scanHotspots(heat);
   if (hs) {
     const cols = [
@@ -420,7 +420,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
       });
     });
   } else {
-    s5.addText('System Scan data isn’t loaded yet.', { x: 0.7, y: 3, w: 12, h: 0.5, fontFace: FONT_FACE, fontSize: 14, color: MUTE });
+    s5.addText('School-and-grade growth data isn’t loaded yet.', { x: 0.7, y: 3, w: 12, h: 0.5, fontFace: FONT_FACE, fontSize: 14, color: MUTE });
   }
 
   // ---- 06 methods

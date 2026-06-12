@@ -19,8 +19,8 @@ function AchievementPage({ sliceLabel, ctx }) {
   const level = ctx.achLevel || 'school';
   return (
     <>
-      <window.BriefHeader eyebrow="Status & Growth" slice={sliceLabel}
-        title="Where each school sits on both fronts"
+      <window.BriefHeader eyebrow="Scores vs. growth" slice={sliceLabel}
+        title="How each school scores — and how fast it grows"
         blurb={'Two views at once: where students scored this year along the bottom, and how much they grew compared with expectations up the side. The dashed lines mark the district average on each, splitting the chart into four corners — for example, schools that score lower but grow faster.'} />
       <OverviewCardAch ctx={ctx} />
       <AchievementFigure level={level} ctx={ctx} />
