@@ -223,6 +223,9 @@
         first(I.scanTakeaways({ heat: b.heat, fmt })),
         first(I.gapTakeaways({ slices: b.gaps, activeKey: GAP_KEYS.find((k) => b.gaps && b.gaps[k]), mode, fmt })),
         first(I.achievementTakeaways({ ach: b.ach, mode, fmt })),
+        // All groups across sections, matching the Demographics page's own
+        // overview card — its "largest difference" deliberately compares the
+        // farthest-apart pair across groupings, not within one comparison.
         first(b.demo ? I.demographicsTakeaways({ data: { groups: buildDemoSections(b.demo).flatMap((x) => x.groups) }, fmt }) : null),
       ].filter(Boolean);
       takeaways.push(...picks);

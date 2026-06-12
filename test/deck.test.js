@@ -116,6 +116,13 @@ const DEMO = { frl: { label: 'FRL · economically disadvantaged', districtMean: 
   { key: 'B', label: 'non-FRL', n: 400, mean: 0.06, median: 0.05, q1: -0.3, q3: 0.4, whiskerLo: -1, whiskerHi: 1.2, outliers: [] },
 ]}};
 
+test('descriptor builders return null on missing data', () => {
+  assert.equal(D.heatSlide({ heat: null, subject: 'math', fmt: fmtSD }), null);
+  assert.equal(D.scatterSlide({ ach: null, subject: 'math', fmt: fmtSD }), null);
+  assert.equal(D.groupsSlide({ demo: null, subject: 'math', fmt: fmtSD }), null);
+  assert.equal(D.glanceSlide({ bySubject: {}, fmt: fmtSD }), null);
+});
+
 test('heatSlide: names, shrunken cell values formatted, suppressed cells flagged', () => {
   const h = D.heatSlide({ heat: HEAT, subject: 'math', fmt: fmtSD });
   assert.equal(h.kind, 'heat');
