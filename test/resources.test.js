@@ -69,6 +69,20 @@ test('detectFindings: low-growth band fires below the floor, with bandsServed', 
   assert.deepEqual(gap.bandsServed.sort(), ['elementary', 'middle']);
 });
 
+test('detectFindings: low-growth bands use shrunken cell values when present', () => {
+  // Raw elementary mean −0.09 would fire, but the shrunken values sit above
+  // the −0.05 floor — no finding.
+  const heatShrunk = {
+    meta: { subject: 'math' },
+    schools: [
+      { school_id: 'S1', grades: { 3: { n: 50, r: -0.10, rs: -0.03, ok: true } } },
+      { school_id: 'S2', grades: { 4: { n: 50, r: -0.08, rs: -0.04, ok: true } } },
+    ],
+  };
+  const out = R.detectFindings({ bySubject: { math: { gaps: {}, heat: heatShrunk } } });
+  assert.equal(out.filter((f) => f.type === 'low_growth').length, 0);
+});
+
 test('detectFindings: spans every subject given', () => {
   const two = {
     ...BY_SUBJECT,

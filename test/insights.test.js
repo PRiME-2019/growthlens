@@ -244,6 +244,25 @@ test('scanTakeaways: suppressed-cell caveat is last and flagged', () => {
   assert.match(last.text, /1 school-grade cell/);
 });
 
+test('scanTakeaways: prefers shrunken cell values and the shipped school overall', () => {
+  const heat = {
+    meta: { subject: 'math' },
+    schools: [
+      { school_id: 'S1', overall: { n: 60, r: 0.30, rs: 0.18 },
+        grades: { 3: { n: 30, r: 0.40, rs: 0.20, ok: true }, 4: { n: 30, r: 0.20, rs: 0.16, ok: true } } },
+      { school_id: 'S2', overall: { n: 60, r: -0.30, rs: -0.17 },
+        grades: { 3: { n: 30, r: -0.35, rs: -0.21, ok: true }, 4: { n: 30, r: -0.25, rs: -0.13, ok: true } } },
+    ],
+  };
+  const out = I.scanTakeaways({ heat, fmt: fmtSD });
+  const extremes = out[0].text;
+  assert.match(extremes, /\+0\.18 SD/);   // S1 overall uses rs, not raw 0.30
+  assert.match(extremes, /−0\.17 SD/);    // S2 overall uses rs
+  const cells = out.find((t) => /stand out/.test(t.text));
+  assert.ok(cells, 'standout cells present');
+  assert.match(cells.text, /−0\.21 SD/);  // shrunken cell value, not raw −0.35
+});
+
 test('scanTakeaways: grade is passed to fmt for per-grade values', () => {
   const seen = [];
   const fmt = { val: (z, o) => { seen.push(o && o.grade); return fmtSD.val(z); } };

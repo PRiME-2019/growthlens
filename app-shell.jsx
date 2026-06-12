@@ -1205,9 +1205,10 @@ function OverviewCardScan({ unit = 'z' }) {
       .filter(c => c && c.ok);
     const n = cells.reduce((acc, c) => acc + c.n, 0);
     const schoolCount = cells.length;
-    // n-weighted mean residual across schools at this grade
+    // n-weighted mean across schools at this grade, preferring the shrunken
+    // cell values (rs) so the boxes match the heatmap below.
     const mean = n > 0
-      ? cells.reduce((acc, c) => acc + c.r * c.n, 0) / n
+      ? cells.reduce((acc, c) => acc + (c.rs != null ? c.rs : c.r) * c.n, 0) / n
       : 0;
     return { g, n, schoolCount, mean };
   });

@@ -96,13 +96,57 @@
 
   async function buildHeatmap(conn, table, subject) {
     const raw = (await conn.query(`
-      SELECT school_id, CAST(grade AS VARCHAR) AS grade, count(*) AS n, avg(residual) AS rbar
+      SELECT school_id, CAST(grade AS VARCHAR) AS grade, count(*) AS n, avg(residual) AS rbar,
+             var_samp(residual) AS s2, avg(residual_se * residual_se) AS ms2
       FROM ${table} GROUP BY school_id, grade
     `)).toArray();
+    const cellsAll = raw.map(r => ({
+      school_id: r.school_id, grade: String(r.grade), n: Number(r.n), r: Number(r.rbar),
+      se: S.cellSE({ s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2), n: Number(r.n) }),
+    }));
+
+    // Cell-level EB: within a grade column, schools are the exchangeable
+    // units — each cell shrinks toward its grade's pooled district mean, the
+    // same machinery the forest applies to school gaps. With <2 reliable
+    // schools in a grade, shrinkage is undefined (same guard as buildGaps)
+    // and rs stays null so the UI falls back to the raw value.
+    const byGrade = {};
+    for (const c of cellsAll) (byGrade[c.grade] = byGrade[c.grade] || []).push(c);
+    for (const gradeCells of Object.values(byGrade)) {
+      const fit = gradeCells.filter(c => c.n >= MIN_N && isFinite(c.se)).map(c => ({ gap: c.r, se: c.se }));
+      const canShrink = fit.length >= 2;
+      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      const pooled = canShrink ? S.pooledMean(fit, tau2) : null;
+      for (const c of gradeCells) {
+        c.rs = (canShrink && pooled && isFinite(c.se))
+          ? S.shrink({ rawGap: c.r, rawSe: c.se, tau2, mu: pooled.mu }).shrunkGap
+          : null;
+      }
+    }
+
+    // Overall column: the SAME school-level shrinkage Status & Growth uses
+    // (cellsOverall + pooled mean over schools), so the two pages can never
+    // disagree about a school's overall growth.
+    const overallBySchool = {};
+    {
+      const c = await cellsOverall(conn, table);
+      const fit = c.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
+      const canShrink = fit.length >= 2;
+      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+      for (const s of c) {
+        overallBySchool[s.g] = {
+          n: s.n, r: s.rbar,
+          rs: canShrink ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap : s.rbar,
+        };
+      }
+    }
+
     const bySchool = {};
-    for (const r of raw) {
-      const id = r.school_id; bySchool[id] = bySchool[id] || { school_id: id, grades: {} };
-      bySchool[id].grades[r.grade] = { n: Number(r.n), r: Number(r.rbar), ok: Number(r.n) >= MIN_N };
+    for (const c of cellsAll) {
+      const id = c.school_id;
+      bySchool[id] = bySchool[id] || { school_id: id, grades: {}, overall: overallBySchool[id] || null };
+      bySchool[id].grades[c.grade] = { n: c.n, r: c.r, rs: c.rs, ok: c.n >= MIN_N };
     }
     return { meta: { subject }, schools: Object.values(bySchool) };
   }

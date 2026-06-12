@@ -140,12 +140,16 @@
   function scanTakeaways({ heat, fmt = fmtSDDefault } = {}) {
     if (!heat || !Array.isArray(heat.schools)) return [];
 
+    // Cell values prefer the engine's shrunken estimate (rs) so the takeaways
+    // describe exactly what the heatmap displays; raw is the fallback for
+    // older fixtures or grades the engine couldn't pool.
+    const val = (c) => (c.rs != null ? c.rs : c.r);
     const cells = [];
     let suppressed = 0;
     for (const s of heat.schools) {
       for (const [g, c] of Object.entries(s.grades || {})) {
         if (!c || !(c.n > 0)) continue;
-        if (c.ok) cells.push({ school: s.school_id, grade: g, n: c.n, r: c.r });
+        if (c.ok) cells.push({ school: s.school_id, grade: g, n: c.n, r: val(c) });
         else suppressed++;
       }
     }
@@ -156,12 +160,14 @@
       return n > 0 ? xs.reduce((t, c) => t + c.r * c.n, 0) / n : null;
     };
 
-    // A — strongest / weakest school overall (n-weighted across its grades).
+    // A — strongest / weakest school overall: the data-shipped school-level
+    // value (same shrinkage as Status & Growth) when present, else an
+    // n-weighted mean across the school's readable grades.
     let schoolExtremes = null;
     const bySchool = heat.schools
-      .map((s) => ({ id: s.school_id, cells: cells.filter((c) => c.school === s.school_id) }))
-      .filter((s) => s.cells.length > 0)
-      .map((s) => ({ id: s.id, mean: wMean(s.cells) }));
+      .map((s) => ({ id: s.school_id, overall: s.overall, cells: cells.filter((c) => c.school === s.school_id) }))
+      .filter((s) => s.overall || s.cells.length > 0)
+      .map((s) => ({ id: s.id, mean: s.overall ? val(s.overall) : wMean(s.cells) }));
     if (bySchool.length >= 2) {
       const sorted = [...bySchool].sort((a, b) => b.mean - a.mean);
       const best = sorted[0], worst = sorted[sorted.length - 1];

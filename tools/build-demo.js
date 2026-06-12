@@ -258,15 +258,56 @@ const STATUS_STUDENT_SD = 1.0;   // independent student-level status noise
   });
 }
 
-// ---- heatmap (school x grade mean residual) --------------------------------
+// ---- heatmap (school x grade mean residual, with EB shrinkage) --------------
+// Mirrors engine/compute.js buildHeatmap: each cell shrinks toward its grade's
+// pooled district mean (schools are the exchangeable units within a grade
+// column), and the Overall column uses the SAME school-level shrinkage as the
+// Status & Growth scatter so the two figures always agree.
 function buildHeatmap() {
+  // Per-cell stats, grouped by grade for the within-grade pooling.
+  const cellsByGrade = {};
+  const cellLookup = {};
+  for (const sc of SCHOOLS) {
+    for (const grade of (sc.band === 'elem' ? ELEM : MID)) {
+      const rows = students.filter(st => st.sid === sc.id && st.grade === grade);
+      const c = { school_id: sc.id, grade, ...cellStats(rows) };
+      (cellsByGrade[grade] = cellsByGrade[grade] || []).push(c);
+      cellLookup[`${sc.id}|${grade}`] = c;
+    }
+  }
+  for (const gradeCells of Object.values(cellsByGrade)) {
+    const fit = gradeCells.filter(c => c.n >= MIN_N && isFinite(c.se)).map(c => ({ gap: c.rbar, se: c.se }));
+    const canShrink = fit.length >= 2;
+    const tau2 = canShrink ? S.remlTau2(fit) : 0;
+    const pooled = canShrink ? S.pooledMean(fit, tau2) : null;
+    for (const c of gradeCells) {
+      c.rs = (canShrink && pooled && isFinite(c.se))
+        ? S.shrink({ rawGap: c.rbar, rawSe: c.se, tau2, mu: pooled.mu }).shrunkGap
+        : null;
+    }
+  }
+  // School-level overall (same fit rule as buildAchievement).
+  const overallBySchool = {};
+  {
+    const agg = SCHOOLS.map(sc => ({ id: sc.id, ...cellStats(students.filter(st => st.sid === sc.id)) }));
+    const fit = agg.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
+    const canShrink = fit.length >= 2;
+    const tau2 = canShrink ? S.remlTau2(fit) : 0;
+    const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+    for (const s of agg) {
+      overallBySchool[s.id] = {
+        n: s.n, r: round(s.rbar, 3),
+        rs: round(canShrink ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap : s.rbar, 3),
+      };
+    }
+  }
   const schools = SCHOOLS.map(sc => {
     const grades = {};
     for (const grade of (sc.band === 'elem' ? ELEM : MID)) {
-      const r = students.filter(st => st.sid === sc.id && st.grade === grade).map(st => st.resid);
-      grades[grade] = { n: r.length, r: round(mean(r), 3), ok: r.length >= MIN_N };
+      const c = cellLookup[`${sc.id}|${grade}`];
+      grades[grade] = { n: c.n, r: round(c.rbar, 3), rs: c.rs == null ? null : round(c.rs, 3), ok: c.n >= MIN_N };
     }
-    return { school_id: sc.id, grades };
+    return { school_id: sc.id, grades, overall: overallBySchool[sc.id] };
   });
   return { meta: { subject: 'math' }, schools };
 }

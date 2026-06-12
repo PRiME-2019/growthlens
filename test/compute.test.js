@@ -28,6 +28,8 @@ function fakeConn(rows) {
         out = Object.entries(g).map(([k, rs]) => ({
           school_id: k.split('|')[0], grade: String(k.split('|')[1]),
           n: rs.length, rbar: mean(rs.map((r) => r.residual)),
+          s2: varSamp(rs.map((r) => r.residual)),
+          ms2: mean(rs.map((r) => r.residual_se ** 2)),
         }));
       } else if (/GROUP BY school_id/.test(s)) {
         const g = {};
@@ -101,6 +103,38 @@ test('computeSlice: emits all five comparisons with focal − reference signs', 
   for (const s of frl.schools) {
     assert.ok(Array.isArray(s.raw_ci95) && Array.isArray(s.shrunk_ci95));
     assert.ok(s.shrinkage_factor >= 0 && s.shrinkage_factor <= 1);
+  }
+});
+
+test('computeSlice: heatmap cells shrink toward their grade pool; Overall matches Status & Growth', async () => {
+  const C = freshCompute(makeRows({}));
+  const out = await C.computeSlice('math');
+  const heat = out.GAPS_DATA_BY_DEMO && out.HEATMAP_DATA;
+  const achById = Object.fromEntries(out.ACH_DATA.school.points.map((p) => [p.school_id, p]));
+  for (const s of heat.schools) {
+    // Overall column = exactly the school-level shrinkage Status & Growth uses.
+    assert.ok(s.overall, `${s.school_id} carries an overall entry`);
+    assert.ok(Math.abs(s.overall.rs - achById[s.school_id].y_shrunk) < 1e-12,
+      `${s.school_id} overall.rs equals ACH y_shrunk`);
+    assert.ok(Math.abs(s.overall.r - achById[s.school_id].y_raw) < 1e-12,
+      `${s.school_id} overall.r equals ACH y_raw`);
+    for (const [g, c] of Object.entries(s.grades)) {
+      if (!c.ok) continue;
+      assert.ok(Number.isFinite(c.rs), `${s.school_id} grade ${g} has a shrunken value`);
+    }
+  }
+  // Shrinkage coherence: within each grade, every cell's shrunken value sits
+  // between its raw value and that grade's precision-weighted center (it
+  // never overshoots past raw in the wrong direction).
+  const grades = [...new Set(heat.schools.flatMap((s) => Object.keys(s.grades)))];
+  for (const g of grades) {
+    const cells = heat.schools.map((s) => s.grades[g]).filter((c) => c && c.ok);
+    if (cells.length < 2) continue;
+    const lo = Math.min(...cells.map((c) => c.r)), hi = Math.max(...cells.map((c) => c.r));
+    for (const c of cells) {
+      assert.ok(Math.abs(c.rs - c.r) < (hi - lo) + 1e-9, 'shrinkage moves cells, not teleports them');
+      assert.ok(c.rs >= lo - 1e-9 && c.rs <= hi + 1e-9, 'shrunken value stays within the grade range');
+    }
   }
 });
 

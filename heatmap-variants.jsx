@@ -17,17 +17,22 @@
 const GRADES = [3, 4, 5, 6, 7, 8];
 
 function getResidual(s, g) { return s.grades[g]; }
-// n-weighted, so sorting by Overall matches the n-weighted Overall column the
-// user sees (an unweighted mean can rank rows differently than the displayed value).
+// Displayed value of a cell: shrunken when the engine could compute it, raw
+// otherwise (older fixtures, or a grade with <2 reliable schools to pool).
+function cellVal(c) { return c.rs != null ? c.rs : c.r; }
+// Sorting by Overall must match the Overall column the user sees: the
+// data-shipped school-level shrunken value when present, else an n-weighted
+// mean of the displayed cells.
 function rowMean(s) {
+  if (s.overall) return s.overall.rs != null ? s.overall.rs : s.overall.r;
   const cells = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok);
   const n = cells.reduce((a, c) => a + c.n, 0);
-  return n ? cells.reduce((a, c) => a + c.r * c.n, 0) / n : 0;
+  return n ? cells.reduce((a, c) => a + cellVal(c) * c.n, 0) / n : 0;
 }
 // Suppressed (ok:false) cells sort as missing — their hidden residuals shouldn't rank rows.
 function cellR(s, g, missing) {
   const c = s.grades[g];
-  return c && c.ok ? c.r : missing;
+  return c && c.ok ? cellVal(c) : missing;
 }
 
 // Every key here must be reachable by clicking a column header (ColumnHeader
@@ -206,16 +211,18 @@ function ScaleLegend({ unit = 'z' }) {
 }
 
 // Display transforms:
-//   estimate: 'raw' / 'shrunk' — reserved seam, no effect yet. The dataset
-//             stores one (raw) residual per cell; until raw/shrunken pairs are
-//             available end-to-end (see GAPS_DATA for the forest's real
-//             implementation), the figure renders the stored value and the
-//             subtitle describes exactly that.
+//   estimate: 'shrunk' (the app default) renders each cell's EB value — the
+//             cell pulled toward its grade's pooled district mean, computed by
+//             the engine (rs). 'raw' falls back to the as-measured mean, as do
+//             cells the engine couldn't shrink (<2 reliable schools in the
+//             grade) and older fixtures without rs.
 //   unit:     'z' shows SD units; 'weeks' converts via grade × subject × year
 //             factors (per-cell grade for the matrix, grade-averaged for the
 //             Overall column).
 // Color scale stays in SD space so the legend remains comparable across units.
-function transformR(c /* , estimate */) {
+function transformR(c, estimate) {
+  if (!c) return c;
+  if (estimate !== 'raw' && c.rs != null) return { ...c, r: c.rs };
   return c;
 }
 function formatUnit(r, unit, opts) {
@@ -278,6 +285,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
             <SuppressedSwatch /> too few students to read reliably (fewer than {MIN_N})
           </span>
           <span style={{ color: SLU.mute }}>Blank cell = grade not served at that school.</span>
+          <span style={{ color: SLU.mute }}>Numbers are steadied toward the district average so a few students can’t swing a cell.</span>
           <span style={{ color: SLU.mute }}>Click any column heading to sort.</span>
         </div>
       }
@@ -347,17 +355,17 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
             );
           })}
           {(() => {
-            // Student-weighted mean of transformed residuals (so the Overall cell
-            // honors the raw/shrunken toggle). Rendered with the same color +
-            // triangle vocabulary as the per-grade cells.
+            // Overall column: the data-shipped school-level value — the SAME
+            // shrinkage Status & Growth uses, so the two figures always agree.
+            // Fallback (older fixtures): n-weighted mean of the displayed cells.
+            const ov = s.overall;
             const cells = GRADES.map(g => getResidual(s, g)).filter(c => c && c.ok);
-            const totalN = cells.reduce((a, c) => a + c.n, 0);
-            const overall = totalN
-              ? cells.reduce((a, c) => {
-                  const r = transformR(c, estimate).r;
-                  return a + r * c.n;
-                }, 0) / totalN
-              : 0;
+            const totalN = ov ? ov.n : cells.reduce((a, c) => a + c.n, 0);
+            const overall = ov
+              ? (estimate !== 'raw' && ov.rs != null ? ov.rs : ov.r)
+              : (totalN
+                  ? cells.reduce((a, c) => a + transformR(c, estimate).r * c.n, 0) / totalN
+                  : 0);
             const above = overall >= 0;
             const hoverKey = `${s.school_id}-overall`;
             const label = totalN > 0

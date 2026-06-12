@@ -85,13 +85,15 @@
         findings.push({ type: 'subgroup_gap', subject, subgroup, comparisons, bandsServed: served });
       }
 
-      // Low-growth grade bands — n-weighted mean over reliable cells.
+      // Low-growth grade bands — n-weighted mean over reliable cells, using
+      // the shrunken cell values when the engine provides them (rs) so the
+      // trigger matches what the heatmap displays.
       for (const [band, grades] of Object.entries(BANDS)) {
         let n = 0, sum = 0;
         for (const s of (data.heat && data.heat.schools) || []) {
           for (const g of grades) {
             const c = s.grades && s.grades[g];
-            if (c && c.ok && c.n > 0) { n += c.n; sum += c.r * c.n; }
+            if (c && c.ok && c.n > 0) { n += c.n; sum += (c.rs != null ? c.rs : c.r) * c.n; }
           }
         }
         if (n > 0 && sum / n <= LOW_GROWTH_FLOOR) {

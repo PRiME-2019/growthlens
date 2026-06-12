@@ -153,14 +153,15 @@ function ExportPage({ ctx }) {
 function fmt2(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2); }
 
 // Identify 3 hottest negative and 3 hottest positive school×grade cells from
-// the heatmap dataset (or null if heat data isn't loaded yet).
+// the heatmap dataset (or null if heat data isn't loaded yet). Uses the
+// shrunken cell values (rs) when present, matching the on-screen heatmap.
 function scanHotspots(heat) {
   if (!heat) return null;
   const cells = [];
   for (const s of heat.schools) {
     for (const g of [3, 4, 5, 6, 7, 8]) {
       const c = s.grades?.[g];
-      if (c && c.ok) cells.push({ school: s.school_id, grade: g, r: c.r, n: c.n });
+      if (c && c.ok) cells.push({ school: s.school_id, grade: g, r: c.rs != null ? c.rs : c.r, n: c.n });
     }
   }
   cells.sort((a, b) => a.r - b.r);
