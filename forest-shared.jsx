@@ -64,16 +64,15 @@ const fmt2plain = (x) => x.toFixed(2);
 // effect sizes from reference/conversion_factors.json (loaded into
 // window.CONVERSION_FACTORS at boot). The display uses the magnitude form
 //   weeks = z * (base_weeks / annual_growth_effect_size)
-// which is the difference-form of the methodological identity
-//   weeks_of_learning = base_weeks * (1 + z / es)
-// from the data-prep README — the +1 cancels for gaps and would obscure
-// signed residual displays in the UI.
+// — the same form the JSON's `formula` field states; its parenthetical level
+// form base_weeks * (1 + z / es) adds back the typical year, which would
+// obscure signed gap displays in the UI.
 //
 // Defaults come from window.WOL_OPTS = { year, subject } (set by app-shell
 // whenever subject changes). Callers can override year / subject / grade
 // per-call via the opts argument. Aggregated displays (school-level gaps,
 // district-pooled box plots) pass no grade and get the year × subject average
-// across grades 3–8.
+// across grades 4–8 (grade 3 has no factor — no grade-2 MAP baseline exists).
 
 // The conversion math lives in engine/units.js (pure, Node-tested); these thin
 // wrappers resolve the app-state defaults (window.WOL_OPTS + the loaded factors).

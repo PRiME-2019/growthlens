@@ -157,7 +157,7 @@ if (!dir.exists("outputs")) dir.create("outputs", recursive = TRUE)
 out = list(
   version = format(Sys.Date(), "%Y-%m-%d"),
   source = "Missouri MAP Grade-Level Assessment, synthetic cohort growth",
-  formula = "weeks_of_learning = base_weeks * (1 + z_residual / annual_growth_effect_size)",
+  formula = "weeks_gap = base_weeks * z_residual / annual_growth_effect_size (the magnitude form GrowthLens displays; the level form base_weeks * (1 + z_residual / annual_growth_effect_size) adds back the typical year)",
   base_weeks = base_weeks,
   factors = computed
 )
