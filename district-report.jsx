@@ -62,6 +62,26 @@ const LEVEL_NOUN = {
 };
 
 const fmtZSigned = (z) => (z >= 0 ? '+' : '−') + Math.abs(z).toFixed(2);
+
+// Charts render at the container's real pixel width (ResizeObserver) instead
+// of scaling a fixed viewBox — wider windows get more plot, not bigger text.
+function useMeasuredWidth(fallback) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(fallback);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const next = Math.floor(el.getBoundingClientRect().width);
+      if (next > 0) setW(next);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w];
+}
 function rptOrdinal(n) {
   const t = n % 100;
   if (t >= 11 && t <= 13) return `${n}th`;
@@ -312,14 +332,15 @@ function HistogramCard({ rows, report, lea, year, setYear }) {
 
 function TileHistogram({ hist, subject, level }) {
   const [hov, setHov] = React.useState(null);   // index into hist.schools
+  const [ref, W] = useMeasuredWidth(380);
   if (!hist || hist.poolN === 0) {
     return (
-      <div style={{ flex: '1 1 320px', minWidth: 300, fontSize: 12, color: SLU.mute }}>
+      <div style={{ flex: '1 1 360px', minWidth: 300, fontSize: 12, color: SLU.mute }}>
         {RPT_SUBJ_LABEL[subject]}: no statewide scores for this school type this year.
       </div>
     );
   }
-  const W = 380, H = 168, padL = 6, padR = 6, padT = 26, padB = 30;
+  const H = 168, padL = 6, padR = 6, padT = 26, padB = 30;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = hist.bins.length;
   const barW = plotW / n;
@@ -337,8 +358,8 @@ function TileHistogram({ hist, subject, level }) {
   for (let t = Math.ceil(x0 / 0.2) * 0.2; t <= x1 + 1e-9; t += 0.2) ticks.push(Math.round(t * 10) / 10);
 
   return (
-    <div style={{ flex: '1 1 320px', minWidth: 300, maxWidth: 460, position: 'relative' }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img"
+    <div ref={ref} style={{ flex: '1 1 360px', minWidth: 300, position: 'relative' }}>
+      <svg width={W} height={H} role="img"
            aria-label={`${RPT_SUBJ_LABEL[subject]}: ${atOrAbove} of your ${hist.schools.length} ${LEVEL_NOUN[level]}s grew at least as fast as typical, out of ${hist.poolN.toLocaleString()} statewide.`}
            style={{ display: 'block', fontFamily: FONT }}>
         <text x={padL} y={14} style={{ fontSize: 12, fontWeight: 700, fill: SLU.ink }}>
@@ -423,7 +444,8 @@ function TrendCard({ report }) {
           </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2, maxWidth: 720 }}>
             The district line averages all your schools’ statewide growth scores each year.
-            Pick a school to lay its own line on top. The break at 2020 is the year state testing was cancelled.
+            Pick a school to lay its own line on top. The vertical dashed line marks 2020,
+            the year state testing was cancelled.
           </div>
         </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -448,7 +470,7 @@ function TrendCard({ report }) {
                     display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 11.5, color: SLU.mute, lineHeight: 1.5 }}>
         <span><span style={{ color: SLU.blue, fontWeight: 600 }}>Blue line</span> = district average.</span>
         {overlaySchool && <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold line</span> = {overlaySchool.name}.</span>}
-        <span>The dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
+        <span>The horizontal dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
         <span>Hover any point for its exact score.</span>
       </div>
     </div>
@@ -457,17 +479,18 @@ function TrendCard({ report }) {
 
 function TrendChart({ report, subject, overlaySchool }) {
   const [hov, setHov] = React.useState(null);
+  const [ref, W] = useMeasuredWidth(380);
   const mean = window.GLPrime.districtMeanSeries(report, subject);
   const over = overlaySchool ? (overlaySchool.series[subject] || []) : [];
   if (mean.length === 0) {
     return (
-      <div style={{ flex: '1 1 320px', minWidth: 300, fontSize: 12, color: SLU.mute }}>
+      <div style={{ flex: '1 1 360px', minWidth: 300, fontSize: 12, color: SLU.mute }}>
         {RPT_SUBJ_LABEL[subject]}: no scores for this district.
       </div>
     );
   }
 
-  const W = 380, H = 190, padL = 36, padR = 10, padT = 26, padB = 24;
+  const H = 190, padL = 36, padR = 10, padT = 26, padB = 24;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const yearsAll = [];
   const yMin = Number(report.years[0]), yMax = Number(report.years[report.years.length - 1]);
@@ -491,6 +514,11 @@ function TrendChart({ report, subject, overlaySchool }) {
   };
   const path = (seg) => seg.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(p.year)},${yOf(p.z)}`).join(' ');
   const yTicks = [-lim, -lim / 2, 0, lim / 2, lim].map((t) => Math.round(t * 100) / 100);
+  // The 2020 cancellation: a vertical dashed rule between the 2018–19 and
+  // 2020–21 school years whenever the district's run spans the gap.
+  const showCovidGap = Number(report.years[0]) < 2020
+    && Number(report.years[report.years.length - 1]) > 2020
+    && !report.years.includes('2020');
 
   const pointTip = (p, who) => `${who}, ${p.year}: ${fmtZSigned(p.z)}`
     + (p.rank != null && p.poolN ? ` — ${rptOrdinal(p.rank)} of ${p.poolN.toLocaleString()}` : '');
@@ -519,11 +547,15 @@ function TrendChart({ report, subject, overlaySchool }) {
   ));
 
   return (
-    <div style={{ flex: '1 1 320px', minWidth: 300, maxWidth: 460, position: 'relative' }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', fontFamily: FONT }}>
+    <div ref={ref} style={{ flex: '1 1 360px', minWidth: 300, position: 'relative' }}>
+      <svg width={W} height={H} style={{ display: 'block', fontFamily: FONT }}>
         <text x={padL} y={14} style={{ fontSize: 12, fontWeight: 700, fill: SLU.ink }}>
           {RPT_SUBJ_LABEL[subject]}
         </text>
+        {showCovidGap && (
+          <line x1={xOf('2020')} x2={xOf('2020')} y1={padT} y2={padT + plotH}
+                stroke={SLU.mute} strokeWidth={1} strokeDasharray="2 4" opacity={0.7} />
+        )}
         {yTicks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={yOf(t)} y2={yOf(t)}
