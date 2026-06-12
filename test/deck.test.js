@@ -75,3 +75,26 @@ test('forestSlides: only reliable comparisons; names, sorted by |gap|, zero-side
   assert.ok(f.axis.min < -0.3 && f.axis.max > 0.1, 'axis covers the CIs');
   assert.deepEqual(f.excluded.map((e) => e.name), ['West Lane Elementary']);
 });
+
+test('forestSlides: raw mode reads the raw gap and interval', () => {
+  const slice = gapSlice('frl', 'FRL', 'non-FRL', -0.15, [-0.22, -0.08], [{
+    school_id: '1', school_name: 'One', n_a: 25, n_b: 30,
+    raw_gap: -0.30, raw_ci95: [-0.4, -0.2],
+    shrunk_gap: -0.18, shrunk_ci95: [-0.26, -0.10],
+    shrinkage_factor: 0.6, meets_min_cell: true,
+  }]);
+  const f = D.forestSlides({ gaps: { frl: slice }, subject: 'math', mode: 'raw', fmt: fmtSD })[0];
+  assert.equal(f.rows[0].text, '−0.30 SD');
+  assert.deepEqual(f.rows[0].ci, [-0.4, -0.2]);
+});
+
+test('forestSlides: a small school with BOTH groups present reads "too few", not "no students"', () => {
+  const slice = gapSlice('frl', 'FRL', 'non-FRL', -0.15, [-0.22, -0.08], [
+    SCH('1', 'Anchor School', -0.2, -0.3, -0.1),
+    SCH('2', 'Tiny School', -0.1, -0.6, 0.4, false),   // 25 vs 30 students but below threshold
+    { ...SCH('3', 'One-Sided School', null, null, null, false), n_a: 0 },
+  ]);
+  const f = D.forestSlides({ gaps: { frl: slice }, subject: 'math', mode: 'shrunk', fmt: fmtSD })[0];
+  assert.equal(f.excluded.find((e) => e.name === 'Tiny School').reason, 'too few students to read reliably');
+  assert.equal(f.excluded.find((e) => e.name === 'One-Sided School').reason, 'no FRL students');
+});

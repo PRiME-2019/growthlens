@@ -59,6 +59,8 @@
     const rows = GAP_KEYS.filter((k) => gaps[k] && gaps[k].meta).map((k) => {
       const { meta, schools } = gaps[k];
       const reliable = isReliable(meta);
+      // The direction reference is always the (shrunken) district gap in
+      // meta.districtGap — there is no raw district pooled mean in the shape.
       const dSign = Math.sign(meta.districtGap || 0);
       const meets = schools.filter((s) => s.meets_min_cell && Number.isFinite(s[gapKey]));
       const leaning = dSign === 0 ? 0 : meets.filter((s) => Math.sign(s[gapKey]) === dSign).length;
@@ -102,7 +104,9 @@
           .filter((s) => !(s.meets_min_cell && Number.isFinite(s[gapKey]) && s[ciKey]))
           .map((s) => ({
             name: label(s),
-            reason: !Number.isFinite(s[gapKey])
+            // An empty group side is the only case that earns the "no X
+            // students" caption; everything else is a sample-size problem.
+            reason: (s.n_a === 0 || s.n_b === 0)
               ? `no ${s.n_a === 0 ? meta.groupA : meta.groupB} students`
               : 'too few students to read reliably',
           }));
