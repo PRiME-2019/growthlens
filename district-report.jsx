@@ -444,8 +444,8 @@ function TrendCard({ report }) {
           </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2, maxWidth: 720 }}>
             The district line averages all your schools’ statewide growth scores each year.
-            Pick a school to lay its own line on top. The vertical dashed line marks 2020,
-            the year state testing was cancelled.
+            Pick a school to lay its own line on top. The dashed stretch crosses 2020,
+            the year state testing was cancelled — no score exists for that year.
           </div>
         </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
@@ -470,7 +470,7 @@ function TrendCard({ report }) {
                     display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 11.5, color: SLU.mute, lineHeight: 1.5 }}>
         <span><span style={{ color: SLU.blue, fontWeight: 600 }}>Blue line</span> = district average.</span>
         {overlaySchool && <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold line</span> = {overlaySchool.name}.</span>}
-        <span>The horizontal dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
+        <span>The gray dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
         <span>Hover any point for its exact score.</span>
       </div>
     </div>
@@ -514,11 +514,17 @@ function TrendChart({ report, subject, overlaySchool }) {
   };
   const path = (seg) => seg.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(p.year)},${yOf(p.z)}`).join(' ');
   const yTicks = [-lim, -lim / 2, 0, lim / 2, lim].map((t) => Math.round(t * 100) / 100);
-  // The 2020 cancellation: a vertical dashed rule between the 2018–19 and
-  // 2020–21 school years whenever the district's run spans the gap.
-  const showCovidGap = Number(report.years[0]) < 2020
-    && Number(report.years[report.years.length - 1]) > 2020
-    && !report.years.includes('2020');
+  // Dashed bridges across missing years (2020): the line itself continues
+  // point-to-point, dashed, so the series reads as one school's story while
+  // the dashes admit there was no measurement in between.
+  const bridges = (pts) => {
+    const segs = segments(pts);
+    const out = [];
+    for (let i = 1; i < segs.length; i++) {
+      out.push([segs[i - 1][segs[i - 1].length - 1], segs[i][0]]);
+    }
+    return out;
+  };
 
   const pointTip = (p, who) => `${who}, ${p.year}: ${fmtZSigned(p.z)}`
     + (p.rank != null && p.poolN ? ` — ${rptOrdinal(p.rank)} of ${p.poolN.toLocaleString()}` : '');
@@ -552,10 +558,6 @@ function TrendChart({ report, subject, overlaySchool }) {
         <text x={padL} y={14} style={{ fontSize: 12, fontWeight: 700, fill: SLU.ink }}>
           {RPT_SUBJ_LABEL[subject]}
         </text>
-        {showCovidGap && (
-          <line x1={xOf('2020')} x2={xOf('2020')} y1={padT} y2={padT + plotH}
-                stroke={SLU.mute} strokeWidth={1} strokeDasharray="2 4" opacity={0.7} />
-        )}
         {yTicks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={yOf(t)} y2={yOf(t)}
@@ -577,8 +579,16 @@ function TrendChart({ report, subject, overlaySchool }) {
         {segments(over).map((seg, i) => (
           <path key={`o${i}`} d={path(seg)} fill="none" stroke={SLU.gold} strokeWidth={2} />
         ))}
+        {bridges(over).map(([a, b], i) => (
+          <line key={`ob${i}`} x1={xOf(a.year)} y1={yOf(a.z)} x2={xOf(b.year)} y2={yOf(b.z)}
+                stroke={SLU.gold} strokeWidth={2} strokeDasharray="4 5" opacity={0.7} />
+        ))}
         {segments(mean).map((seg, i) => (
           <path key={`m${i}`} d={path(seg)} fill="none" stroke={SLU.blue} strokeWidth={2.5} />
+        ))}
+        {bridges(mean).map(([a, b], i) => (
+          <line key={`mb${i}`} x1={xOf(a.year)} y1={yOf(a.z)} x2={xOf(b.year)} y2={yOf(b.z)}
+                stroke={SLU.blue} strokeWidth={2.5} strokeDasharray="4 5" opacity={0.7} />
         ))}
         {overlaySchool && renderPoints(over, SLU.gold, overlaySchool.name, 'diamond')}
         {renderPoints(mean, SLU.blue, 'District average', 'circle')}
