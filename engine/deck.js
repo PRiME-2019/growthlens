@@ -233,5 +233,90 @@
     return { kind: 'glance', tiles, takeaways: takeaways.slice(0, 6) };
   }
 
-  return { buildDemoSections, label, gapsOverview, forestSlides, heatSlide, scatterSlide, groupsSlide, glanceSlide };
+  const LEVEL_ORDER = ['Elementary', 'Middle', 'EleMiddle', 'Other'];
+  const LEVEL_HEADING = { Elementary: 'Elementary schools', Middle: 'Middle schools',
+    EleMiddle: 'Elementary–middle schools', Other: 'Other schools' };
+  const SUBJ_WORD = { ela: 'ELA', math: 'Math' };
+
+  // Statewide section: latest year with district data; per level present that
+  // year, per subject: histogram bins + the district's named schools; plus a
+  // growth-over-time district-mean series per subject.
+  function statewideSlides({ prime } = {}) {
+    if (!prime || !prime.rows || !prime.rows.length || !prime.lea || !P) return [];
+    const report = P.districtReport(prime.rows, prime.lea);
+    if (!report) return [];
+    const year = report.years[report.years.length - 1];
+    const levels = LEVEL_ORDER.filter((lv) =>
+      report.schools.some((s) => ['ela', 'math'].some((sub) =>
+        (s.series[sub] || []).some((p) => p.year === year && p.level === lv))));
+    const histLevels = levels.map((lv) => {
+      const subjects = {};
+      for (const sub of ['ela', 'math']) {
+        const h = P.histogram(prime.rows, { year, level: lv, subject: sub, binWidth: 0.05, lea: prime.lea });
+        subjects[sub] = {
+          poolN: h.poolN,
+          bins: h.bins.map((b) => ({ x0: b.x0, x1: b.x1, count: b.count, district: b.district })),
+          yours: h.schools.map((s) => ({ name: s.name, z: s.z, rank: s.rank })),
+        };
+      }
+      return { level: lv, heading: LEVEL_HEADING[lv], subjects };
+    });
+    const series = {};
+    for (const sub of ['ela', 'math']) series[sub] = P.districtMeanSeries(report, sub);
+    return [
+      { kind: 'stateHist', district: report.name, year, levels: histLevels },
+      { kind: 'stateTrend', district: report.name, years: report.years, series },
+    ];
+  }
+
+  function buildDeck({ bySubject = {}, prime = null, unit = 'z', unitLabel = 'SD (standard scale)',
+                       mode = 'shrunk', fmt, today = '' } = {}) {
+    const subjects = ['math', 'ela'].filter((s) => bySubject[s]);
+    const metas = subjects.map((s) => bySubject[s].meta).filter(Boolean);
+    const sample = !metas.some((m) => m && m.source === 'uploaded');
+    const district = (metas.map((m) => m && m.districtName).find(Boolean))
+      || (sample ? 'Sample district' : 'Your district');
+    const year = metas.map((m) => m && m.latestYear).find(Boolean) || '';
+
+    const slides = [];
+    slides.push({ kind: 'cover', district, year, sample, today,
+                  subjects: subjects.map((s) => SUBJ_WORD[s]) });
+    slides.push({ kind: 'intro', unitLabel, bullets: [
+      'Every number compares growth with what was expected: 0 means a typical year of growth, positive means faster, negative means slower.',
+      'Small schools and groups are steadied toward the district average, so a handful of students can\'t swing a result.',
+      `Values are shown in ${unitLabel}.`,
+    ]});
+    const glance = glanceSlide({ bySubject, mode, fmt });
+    if (glance) slides.push(glance);
+    for (const s of subjects) {
+      const b = bySubject[s];
+      for (const sl of [heatSlide({ heat: b.heat, subject: s, fmt }),
+                        scatterSlide({ ach: b.ach, subject: s, mode, fmt }),
+                        groupsSlide({ demo: b.demo, subject: s, fmt })]) {
+        if (sl) slides.push(sl);
+      }
+      const ov = gapsOverview({ gaps: b.gaps, mode, fmt });
+      if (ov.rows.length) slides.push({ ...ov, subject: s });
+    }
+    slides.push(...statewideSlides({ prime }));
+    slides.push({ kind: 'cautions', unitLabel, bullets: [
+      'Numbers are nudged toward the district average (shrinkage), so a few students can\'t swing a school.',
+      'Groups with fewer than 10 students are flagged, not trusted.',
+      'These figures describe what\'s happening, not why — use them to ask sharper questions, never to evaluate individual teachers.',
+      'All analysis ran privately in the browser; no student data left the device.',
+    ]});
+    const forests = subjects.flatMap((s) =>
+      forestSlides({ gaps: bySubject[s].gaps, subject: s, mode, fmt }));
+    if (forests.length) {
+      slides.push({ kind: 'divider', title: 'Appendix — school-by-school detail',
+        sub: 'One slide per group comparison with a clear district-wide signal.' });
+      slides.push(...forests);
+    }
+    slides.forEach((s, i) => { s.n = i + 1; });
+    return { slides, meta: { district, year, sample, subjects: subjects.map((s) => SUBJ_WORD[s]), unitLabel } };
+  }
+
+  return { buildDemoSections, label, gapsOverview, forestSlides,
+           heatSlide, scatterSlide, groupsSlide, glanceSlide,
+           statewideSlides, buildDeck };
 });

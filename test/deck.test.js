@@ -164,3 +164,60 @@ test('glanceSlide: tiles + first non-caveat takeaway per generator, capped at si
   assert.ok(g.takeaways.length >= 1 && g.takeaways.length <= 6);
   assert.ok(g.takeaways.every((t) => !t.caveat));
 });
+
+function primeRow(lea, leaName, school, schoolName, year, level, ela, math, rEla, rMath) {
+  return { lea_id: lea, lea_name: leaName, school_id: school, school_name: schoolName,
+    school_year: String(year), school_level: level,
+    growth_zscore_all_ela: String(ela), growth_zscore_all_math: String(math),
+    prime_rank_all_1yr_ela: String(rEla), prime_rank_all_1yr_math: String(rMath) };
+}
+const PRIME_ROWS = [
+  primeRow('016090', 'Jackson R-II', '4015', 'Orchard Drive Elementary', 2025, 'Elementary', 0.07, 0.17, 294, 117),
+  primeRow('016090', 'Jackson R-II', '4015', 'Orchard Drive Elementary', 2024, 'Elementary', 0.07, 0.22, 284, 59),
+  primeRow('999999', 'Elsewhere', '0001', 'Other School', 2025, 'Elementary', -0.1, -0.2, 800, 900),
+];
+
+test('statewideSlides: histogram + trend descriptors when the district resolves', () => {
+  const slides = D.statewideSlides({ prime: { rows: PRIME_ROWS, lea: '016090' } });
+  assert.equal(slides.length, 2);
+  const hist = slides.find((s) => s.kind === 'stateHist');
+  assert.equal(hist.year, '2025');
+  assert.equal(hist.levels[0].level, 'Elementary');
+  assert.ok(hist.levels[0].subjects.ela.bins.length > 0);
+  assert.equal(hist.levels[0].subjects.ela.yours[0].name, 'Orchard Drive Elementary');
+  const trend = slides.find((s) => s.kind === 'stateTrend');
+  assert.deepEqual(trend.series.math.map((p) => p.year), ['2024', '2025']);
+});
+
+test('statewideSlides: empty when no district', () => {
+  assert.deepEqual(D.statewideSlides({ prime: null }), []);
+});
+
+test('buildDeck: full assembly, order, and edge cases', () => {
+  const bySubject = { math: { gaps: GAPS, heat: HEAT, ach: ACH, demo: DEMO,
+    meta: { subject: 'math', latestYear: 2025, nSchools: 2, nRowsLatest: 700,
+            districtName: 'Jackson R-II', source: 'uploaded' } } };
+  const deck = D.buildDeck({ bySubject, prime: { rows: PRIME_ROWS, lea: '016090' },
+                             unit: 'z', unitLabel: 'SD (standard scale)', fmt: fmtSD, today: 'June 12, 2026' });
+  const kinds = deck.slides.map((s) => s.kind);
+  assert.deepEqual(kinds, ['cover', 'intro', 'glance', 'heat', 'scatter', 'groups',
+    'gapsOverview', 'stateHist', 'stateTrend', 'cautions', 'divider', 'forest']);
+  assert.equal(deck.meta.district, 'Jackson R-II');
+  assert.equal(deck.meta.sample, false);
+  assert.equal(deck.slides[0].district, 'Jackson R-II');
+  // numbering for the carousel/footers
+  assert.equal(deck.slides[0].n, 1);
+  assert.equal(deck.slides[deck.slides.length - 1].n, deck.slides.length);
+});
+
+test('buildDeck: sample data, no prime, no reliable gaps → minimal deck', () => {
+  const gapsNoSignal = { frl: gapSlice('frl', 'FRL', 'non-FRL', -0.05, [-0.15, 0.05],
+    [SCH('4001', null, -0.05, -0.15, 0.05)]) };
+  const bySubject = { math: { gaps: gapsNoSignal, heat: HEAT, ach: ACH, demo: DEMO,
+    meta: { subject: 'math', latestYear: 2025, nSchools: 2, source: 'demo' } } };
+  const deck = D.buildDeck({ bySubject, prime: null, unit: 'z', unitLabel: 'SD', fmt: fmtSD, today: 'x' });
+  const kinds = deck.slides.map((s) => s.kind);
+  assert.ok(!kinds.includes('stateHist') && !kinds.includes('forest') && !kinds.includes('divider'));
+  assert.equal(deck.meta.sample, true);
+  assert.equal(deck.slides[0].district, 'Sample district');
+});
