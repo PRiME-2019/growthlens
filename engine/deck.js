@@ -250,6 +250,8 @@
       report.schools.some((s) => ['ela', 'math'].some((sub) =>
         (s.series[sub] || []).some((p) => p.year === year && p.level === lv))));
     const histLevels = levels.map((lv) => {
+      // A subject with no statewide pool at this level still gets a block
+      // (poolN 0, empty bins) — renderers filter on poolN > 0.
       const subjects = {};
       for (const sub of ['ela', 'math']) {
         const h = P.histogram(prime.rows, { year, level: lv, subject: sub, binWidth: 0.05, lea: prime.lea });
@@ -269,7 +271,9 @@
     ];
   }
 
-  function buildDeck({ bySubject = {}, prime = null, unit = 'z', unitLabel = 'SD (standard scale)',
+  // No `unit` param: the unit choice is already baked into the injected fmt;
+  // the engine only needs unitLabel for display copy.
+  function buildDeck({ bySubject = {}, prime = null, unitLabel = 'SD (standard scale)',
                        mode = 'shrunk', fmt, today = '' } = {}) {
     const subjects = ['math', 'ela'].filter((s) => bySubject[s]);
     const metas = subjects.map((s) => bySubject[s].meta).filter(Boolean);

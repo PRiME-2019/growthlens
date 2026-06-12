@@ -210,6 +210,20 @@ test('buildDeck: full assembly, order, and edge cases', () => {
   assert.equal(deck.slides[deck.slides.length - 1].n, deck.slides.length);
 });
 
+test('buildDeck: both subjects interleave math-then-ela', () => {
+  const mk = (subj) => ({ gaps: GAPS, heat: HEAT, ach: ACH, demo: DEMO,
+    meta: { subject: subj, latestYear: 2025, nSchools: 2, nRowsLatest: 700, source: 'uploaded' } });
+  const deck = D.buildDeck({ bySubject: { math: mk('math'), ela: mk('ela') }, prime: null,
+                             unitLabel: 'SD', fmt: fmtSD, today: 'x' });
+  assert.deepEqual(deck.slides.map((s) => s.kind), ['cover', 'intro', 'glance',
+    'heat', 'scatter', 'groups', 'gapsOverview',
+    'heat', 'scatter', 'groups', 'gapsOverview',
+    'cautions', 'divider', 'forest', 'forest']);
+  assert.deepEqual(deck.slides.filter((s) => s.kind === 'heat').map((s) => s.subject), ['math', 'ela']);
+  assert.equal(deck.slides[0].district, 'Your district');   // uploaded but no district name
+  assert.deepEqual(deck.meta.subjects, ['Math', 'ELA']);
+});
+
 test('buildDeck: sample data, no prime, no reliable gaps → minimal deck', () => {
   const gapsNoSignal = { frl: gapSlice('frl', 'FRL', 'non-FRL', -0.05, [-0.15, 0.05],
     [SCH('4001', null, -0.05, -0.15, 0.05)]) };
