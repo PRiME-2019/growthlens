@@ -1,0 +1,30 @@
+# GrowthLens on Netlify — static files, no build step (in-browser Babel
+# compiles the JSX; a production bundle is on the README roadmap).
+[build]
+  publish = "."
+
+# Long-lived caches for the assets that rarely change. Netlify's default
+# (ETag revalidation per request) stays in place for the HTML/JSX/engine
+# files, so code deploys show up immediately; these two trees are the heavy,
+# stable ones.
+#
+# vendor/duckdb: pinned WASM bundle (~33 MB raw) — 30 days. If the bundle is
+# ever upgraded in place under the same filenames, drop this to let returning
+# visitors pick it up sooner.
+[[headers]]
+  for = "/vendor/duckdb/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# reference/: the PRiME database (refreshed about once a year) and the small
+# evidence/conversion tables — 7 days keeps repeat visits nearly free without
+# holding a data refresh hostage for long.
+[[headers]]
+  for = "/reference/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/favicon.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
