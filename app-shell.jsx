@@ -83,7 +83,7 @@ function AppBody() {
   const [unit, setUnit] = React.useState(() =>
     loadAnalysisPrefs().unit === 'weeks' ? 'weeks' : 'z');
   // scanSort is no longer in ctx — HeatmapH1 manages its own column-click sort.
-  const [demoVar, setDemoVar]     = React.useState('frl');
+  // demoVar is gone too — Demographics shows every group at once.
   const [achLevel, setAchLevel]   = React.useState('school');
   const [achShowMeans, setAchShowMeans] = React.useState(true);
   // Bumped by the Upload page when data lands or is removed, so the shell
@@ -155,7 +155,6 @@ function AppBody() {
   const ctx = {
     page, setPage, subject, setSubject, disabledSubjects, demo, setDemo, disabledDemos,
     estimate, setEstimate, unit, setUnit,
-    demoVar, setDemoVar,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
     bumpDataRev,

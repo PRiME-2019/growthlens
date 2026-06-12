@@ -11,40 +11,72 @@
 // GNU Affero General Public License for more details.
 
 // Demographics box-plot page.
-// One box per group, side-by-side, horizontal layout (groups on y-axis is
-// conceptually what the user asked for — i.e. demographic *category* on y;
-// here the categories live on the y axis as labeled rows, residuals run
-// left-to-right on a shared x axis). District reference line at 0; n shown
-// per group; outlier dots beyond the whiskers.
+// EVERY demographic group at once, in labeled sections on one shared x axis —
+// the district-level companion to Gap Analysis's school-by-school view (the
+// intro points there for the drill-down). The two race comparisons share a
+// White reference group with identical numbers, so they merge into one Race
+// section. District reference line at the pooled mean; n per group; outlier
+// dots beyond the whiskers.
 
 const DEMO_PAGE_FONT = window.FONT;
 const DEMO_PAGE_MONO = window.MONO;
 const DEMO_PAGE_LABEL = window.LABEL;
 
-function DemographicsPage({ sliceLabel, ctx }) {
-  // Clamp to a demographic that exists in the active dataset (uploads expose only the engine's
-  // 5 comparisons; a stale demo key like 'race' would otherwise render "No data").
-  const dd = window.DEMO_DATA || {};
-  const demoVar = dd[ctx.demoVar] ? ctx.demoVar : (dd.frl ? 'frl' : Object.keys(dd)[0]);
-  // Write the clamp back into ctx so stale state can't silently flip the figure
-  // when the dataset changes again later.
-  React.useEffect(() => { if (demoVar && demoVar !== ctx.demoVar) ctx.setDemoVar(demoVar); });
+// Sections: one per demographic dimension, built from whatever comparisons
+// the active dataset carries. A group label that appears in more than one
+// race comparison (White, the shared reference) is kept once, ordered last.
+function buildDemoSections(dd) {
+  const sections = [];
+  const groupsOf = (key) => (dd[key] && dd[key].groups) || [];
+  if (groupsOf('frl').length) sections.push({ title: 'Income', groups: groupsOf('frl') });
+  if (groupsOf('iep').length) sections.push({ title: 'Disability', groups: groupsOf('iep') });
+  if (groupsOf('el').length) sections.push({ title: 'Language', groups: groupsOf('el') });
 
-  const districtData = dd[demoVar];
-  const groups = districtData ? districtData.groups : [];
-  const label = districtData ? districtData.label : '';
+  const raceKeys = ['race_bw', 'race_hw'].filter((k) => groupsOf(k).length);
+  if (raceKeys.length) {
+    const counts = {};
+    raceKeys.forEach((k) => groupsOf(k).forEach((g) => { counts[g.label] = (counts[g.label] || 0) + 1; }));
+    const seen = new Set();
+    const focal = [], shared = [];
+    raceKeys.forEach((k) => groupsOf(k).forEach((g) => {
+      if (seen.has(g.label)) return;
+      seen.add(g.label);
+      (counts[g.label] > 1 ? shared : focal).push(g);
+    }));
+    sections.push({ title: 'Race', groups: [...focal, ...shared] });
+  }
+
+  // Future-proofing: any comparison beyond the engine's five gets its own section.
+  const known = new Set(['frl', 'iep', 'el', 'race_bw', 'race_hw']);
+  for (const [key, v] of Object.entries(dd)) {
+    if (known.has(key) || !v || !v.groups || !v.groups.length) continue;
+    sections.push({ title: v.label || key, groups: v.groups });
+  }
+  return sections;
+}
+
+function DemographicsPage({ sliceLabel, ctx }) {
+  const dd = window.DEMO_DATA || {};
+  const sections = buildDemoSections(dd);
+  const allGroups = sections.flatMap((s) => s.groups);
   // Default to 0 (the residual scale's natural center) if the dataset doesn't
   // carry a districtMean, so the reference line never silently disappears.
-  const districtMean = (districtData && districtData.districtMean != null) ? districtData.districtMean : 0;
+  const first = Object.values(dd).find((v) => v && v.districtMean != null);
+  const districtMean = first ? first.districtMean : 0;
 
   return (
     <>
       <window.BriefHeader eyebrow="Demographics" slice={sliceLabel}
                    title="How growth varies from group to group"
-                   blurb={'For each group, the box shows the middle of the pack and the line shows the typical student; the whiskers and dots show the full spread. Compare the typical student and the spread across groups to see whether differences sit in the middle or out in the tails.'} />
-      <OverviewCardDemo data={districtData} label={label} ctx={ctx} />
-      <DemographicsFigure label={label} groups={groups} districtMean={districtMean}
-                          demoVar={demoVar} ctx={ctx} />
+                   blurb={<>For each group, the box shows the middle of the pack and the line shows
+                     the typical student; the whiskers and dots show the full spread. Compare the
+                     typical student and the spread across groups to see whether differences sit in
+                     the middle or out in the tails. To see how any of these gaps plays out school
+                     by school, open{' '}
+                     <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('gap'); }}
+                        style={{ color: window.SLU.blue, fontWeight: 600 }}>Gap Analysis</a>.</>} />
+      <OverviewCardDemo groups={allGroups} ctx={ctx} />
+      <DemographicsFigure sections={sections} districtMean={districtMean} ctx={ctx} />
     </>
   );
 }
@@ -59,10 +91,10 @@ const DEMO_TRANSITION = {
 };
 
 // District-level context — same scaffolding as the other overview cards:
-// headline numbers plus generated takeaways, tracking the global units and
-// the group chosen on the figure card below.
-function OverviewCardDemo({ data, label, ctx }) {
-  if (!data || !data.groups || data.groups.length === 0) return null;
+// headline numbers plus generated takeaways across EVERY group, tracking the
+// global units setting.
+function OverviewCardDemo({ groups, ctx }) {
+  if (!groups || groups.length === 0) return null;
   const SLU = window.SLU;
   const unit = ctx.unit || 'z';
   const isWk = unit === 'weeks';
@@ -74,75 +106,57 @@ function OverviewCardDemo({ data, label, ctx }) {
   const unitTagFor = (v) => isWk
     ? (Math.abs(Math.round(window.zToWeeks(v))) === 1 ? 'week' : 'weeks')
     : 'SD';
-  const groups = data.groups;
   const sorted = [...groups].sort((a, b) => b.median - a.median);
   const hi = sorted[0], lo = sorted[sorted.length - 1];
-  const totalN = groups.reduce((t, g) => t + g.n, 0);
+  // Every grouping slices the same students, so "students included" is the
+  // size of the largest single pairing, not the sum across sections.
+  const dd = window.DEMO_DATA || {};
+  const totalN = Math.max(0, ...Object.values(dd).map((v) =>
+    ((v && v.groups) || []).reduce((t, g) => t + g.n, 0)));
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
   const takeaways = window.GLInsights
-    ? window.GLInsights.demographicsTakeaways({ data, fmt: { val: (v) => `${fmtV(v)} ${unitTagFor(v)}` } })
+    ? window.GLInsights.demographicsTakeaways({ data: { groups }, fmt: { val: (v) => `${fmtV(v)} ${unitTagFor(v)}` } })
     : [];
   const big = { fontSize: 36, fontWeight: 600, fontFamily: DEMO_PAGE_MONO,
                 color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };
   return (
-    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · growth by ${label} · ${yr}`}>
+    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · growth by group · ${yr}`}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 36px', alignItems: 'flex-start' }}>
         {groups.length >= 2 && (
           <div style={{ minWidth: 220 }}>
-            <window.StatLabel>Typical-student difference</window.StatLabel>
+            <window.StatLabel>Widest typical-student difference</window.StatLabel>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
               <span style={big}>{fmtV(hi.median - lo.median)}</span>
               <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTagFor(hi.median - lo.median)}</span>
             </div>
             <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
-              {hi.label} median minus {lo.label} median
+              {hi.label} median minus {lo.label} median — the widest pair across all groupings
             </div>
           </div>
         )}
-        <div style={{ minWidth: 180 }}>
-          <window.StatLabel>Students included</window.StatLabel>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-            <span style={big}>{totalN.toLocaleString()}</span>
+        {totalN > 0 && (
+          <div style={{ minWidth: 180 }}>
+            <window.StatLabel>Students included</window.StatLabel>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+              <span style={big}>{totalN.toLocaleString()}</span>
+            </div>
+            <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
+              every grouping below draws from the same students
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4, fontFamily: DEMO_PAGE_MONO }}>
-            {groups.map((g) => `${g.label} ${g.n.toLocaleString()}`).join(' · ')}
-          </div>
-        </div>
+        )}
       </div>
       <window.KeyTakeaways items={takeaways} />
     </window.AuxCard>
   );
 }
 
-// Inline group picker for the card header — options come from the active
-// dataset's comparisons (window.DEMO_SPECS).
-function GroupSelect({ value, onChange }) {
+function DemographicsFigure({ sections, districtMean = 0, ctx }) {
   const SLU = window.SLU;
-  const options = {};
-  if (window.DEMO_SPECS) {
-    Object.entries(window.DEMO_SPECS).forEach(([k, v]) => { options[k] = v.label; });
-  }
-  return (
-    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: 11, fontFamily: DEMO_PAGE_LABEL, color: SLU.mute,
-                      textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
-        Group
-      </span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
-        fontFamily: DEMO_PAGE_FONT, fontSize: 12.5, color: SLU.ink, padding: '7px 26px 7px 12px',
-        border: `1px solid ${SLU.rule}`, borderRadius: 999, background: '#fff', cursor: 'pointer',
-      }}>
-        {Object.entries(options).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
-  const SLU = window.SLU;
-  const [hover, setHover] = React.useState(null); // {gKey, oi, px, py, record, boxStroke}
-  if (!groups || groups.length === 0) {
+  const [hover, setHover] = React.useState(null); // {rowId, oi, px, py, record, boxStroke}
+  const allGroups = sections.flatMap((s) => s.groups);
+  if (allGroups.length === 0) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
                           padding: 40, color: SLU.mute, fontSize: 13 }}>No data to show yet.</div>;
   }
@@ -160,7 +174,7 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
 
   // x scale tracks actual residual values — not forced symmetric around 0.
   let xMin = Infinity, xMax = -Infinity;
-  groups.forEach(g => {
+  allGroups.forEach(g => {
     xMin = Math.min(xMin, g.whiskerLo, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
     xMax = Math.max(xMax, g.whiskerHi, ...((g.outliers || []).map(o => typeof o === 'number' ? o : o.residual)));
   });
@@ -182,9 +196,23 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
   const rightPad = 140; // stats column
   const topPad = 36;
   const bottomPad = 58;  // ticks + the axis title beneath them
-  const rowH = 84;
+  const rowH = 76;
+  const headerH = 38;
+
+  // Lay out section headers and group rows top to bottom.
+  const placed = [];
+  let yCursor = topPad;
+  sections.forEach((sec) => {
+    placed.push({ type: 'header', title: sec.title, y: yCursor, h: headerH });
+    yCursor += headerH;
+    sec.groups.forEach((g, gi) => {
+      placed.push({ type: 'group', g, id: `${sec.title}:${g.label}`, y: yCursor, h: rowH,
+                    lastInSection: gi === sec.groups.length - 1 });
+      yCursor += rowH;
+    });
+  });
   const plotW = width - leftPad - rightPad;
-  const height = topPad + groups.length * rowH + bottomPad;
+  const height = yCursor + bottomPad;
 
   const xToPx = (v) => leftPad + ((toUnit(v) - toUnit(xLo)) / (toUnit(xHi) - toUnit(xLo))) * plotW;
   const meanPx = xToPx(districtMean);
@@ -209,23 +237,19 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
       boxShadow: '0 1px 2px rgba(15,23,42,.04)',
       padding: '18px 22px 24px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-                     gap: 12, marginBottom: 4 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: DEMO_PAGE_FONT }}>
-            Growth by {label}
-          </h2>
-          <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-            Across the whole district
-            <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
-          </div>
+      <div style={{ marginBottom: 4 }}>
+        <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: DEMO_PAGE_FONT }}>
+          Every group, one scale
+        </h2>
+        <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
+          Across the whole district
+          <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
+          box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
         </div>
-        <GroupSelect value={demoVar} onChange={ctx.setDemoVar} />
       </div>
 
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
-           role="img" aria-label={`Box plots of growth by ${label}, ${groups.length} groups`}>
+           role="img" aria-label={`Box plots of growth for every demographic group, ${allGroups.length} groups in ${sections.length} sections`}>
         {/* district mean reference — computed from pooled student residuals */}
         {toUnit(xLo) <= toUnit(districtMean) && toUnit(districtMean) <= toUnit(xHi) && (
           <g>
@@ -240,9 +264,23 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
           </g>
         )}
 
+        {/* section headers */}
+        {placed.filter((r) => r.type === 'header').map((r) => (
+          <g key={`h:${r.title}`}>
+            <text x={2} y={r.y + r.h - 12} fontSize={10.5} fontFamily={DEMO_PAGE_LABEL}
+                  fill={SLU.mute} fontWeight={700}
+                  style={{ textTransform: 'uppercase', letterSpacing: 1.2 }}>
+              {r.title}
+            </text>
+            <line x1={2} x2={width - 2} y1={r.y + r.h - 4} y2={r.y + r.h - 4}
+                  stroke={SLU.rule2} strokeWidth={1} />
+          </g>
+        ))}
+
         {/* group rows */}
-        {groups.map((g, i) => {
-          const cy = topPad + i * rowH + rowH / 2;
+        {placed.filter((r) => r.type === 'group').map((row) => {
+          const g = row.g;
+          const cy = row.y + rowH / 2;
           // Same 10-student floor as everywhere else — the Upload FAQ promises
           // too-small groups are flagged wherever they appear.
           const tooFew = g.n < 10;
@@ -261,10 +299,12 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
           const boxStroke = above ? SLU.blue : SLU.neg;
 
           return (
-            <g key={g.key} opacity={tooFew ? 0.45 : 1}>
-              {/* row guide (subtle) */}
-              <line x1={leftPad} x2={leftPad + plotW} y1={cy + rowH / 2 - 2} y2={cy + rowH / 2 - 2}
-                    stroke={SLU.rule2} strokeWidth={1} opacity={i === groups.length - 1 ? 0 : 1} />
+            <g key={row.id} opacity={tooFew ? 0.45 : 1}>
+              {/* row guide (subtle) — skipped on a section's last row */}
+              {!row.lastInSection && (
+                <line x1={leftPad} x2={leftPad + plotW} y1={row.y + rowH - 2} y2={row.y + rowH - 2}
+                      stroke={SLU.rule2} strokeWidth={1} />
+              )}
 
               {/* group label + meta */}
               <text x={leftPad - 14} y={cy - 4} fontSize={14} fontWeight={700}
@@ -299,11 +339,11 @@ function DemographicsFigure({ label, groups, districtMean = 0, demoVar, ctx }) {
               {(g.outliers || []).map((o, oi) => {
                 const rec = typeof o === 'number' ? { residual: o } : o;
                 const px = xToPx(rec.residual);
-                const isHover = hover && hover.gKey === g.key && hover.oi === oi;
+                const isHover = hover && hover.rowId === row.id && hover.oi === oi;
                 return (
                   <g key={oi} style={{ cursor: 'pointer' }}
-                     onMouseEnter={() => setHover({ gKey: g.key, oi, px, py: cy, record: rec, boxStroke, groupLabel: g.label })}
-                     onMouseLeave={() => setHover(h => (h && h.gKey === g.key && h.oi === oi) ? null : h)}>
+                     onMouseEnter={() => setHover({ rowId: row.id, oi, px, py: cy, record: rec, boxStroke, groupLabel: g.label })}
+                     onMouseLeave={() => setHover(h => (h && h.rowId === row.id && h.oi === oi) ? null : h)}>
                     <circle cx={px} cy={cy} r={9} fill="transparent" />
                     <circle cx={px} cy={cy} r={isHover ? 4.2 : 2.4}
                             fill={boxStroke} fillOpacity={isHover ? 0.95 : 0.55}
