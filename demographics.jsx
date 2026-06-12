@@ -154,7 +154,8 @@ function OverviewCardDemo({ groups, ctx }) {
 
 function DemographicsFigure({ sections, districtMean = 0, ctx }) {
   const SLU = window.SLU;
-  const [hover, setHover] = React.useState(null); // {rowId, oi, px, py, record, boxStroke}
+  const [hover, setHover] = React.useState(null); // outlier dots: {rowId, oi, px, py, record, boxStroke}
+  const [rowHover, setRowHover] = React.useState(null); // whole-row hover/focus: row.id
   const allGroups = sections.flatMap((s) => s.groups);
   if (allGroups.length === 0) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -244,7 +245,9 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
         <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
           Across the whole district
           <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-          box = the middle half of students, line = the typical student, diamond = the average, dots = individual outliers
+          box = the middle half of students, diamond = the average, dots = individual outliers
+          <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
+          hover any group for its numbers
         </div>
       </div>
 
@@ -288,7 +291,6 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           const boxH = 36;
           const x_q1 = xToPx(g.q1);
           const x_q3 = xToPx(g.q3);
-          const x_med = xToPx(g.median);
           const x_mean = xToPx(g.mean);
           const x_wLo = xToPx(g.whiskerLo);
           const x_wHi = xToPx(g.whiskerHi);
@@ -297,9 +299,29 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           // blue = above district mean, rust (SLU.neg) = below.
           const boxFill = above ? 'rgba(0,61,165,0.10)' : 'rgba(124,58,18,0.12)';
           const boxStroke = above ? SLU.blue : SLU.neg;
+          // Row stays lit while probing its outlier dots — the band tracks
+          // either kind of hover; the stats tooltip yields to the dot's.
+          const rowActive = rowHover === row.id || (hover && hover.rowId === row.id);
 
           return (
             <g key={row.id} opacity={tooFew ? 0.45 : 1}>
+              {/* whole-row hover/focus target — drawn first so the outlier
+                  dots painted later keep their own finer-grained hover */}
+              <rect x={0} y={row.y} width={width} height={rowH} fill="transparent"
+                    tabIndex={0} className="gl-focus" role="img"
+                    aria-label={`${g.label}: typical student ${fmt(g.median)} ${unitLabel}, average ${fmt(g.mean)}, middle half ${fmt(g.q1)} to ${fmt(g.q3)}, n=${g.n.toLocaleString()}`}
+                    onMouseEnter={() => setRowHover(row.id)}
+                    onMouseLeave={() => setRowHover((r) => (r === row.id ? null : r))}
+                    onFocus={() => setRowHover(row.id)}
+                    onBlur={() => setRowHover((r) => (r === row.id ? null : r))} />
+              {rowActive && (
+                <rect x={2} y={row.y + 1} width={width - 4} height={rowH - 2} rx={4}
+                      fill="rgba(0, 61, 165, 0.04)" pointerEvents="none" />
+              )}
+              {/* Decorative row content is pointer-transparent so the hover
+                  target underneath sees the cursor everywhere in the row;
+                  only the outlier dots below keep their own hit areas. */}
+              <g pointerEvents="none">
               {/* row guide (subtle) — skipped on a section's last row */}
               {!row.lastInSection && (
                 <line x1={leftPad} x2={leftPad + plotW} y1={row.y + rowH - 2} y2={row.y + rowH - 2}
@@ -325,13 +347,10 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
               <rect x={x_q1} y={boxTop} width={Math.max(2, x_q3 - x_q1)} height={boxH}
                     fill={boxFill} stroke={boxStroke} strokeWidth={1.4} style={DEMO_TRANSITION} />
 
-              {/* median */}
-              <line x1={x_med} x2={x_med} y1={boxTop} y2={boxTop + boxH}
-                    stroke={boxStroke} strokeWidth={2.4} style={DEMO_TRANSITION} />
-
               {/* mean diamond (subtle) */}
               <g transform={`translate(${x_mean} ${cy})`} style={DEMO_TRANSITION}>
                 <polygon points="0,-5 5,0 0,5 -5,0" fill="#fff" stroke={boxStroke} strokeWidth={1.2} />
+              </g>
               </g>
 
               {/* outliers — visible dot rides inside a generous invisible hit
@@ -354,14 +373,16 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
               })}
 
               {/* stats column on the right */}
-              <text x={leftPad + plotW + 14} y={cy - 4} fontSize={12} fontFamily={DEMO_PAGE_MONO}
-                    fill={SLU.ink} fontWeight={600}>
-                med {fmt(g.median)}
-              </text>
-              <text x={leftPad + plotW + 14} y={cy + 12} fontSize={11} fontFamily={DEMO_PAGE_MONO}
-                    fill={SLU.mute}>
-                IQR {(toUnit(g.q3) - toUnit(g.q1)).toFixed(2)}
-              </text>
+              <g pointerEvents="none">
+                <text x={leftPad + plotW + 14} y={cy - 4} fontSize={12} fontFamily={DEMO_PAGE_MONO}
+                      fill={SLU.ink} fontWeight={600}>
+                  med {fmt(g.median)}
+                </text>
+                <text x={leftPad + plotW + 14} y={cy + 12} fontSize={11} fontFamily={DEMO_PAGE_MONO}
+                      fill={SLU.mute}>
+                  IQR {(toUnit(g.q3) - toUnit(g.q1)).toFixed(2)}
+                </text>
+              </g>
             </g>
           );
         })}
@@ -431,6 +452,48 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
                   </text>
                 </g>
               )}
+            </g>
+          );
+        })()}
+
+        {/* row stats tooltip — yields to an outlier-dot tooltip on the same row */}
+        {rowHover && !(hover && hover.rowId === rowHover) && (() => {
+          const row = placed.find((r) => r.type === 'group' && r.id === rowHover);
+          if (!row) return null;
+          const g = row.g;
+          const cy = row.y + rowH / 2;
+          const stroke = g.median >= 0 ? SLU.blue : SLU.neg;
+          const tipW = 212, tipH = 96;
+          const anchorR = xToPx(g.whiskerHi);
+          const placeRight = anchorR + tipW + 24 <= width;
+          const tx = Math.max(4, placeRight ? anchorR + 14 : xToPx(g.whiskerLo) - tipW - 14);
+          const ty = Math.max(4, Math.min(height - tipH - 4, cy - tipH / 2));
+          const line = (label, value, dy) => (
+            <g key={label}>
+              <text x={tx + 10} y={ty + dy} fontSize={10.5} fontFamily={DEMO_PAGE_FONT} fill={SLU.mute}>{label}</text>
+              <text x={tx + tipW - 10} y={ty + dy} fontSize={10.5} fontFamily={DEMO_PAGE_MONO}
+                    fill={SLU.ink2} textAnchor="end" fontWeight={600}>{value}</text>
+            </g>
+          );
+          return (
+            <g pointerEvents="none">
+              <rect x={tx} y={ty} width={tipW} height={tipH} rx={5}
+                    fill="#fff" stroke={stroke} strokeWidth={1.2}
+                    filter="drop-shadow(0 2px 6px rgba(15,23,42,0.12))" />
+              <text x={tx + 10} y={ty + 18} fontSize={11.5} fontFamily={DEMO_PAGE_FONT}
+                    fontWeight={700} fill={SLU.ink}>
+                {g.label}
+              </text>
+              <text x={tx + tipW - 10} y={ty + 18} fontSize={10.5} fontFamily={DEMO_PAGE_MONO}
+                    fill={SLU.mute} textAnchor="end">
+                n={g.n.toLocaleString()}
+              </text>
+              <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 26} y2={ty + 26}
+                    stroke={SLU.rule2} strokeWidth={1} />
+              {line('Typical student', `${fmt(g.median)} ${unitLabel}`, 42)}
+              {line('Average', `${fmt(g.mean)} ${unitLabel}`, 58)}
+              {line('Middle half', `${fmt(g.q1)} to ${fmt(g.q3)}`, 74)}
+              {line('Full spread', `${fmt(g.whiskerLo)} to ${fmt(g.whiskerHi)}`, 90)}
             </g>
           );
         })()}
