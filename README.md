@@ -118,6 +118,8 @@ export.jsx              Export page — renders the deck model as a PptxGenJS PP
 
 engine/                 real ingestion + computation engine (see Architecture)
 engine/deck.js          deck model for the Export page (Node-tested slide descriptors)
+deck-figures.js         SVG figure builders shared by the PPTX export (rasterized to PNG)
+                        and the on-page carousel (Node-tested)
 tools/build-demo.js     regenerates ALL demo fixtures (data.js + heatmap-data.js + demo-data.js)
                         from one synthetic student dataset via engine/stats.js
 vendor/duckdb/          vendored DuckDB-WASM + Apache Arrow, same-origin (has its own README)
