@@ -155,7 +155,6 @@ function OverviewCardDemo({ groups, ctx }) {
 
 function DemographicsFigure({ sections, districtMean = 0, ctx }) {
   const SLU = window.SLU;
-  const [hover, setHover] = React.useState(null); // outlier dots: {rowId, oi, px, py, record, boxStroke}
   const [rowHover, setRowHover] = React.useState(null); // whole-row hover/focus: row.id
   const [measureRef, measuredW] = window.useMeasuredWidth(920);
   const allGroups = sections.flatMap((s) => s.groups);
@@ -305,14 +304,12 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           // blue = above district mean, rust (SLU.neg) = below.
           const boxFill = above ? 'rgba(0,61,165,0.10)' : 'rgba(124,58,18,0.12)';
           const boxStroke = above ? SLU.blue : SLU.neg;
-          // Row stays lit while probing its outlier dots — the band tracks
-          // either kind of hover; the stats tooltip yields to the dot's.
-          const rowActive = rowHover === row.id || (hover && hover.rowId === row.id);
+          const rowActive = rowHover === row.id;
 
           return (
             <g key={row.id} opacity={tooFew ? 0.45 : 1}>
-              {/* whole-row hover/focus target — drawn first so the outlier
-                  dots painted later keep their own finer-grained hover */}
+              {/* whole-row hover/focus target — the row is the only
+                  interactive unit; everything drawn on it is decorative */}
               <rect x={0} y={row.y} width={width} height={rowH} fill="transparent"
                     tabIndex={0} className="gl-focus" role="img"
                     aria-label={`${g.label}: typical student ${fmt(g.median)} ${unitLabel}, middle half ${fmt(g.q1)} to ${fmt(g.q3)}, n=${g.n.toLocaleString()}`}
@@ -325,8 +322,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
                       fill="rgba(0, 61, 165, 0.04)" pointerEvents="none" />
               )}
               {/* Decorative row content is pointer-transparent so the hover
-                  target underneath sees the cursor everywhere in the row;
-                  only the outlier dots below keep their own hit areas. */}
+                  target underneath sees the cursor everywhere in the row. */}
               <g pointerEvents="none">
               {/* row guide (subtle) — skipped on a section's last row */}
               {!row.lastInSection && (
@@ -361,22 +357,14 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
               </g>
               </g>
 
-              {/* outliers — visible dot rides inside a generous invisible hit
-                  area, since a ~5px target is hard to hover precisely */}
+              {/* outliers — individual students far from the pack; decorative
+                  only, so the whole-row hover works across them too */}
               {(g.outliers || []).map((o, oi) => {
                 const rec = typeof o === 'number' ? { residual: o } : o;
                 const px = xToPx(rec.residual);
-                const isHover = hover && hover.rowId === row.id && hover.oi === oi;
                 return (
-                  <g key={oi} style={{ cursor: 'pointer' }}
-                     onMouseEnter={() => setHover({ rowId: row.id, oi, px, py: cy, record: rec, boxStroke, groupLabel: g.label })}
-                     onMouseLeave={() => setHover(h => (h && h.rowId === row.id && h.oi === oi) ? null : h)}>
-                    <circle cx={px} cy={cy} r={9} fill="transparent" />
-                    <circle cx={px} cy={cy} r={isHover ? 4.2 : 2.4}
-                            fill={boxStroke} fillOpacity={isHover ? 0.95 : 0.55}
-                            stroke={isHover ? '#fff' : 'none'} strokeWidth={isHover ? 1.4 : 0}
-                            style={DEMO_TRANSITION} pointerEvents="none" />
-                  </g>
+                  <circle key={oi} cx={px} cy={cy} r={2.4} pointerEvents="none"
+                          fill={boxStroke} fillOpacity={0.55} style={DEMO_TRANSITION} />
                 );
               })}
 
@@ -419,53 +407,8 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           Growth vs. expected ({unitLabel})
         </text>
 
-        {/* outlier tooltip — drawn last so it sits above everything. Uploaded
-            outliers are bare residuals (no student/school ids), so the tooltip
-            collapses to a compact value + group line instead of placeholders. */}
-        {hover && hover.record && (() => {
-          const r = hover.record;
-          const hasIds = !!(r.student_id || r.school_id);
-          const tipW = 168, tipH = hasIds ? 64 : 28;
-          const px = hover.px;
-          const py = hover.py;
-          // Flip the tooltip to whichever side has room.
-          const placeRight = px + tipW + 16 <= width;
-          const tx = placeRight ? px + 10 : px - tipW - 10;
-          const ty = Math.max(4, Math.min(height - tipH - 4, py - tipH / 2));
-          const resid = (toUnit(r.residual) >= 0 ? '+' : '−') + Math.abs(toUnit(r.residual)).toFixed(2);
-          return (
-            <g pointerEvents="none">
-              <line x1={px} x2={placeRight ? tx : tx + tipW} y1={py} y2={ty + tipH / 2}
-                    stroke={hover.boxStroke} strokeWidth={1} opacity={0.6} />
-              <rect x={tx} y={ty} width={tipW} height={tipH} rx={5}
-                    fill="#fff" stroke={hover.boxStroke} strokeWidth={1.2}
-                    filter="drop-shadow(0 2px 6px rgba(15,23,42,0.12))" />
-              <text x={tx + 10} y={ty + 18} fontSize={11.5} fontFamily={DEMO_PAGE_MONO}
-                    fontWeight={700} fill={SLU.ink}>
-                {r.student_id || hover.groupLabel}
-              </text>
-              <text x={tx + tipW - 10} y={ty + 18} fontSize={11} fontFamily={DEMO_PAGE_MONO}
-                    fill={hover.boxStroke} textAnchor="end" fontWeight={700}>
-                {resid} {unitLabel}
-              </text>
-              {hasIds && (
-                <g>
-                  <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 24} y2={ty + 24}
-                        stroke={SLU.rule2} strokeWidth={1} />
-                  <text x={tx + 10} y={ty + 38} fontSize={10.5} fontFamily={DEMO_PAGE_MONO} fill={SLU.ink2}>
-                    {hover.groupLabel}
-                  </text>
-                  <text x={tx + 10} y={ty + 52} fontSize={10} fontFamily={DEMO_PAGE_MONO} fill={SLU.mute}>
-                    {r.school_id || ''}{r.grade ? ` · Gr ${r.grade}` : ''}
-                  </text>
-                </g>
-              )}
-            </g>
-          );
-        })()}
-
-        {/* row stats tooltip — yields to an outlier-dot tooltip on the same row */}
-        {rowHover && !(hover && hover.rowId === rowHover) && (() => {
+        {/* row stats tooltip */}
+        {rowHover && (() => {
           const row = placed.find((r) => r.type === 'group' && r.id === rowHover);
           if (!row) return null;
           const g = row.g;
