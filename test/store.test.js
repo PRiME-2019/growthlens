@@ -70,9 +70,29 @@ test('store: allSubjectsData spans every available subject regardless of the act
   assert.deepEqual(Object.keys(store.allSubjectsData()), ['math']);   // demo is Math-only
   const elaShapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: { schools: [] }, DEMO_DATA: {}, ACH_DATA: {} };
   store.putUploaded('ela', elaShapes, { subject: 'ela' });
-  const all = store.allSubjectsData();   // still active=math
-  assert.deepEqual(Object.keys(all).sort(), ['ela', 'math']);
+  // Real data suppresses the sample entirely — only the upload remains.
+  const all = store.allSubjectsData();
+  assert.deepEqual(Object.keys(all), ['ela']);
   assert.equal(all.ela.heat, elaShapes.HEATMAP_DATA);
+  const mathShapes = { GAPS_DATA_BY_DEMO: { frl: {} }, HEATMAP_DATA: { schools: [] }, DEMO_DATA: {}, ACH_DATA: {} };
+  store.putUploaded('math', mathShapes, { subject: 'math' });
+  assert.deepEqual(Object.keys(store.allSubjectsData()).sort(), ['ela', 'math']);
+});
+
+test('store: any real upload suppresses the demo; removing it brings the sample back', () => {
+  const { win, store, demoGaps } = freshStore();
+  store.seedDemo();
+  store.setActiveSubject('math');
+  assert.equal(store.available('math'), true);   // demo backs math
+  const elaFrl = { meta: { subject: 'ela', demographic: 'frl' }, schools: [] };
+  store.putUploaded('ela', { GAPS_DATA_BY_DEMO: { frl: elaFrl }, HEATMAP_DATA: {}, DEMO_DATA: {}, ACH_DATA: {} }, { subject: 'ela' });
+  assert.equal(store.available('math'), false, 'sample math unloaded once real ELA exists');
+  assert.equal(store.activeSubject(), 'ela', 'active subject moves off the vanished sample');
+  assert.equal(win.GAPS_DATA, elaFrl, 'globals point at the upload, not stale demo data');
+  store.removeUploaded('ela');
+  assert.equal(store.available('math'), true, 'sample returns when the last upload is removed');
+  assert.equal(store.activeSubject(), 'math');
+  assert.equal(win.GAPS_DATA, demoGaps);
 });
 
 test('store: putUploaded(ela) makes ela available + active and shadows the right gaps', () => {

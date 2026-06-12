@@ -19,11 +19,24 @@
     };
   }
 
-  function resolve(subject) { return sources.uploaded[subject] || sources.demo[subject] || null; }
+  // Real data never sits next to the sample: once ANY subject is uploaded,
+  // the demo stops backing the others entirely (a user toggling subjects must
+  // never mistake bundled sample data for their own). Removing the last
+  // upload lets the sample show through again.
+  function anyUploaded() { return Object.keys(sources.uploaded).length > 0; }
+  function resolve(subject) {
+    if (sources.uploaded[subject]) return sources.uploaded[subject];
+    return anyUploaded() ? null : (sources.demo[subject] || null);
+  }
   function available(subject) { return !!resolve(subject); }
 
   function putUploaded(subject, shapes, meta) {
     sources.uploaded[subject] = { shapes, meta: { ...meta, source: 'uploaded' } };
+    // The upload may have just suppressed the sample that backed the active
+    // subject — move to the upload and re-point the globals immediately so
+    // no figure renders stale demo data.
+    if (!available(activeSubject)) activeSubject = subject;
+    pointGlobals(activeSubject, activeSubgroup);
   }
 
   function pointGlobals(subject, subgroup) {

@@ -19,8 +19,8 @@
 
 // Subject toggle is live across all screens. Figure data is swapped behind the
 // window.* globals by engine/store.js (GLStore): the bundled fixtures are the
-// Math demo; an uploaded subject shadows the demo. ELA is unavailable until a
-// real ELA file is uploaded.
+// Math sample, and ANY real upload suppresses the sample entirely (real and
+// sample data never coexist). A subject is unavailable until its file loads.
 const SUBJECTS = { ela: 'ELA', math: 'Math' };
 
 // ---- SUBJECT DATA SWAP -> engine/store.js (GLStore) --------------------------
@@ -129,10 +129,13 @@ function AppBody() {
     try { localStorage.setItem(ANALYSIS_PREFS_KEY, JSON.stringify({ subject, unit, estimate, demo })); }
     catch { /* ignore */ }
   }, [subject, unit, estimate, demo]);
-  // A persisted subject the active store can't serve (e.g. 'ela' with the
-  // Math-only demo) snaps back instead of dead-ending on "No data".
+  // A subject the store can't serve snaps to one it can — a persisted 'ela'
+  // with the Math-only sample, or 'math' right after an ELA upload suppresses
+  // the sample. Never dead-end on "No data".
   React.useEffect(() => {
-    if (window.GLStore && !window.GLStore.available(subject)) setSubjectState('math');
+    if (!window.GLStore || window.GLStore.available(subject)) return;
+    const fallback = ['math', 'ela'].find((s) => window.GLStore.available(s));
+    if (fallback && fallback !== subject) setSubjectState(fallback);
   });
 
   // Same idea for subgroups: the demo ships only the FRL slice, so the other
