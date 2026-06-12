@@ -79,7 +79,9 @@
     const skippedNote = skipped.length
       ? `No school-by-school slide for ${skipped.join(' or ')} — the district-wide difference there could plausibly be zero.`
       : null;
-    return { kind: 'gapsOverview', rows, skippedNote };
+    const activeKey = GAP_KEYS.find((k) => gaps[k] && gaps[k].meta);
+    return { kind: 'gapsOverview', rows, skippedNote,
+             takeaways: pickTakeaways(I.gapTakeaways({ slices: gaps, activeKey, mode, fmt })) };
   }
 
   // Appendix: one forest slide per RELIABLE comparison, schools sorted by
@@ -128,6 +130,10 @@
   const GRADES = [3, 4, 5, 6, 7, 8];
   const cellVal = (c) => (c.rs != null ? c.rs : c.r);
 
+  // Each figure slide carries its page's generated takeaways — the same
+  // insights the app's overview cards show, minus caveats, capped at three.
+  const pickTakeaways = (items) => (items || []).filter((t) => t && !t.caveat).slice(0, 3);
+
   function heatSlide({ heat, subject, fmt } = {}) {
     if (!heat || !heat.schools || !heat.schools.length) return null;
     const grades = GRADES.filter((g) => heat.schools.some((s) => s.grades && s.grades[g] && s.grades[g].n > 0));
@@ -144,7 +150,8 @@
         overall: ovz == null ? null : { z: ovz, n: s.overall.n, text: fmt.val(ovz) },
       };
     });
-    return { kind: 'heat', subject, grades, rows };
+    return { kind: 'heat', subject, grades, rows,
+             takeaways: pickTakeaways(I.scanTakeaways({ heat, fmt })) };
   }
 
   function scatterSlide({ ach, subject, mode = 'shrunk', fmt } = {}) {
@@ -161,6 +168,7 @@
       xMean: w ? xw / w : 0, yMean: w ? yw / w : 0,
       best: { name: best.name, text: fmt.val(best.y) },
       worst: { name: worst.name, text: fmt.val(worst.y) },
+      takeaways: pickTakeaways(I.achievementTakeaways({ ach, mode, fmt })),
     };
   }
 
@@ -178,7 +186,8 @@
     const raw = rawSections.flatMap((s) => s.groups);
     const lo = Math.min(...raw.map((g) => (g.whiskerLo != null ? g.whiskerLo : g.q1)));
     const hi = Math.max(...raw.map((g) => (g.whiskerHi != null ? g.whiskerHi : g.q3)));
-    return { kind: 'groups', subject, sections, domain: { min: lo, max: hi } };
+    return { kind: 'groups', subject, sections, domain: { min: lo, max: hi },
+             takeaways: pickTakeaways(I.demographicsTakeaways({ data: { groups: raw }, fmt })) };
   }
 
   // Tiles + the first non-caveat takeaway from each page's generator,
@@ -192,9 +201,9 @@
       const ov = ((heat && heat.schools) || []).map((x) => x.overall).filter(Boolean);
       if (ov.length) {
         tiles.push({
-          label: `Schools growing faster than expected · ${s === 'ela' ? 'ELA' : 'Math'}`,
+          label: `Growing faster than expected · ${s === 'ela' ? 'ELA' : 'Math'}`,
           value: `${ov.filter((o) => cellVal(o) >= 0).length} / ${ov.length}`,
-          sub: 'after steadying small schools',
+          sub: 'schools, after steadying small ones',
         });
       }
     }

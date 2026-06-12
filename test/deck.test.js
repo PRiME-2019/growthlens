@@ -153,6 +153,23 @@ test('groupsSlide: sections via buildDemoSections, median text, shared domain', 
   assert.ok(g.domain.min <= -1 && g.domain.max >= 1.2, 'domain covers whiskers');
 });
 
+test('figure slides carry their page generator takeaways (non-caveat, max 3)', () => {
+  const h = D.heatSlide({ heat: HEAT, subject: 'math', fmt: fmtSD });
+  assert.ok(Array.isArray(h.takeaways) && h.takeaways.length >= 1 && h.takeaways.length <= 3,
+    'heat takeaways present');
+  assert.ok(h.takeaways.every((t) => !t.caveat && typeof t.text === 'string'));
+
+  const s = D.scatterSlide({ ach: ACH, subject: 'math', mode: 'shrunk', fmt: fmtSD });
+  assert.ok(Array.isArray(s.takeaways) && s.takeaways.length <= 3, 'scatter takeaways present');
+
+  const g = D.groupsSlide({ demo: DEMO, subject: 'math', fmt: fmtSD });
+  assert.ok(Array.isArray(g.takeaways) && g.takeaways.length >= 1, 'groups takeaways present');
+
+  const o = D.gapsOverview({ gaps: GAPS, mode: 'shrunk', fmt: fmtSD });
+  assert.ok(Array.isArray(o.takeaways) && o.takeaways.length >= 1, 'gaps takeaways present');
+  assert.ok(o.takeaways.every((t) => !t.caveat));
+});
+
 test('glanceSlide: tiles + first non-caveat takeaway per generator, capped at six', () => {
   const bySubject = { math: { gaps: GAPS, heat: HEAT, ach: ACH, demo: DEMO,
     meta: { subject: 'math', latestYear: 2025, nSchools: 2, nRowsLatest: 700 } } };

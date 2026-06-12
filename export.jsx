@@ -31,29 +31,64 @@ function rgbToHex(rgb) {
   return [m[1], m[2], m[3]].map((v) => (+v).toString(16).padStart(2, '0').toUpperCase()).join('');
 }
 
-// Standard slide chrome: eyebrow + title + gold rule + footer.
+// Standard slide chrome: eyebrow + title + gold rule, and a ruled footer
+// with the deck identity left and the page number right.
 function chrome(slide, deck, d, eyebrow, title) {
-  slide.addText(eyebrow.toUpperCase(), { x: 0.6, y: 0.32, w: 9, h: 0.3, fontFace: F_HEAD, fontSize: 11, color: XP.mute, bold: true, charSpacing: 3 });
-  slide.addText(title, { x: 0.6, y: 0.62, w: 12.1, h: 0.55, fontFace: F_SERIF, fontSize: 24, color: XP.ink });
-  slide.addShape('rect', { x: 0.6, y: 1.28, w: 0.55, h: 0.035, fill: { color: XP.gold }, line: { type: 'none' } });
+  slide.addText(eyebrow.toUpperCase(), { x: 0.6, y: 0.3, w: 9, h: 0.3, fontFace: F_HEAD, fontSize: 11, color: XP.gold, bold: true, charSpacing: 3 });
+  slide.addText(title, { x: 0.6, y: 0.6, w: 12.1, h: 0.55, fontFace: F_SERIF, fontSize: 24, color: XP.ink });
+  slide.addShape('rect', { x: 0.6, y: 1.26, w: 0.55, h: 0.035, fill: { color: XP.gold }, line: { type: 'none' } });
+  slide.addShape('line', { x: 0.6, y: PAGE_H - 0.46, w: 12.13, h: 0, line: { color: XP.rule2, width: 0.75 } });
   const tag = deck.meta.sample ? 'SAMPLE DATA · ' : '';
-  slide.addText(`${tag}${deck.meta.district} · ${deck.meta.year} · GrowthLens · ${d.n}/${deck.slides.length}`,
-    { x: 0.6, y: PAGE_H - 0.42, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 9, color: XP.mute, charSpacing: 2 });
+  slide.addText(`${tag}${deck.meta.district} · ${deck.meta.year}`,
+    { x: 0.6, y: PAGE_H - 0.38, w: 8, h: 0.26, fontFace: F_HEAD, fontSize: 9, color: XP.mute, charSpacing: 2 });
+  slide.addText(`GrowthLens · ${d.n} / ${deck.slides.length}`,
+    { x: 9.7, y: PAGE_H - 0.38, w: 3.03, h: 0.26, fontFace: F_HEAD, fontSize: 9, color: XP.mute, charSpacing: 2, align: 'right' });
 }
 const subjWord = (s) => (s === 'ela' ? 'ELA' : 'Math');
+
+// Round a chart step to a friendly size (1/2/2.5/5 × 10^k).
+function niceStep(span, target = 4) {
+  const raw = Math.abs(span) / target || 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+
+// "What stands out" — the page's generated takeaways in a paper band with a
+// gold edge, the deck's counterpart of the app's overview-card bullets.
+function takeawayBand(slide, takeaways, { x = 0.6, y, w = 12.13, h = 1.15, fontSize = 10.5 } = {}) {
+  if (!takeaways || !takeaways.length) return;
+  slide.addShape('rect', { x, y, w, h, fill: { color: XP.paper }, line: { color: XP.rule2, width: 0.75 } });
+  slide.addShape('rect', { x, y, w: 0.045, h, fill: { color: XP.gold }, line: { type: 'none' } });
+  slide.addText('WHAT STANDS OUT', { x: x + 0.16, y: y + 0.07, w: w - 0.3, h: 0.22, fontFace: F_HEAD, fontSize: 8.5, bold: true, color: XP.mute, charSpacing: 2 });
+  const rows = takeaways.flatMap((t) => mdRuns(t.text, { fontSize, color: XP.ink2 })
+    .map((r, i, arr) => ({ ...r, options: { ...r.options, bullet: i === 0 ? { code: '25AA', indent: 10 } : undefined, breakLine: i === arr.length - 1, paraSpaceAfter: 4 } })));
+  slide.addText(rows, { x: x + 0.18, y: y + 0.3, w: w - 0.42, h: h - 0.38, fontFace: F_BODY, valign: 'top', lineSpacingMultiple: 1.08 });
+}
 
 // ---- PPTX layouts (one per slide kind) -------------------------------------
 function layoutCover(pres, slide, deck, d) {
   slide.background = { color: XP.blueDark };
-  slide.addText('GrowthLens', { x: 0.9, y: 1.5, w: 8, h: 0.8, fontFace: F_SERIF, fontSize: 40, color: 'FFFFFF' });
-  slide.addShape('rect', { x: 0.95, y: 2.45, w: 1.0, h: 0.04, fill: { color: XP.goldLight }, line: { type: 'none' } });
-  slide.addText(d.district, { x: 0.9, y: 2.8, w: 11.5, h: 1.0, fontFace: F_HEAD, fontSize: 32, bold: true, color: 'FFFFFF' });
+  // Brand glyph — the measurement bar from the favicon: a muted track with
+  // gold and light-blue segments and a reference tick.
+  slide.addShape('rect', { x: 0.92, y: 1.06, w: 1.7, h: 0.075, fill: { color: '3D5187' }, line: { type: 'none' } });
+  slide.addShape('rect', { x: 1.43, y: 1.06, w: 0.6, h: 0.075, fill: { color: XP.goldLight }, line: { type: 'none' } });
+  slide.addShape('rect', { x: 2.03, y: 1.06, w: 0.59, h: 0.075, fill: { color: '5A7DC4' }, line: { type: 'none' } });
+  slide.addShape('line', { x: 2.03, y: 0.94, w: 0, h: 0.3, line: { color: 'FFFFFF', width: 1.5 } });
+  slide.addText('GrowthLens', { x: 0.9, y: 1.4, w: 8, h: 0.8, fontFace: F_SERIF, fontSize: 40, color: 'FFFFFF' });
+  slide.addShape('rect', { x: 0.95, y: 2.4, w: 1.0, h: 0.04, fill: { color: XP.goldLight }, line: { type: 'none' } });
+  slide.addText(d.district, { x: 0.9, y: 3.0, w: 11.5, h: 1.0, fontFace: F_HEAD, fontSize: 36, bold: true, color: 'FFFFFF' });
   slide.addText(`Growth report · ${d.year} · ${d.subjects.join(' + ')}`,
-    { x: 0.9, y: 3.8, w: 11, h: 0.5, fontFace: F_HEAD, fontSize: 16, color: XP.goldLight });
-  if (d.sample) slide.addText('SAMPLE DATA — for demonstration only',
-    { x: 0.9, y: 4.5, w: 8, h: 0.4, fontFace: F_HEAD, fontSize: 13, bold: true, color: 'FFD27D' });
+    { x: 0.9, y: 4.05, w: 11, h: 0.5, fontFace: F_HEAD, fontSize: 17, color: XP.goldLight });
+  if (d.sample) {
+    slide.addShape('roundRect', { x: 0.9, y: 4.75, w: 3.85, h: 0.42, rectRadius: 0.08,
+      fill: { color: '1B3568' }, line: { color: 'C8A84A', width: 1 } });
+    slide.addText('SAMPLE DATA — FOR DEMONSTRATION ONLY', { x: 1.0, y: 4.79, w: 3.7, h: 0.34,
+      fontFace: F_HEAD, fontSize: 10, bold: true, color: 'FFD27D', charSpacing: 1.5, valign: 'middle' });
+  }
+  slide.addShape('line', { x: 0.9, y: PAGE_H - 0.85, w: 11.5, h: 0, line: { color: '3D5187', width: 0.75 } });
   slide.addText(`PRiME Center · Saint Louis University · ${d.today}`,
-    { x: 0.9, y: PAGE_H - 0.7, w: 11, h: 0.35, fontFace: F_HEAD, fontSize: 10, color: 'B9C4DE', charSpacing: 2 });
+    { x: 0.9, y: PAGE_H - 0.72, w: 11, h: 0.35, fontFace: F_HEAD, fontSize: 10, color: 'B9C4DE', charSpacing: 2 });
   slide.addNotes('Title slide. Set the scene: this is the district’s growth report. Anyone who wants the technical detail can read the methods note linked from the app.');
 }
 
@@ -79,17 +114,20 @@ function layoutIntro(pres, slide, deck, d) {
 
 function layoutGlance(pres, slide, deck, d) {
   chrome(slide, deck, d, 'Summary', 'Your district at a glance');
-  const tileW = Math.min(3.9, 12.1 / Math.max(1, d.tiles.length) - 0.2);
+  const n = Math.max(1, d.tiles.length);
+  const gap = 0.3, tileW = (12.13 - gap * (n - 1)) / n, tileH = 1.85;
   d.tiles.forEach((t, i) => {
-    const x = 0.6 + i * (tileW + 0.25);
-    slide.addShape('rect', { x, y: 1.7, w: tileW, h: 1.5, fill: { color: XP.paper }, line: { color: XP.rule2, width: 1 } });
-    slide.addText(t.label.toUpperCase(), { x: x + 0.15, y: 1.8, w: tileW - 0.3, h: 0.5, fontFace: F_HEAD, fontSize: 9, bold: true, color: XP.mute, charSpacing: 1.5 });
-    slide.addText(t.value, { x: x + 0.15, y: 2.25, w: tileW - 0.3, h: 0.6, fontFace: F_MONO, fontSize: 26, bold: true, color: XP.ink });
-    slide.addText(t.sub, { x: x + 0.15, y: 2.85, w: tileW - 0.3, h: 0.3, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
+    const x = 0.6 + i * (tileW + gap);
+    slide.addShape('rect', { x, y: 1.65, w: tileW, h: tileH, fill: { color: XP.paper }, line: { color: XP.rule2, width: 1 } });
+    slide.addShape('rect', { x, y: 1.65, w: tileW, h: 0.045, fill: { color: XP.gold }, line: { type: 'none' } });
+    slide.addText(t.label.toUpperCase(), { x: x + 0.2, y: 1.82, w: tileW - 0.4, h: 0.45, fontFace: F_HEAD, fontSize: 9.5, bold: true, color: XP.mute, charSpacing: 1.5, valign: 'top' });
+    slide.addText(t.value, { x: x + 0.2, y: 2.3, w: tileW - 0.4, h: 0.7, fontFace: F_MONO, fontSize: 32, bold: true, color: XP.blue });
+    slide.addText(t.sub, { x: x + 0.2, y: 3.05, w: tileW - 0.4, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
   });
-  const rows = d.takeaways.flatMap((t) => mdRuns(t.text, { fontSize: 13.5, color: XP.ink2 })
-    .map((r, i, arr) => ({ ...r, options: { ...r.options, bullet: i === 0 ? { code: '25AA', indent: 14 } : undefined, breakLine: i === arr.length - 1, paraSpaceAfter: 8 } })));
-  slide.addText(rows, { x: 0.8, y: 3.6, w: 11.7, h: 3.3, fontFace: F_BODY, valign: 'top', lineSpacingMultiple: 1.15 });
+  slide.addText('WHAT THE DATA SAYS', { x: 0.6, y: 3.85, w: 5, h: 0.26, fontFace: F_HEAD, fontSize: 9, bold: true, color: XP.mute, charSpacing: 2.5 });
+  const rows = d.takeaways.flatMap((t) => mdRuns(t.text, { fontSize: 13, color: XP.ink2 })
+    .map((r, i, arr) => ({ ...r, options: { ...r.options, bullet: i === 0 ? { code: '25AA', indent: 14 } : undefined, breakLine: i === arr.length - 1, paraSpaceAfter: 9 } })));
+  slide.addText(rows, { x: 0.75, y: 4.15, w: 11.8, h: 2.7, fontFace: F_BODY, valign: 'top', lineSpacingMultiple: 1.12 });
   slide.addNotes('The whole story on one slide. Each bullet is generated from the data behind a later section; the sections carry the detail.');
 }
 
@@ -113,75 +151,136 @@ function layoutHeat(pres, slide, deck, d) {
           color: window.heatCellInk(r.overall.z) === '#fff' ? 'FFFFFF' : XP.ink } }
       : { text: '—', options: { align: 'center', color: XP.mute } },
   ]);
-  const rowH = Math.min(0.42, 4.9 / (body.length + 1));
-  slide.addTable([head, ...body], { x: 0.6, y: 1.7, w: 12.1, rowH,
-    colW: [3.4, ...d.grades.map(() => (12.1 - 3.4 - 1.3) / d.grades.length), 1.3],
+  const rowH = Math.min(0.42, 3.7 / (body.length + 1));
+  slide.addTable([head, ...body], { x: 0.6, y: 1.55, w: 12.13, rowH,
+    colW: [3.4, ...d.grades.map(() => (12.13 - 3.4 - 1.3) / d.grades.length), 1.3],
     border: { type: 'solid', color: 'FFFFFF', pt: 1 }, valign: 'middle', fontFace: F_BODY });
-  slide.addText('Blue = growing faster than expected · rust = slower · numbers steadied toward the district average',
-    { x: 0.6, y: PAGE_H - 0.85, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
+  // Legend chips under the table, where the eye lands after reading it.
+  const legendY = 1.55 + rowH * (body.length + 1) + 0.18;
+  slide.addShape('rect', { x: 0.62, y: legendY + 0.03, w: 0.22, h: 0.14, fill: { color: rgbToHex(window.divColor(0.2)) }, line: { type: 'none' } });
+  slide.addText('growing faster than expected', { x: 0.88, y: legendY - 0.04, w: 2.4, h: 0.26, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
+  slide.addShape('rect', { x: 3.3, y: legendY + 0.03, w: 0.22, h: 0.14, fill: { color: rgbToHex(window.divColor(-0.2)) }, line: { type: 'none' } });
+  slide.addText('growing slower', { x: 3.56, y: legendY - 0.04, w: 1.4, h: 0.26, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
+  slide.addText('numbers steadied toward the district average, so a few students can’t swing a cell',
+    { x: 5.1, y: legendY - 0.04, w: 7.6, h: 0.26, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute, align: 'right' });
+  takeawayBand(slide, d.takeaways, { y: PAGE_H - 1.85, h: 1.2 });
   slide.addNotes('Scan rows for schools that are consistently strong or soft, and columns for grades where the whole district leans one way.');
 }
 
+// Shape-drawn scatter — the native chart can't put the quadrant crosshair at
+// the district averages or keep its axis labels out of the plot.
 function layoutScatter(pres, slide, deck, d) {
   chrome(slide, deck, d, subjWord(d.subject), 'Scores vs. growth, school by school');
-  slide.addChart(pres.ChartType.scatter, [
-    { name: 'Score', values: d.points.map((p) => p.x) },
-    { name: 'Schools', values: d.points.map((p) => p.y) },
-  ], {
-    x: 0.6, y: 1.6, w: 8.2, h: 5.1,
-    lineSize: 0, showLegend: false,
-    chartColors: [XP.blue],
-    catAxisTitle: 'This year’s score (standard scale)', showCatAxisTitle: true, catAxisTitleFontSize: 10,
-    valAxisTitle: 'Growth vs. expected', showValAxisTitle: true, valAxisTitleFontSize: 10,
-    lineDataSymbolSize: 9,
-  });
+  const px = 0.95, py = 1.75, pw = 7.45, ph = 4.15;
+  const xs = d.points.map((p) => p.x), ys = d.points.map((p) => p.y);
+  const padX = Math.max(0.1, (Math.max(...xs) - Math.min(...xs)) * 0.15);
+  const padY = Math.max(0.04, (Math.max(...ys) - Math.min(...ys)) * 0.18);
+  const xLo = Math.min(...xs, d.xMean) - padX, xHi = Math.max(...xs, d.xMean) + padX;
+  const yLo = Math.min(...ys, d.yMean) - padY, yHi = Math.max(...ys, d.yMean) + padY;
+  const sx = (v) => px + ((v - xLo) / (xHi - xLo || 1)) * pw;
+  const sy = (v) => py + ph - ((v - yLo) / (yHi - yLo || 1)) * ph;
+
+  slide.addShape('rect', { x: px, y: py, w: pw, h: ph, fill: { color: 'FFFFFF' }, line: { color: XP.rule, width: 1 } });
+  // gridlines + tick labels (outside the plot, never rotated)
+  const xStep = niceStep(xHi - xLo), yStep = niceStep(yHi - yLo);
+  const tickLabel = (t, dp) => (Math.abs(t) < 1e-9 ? '0' : (t > 0 ? '+' : '−') + Math.abs(t).toFixed(dp));
+  for (let t = Math.ceil(xLo / xStep) * xStep; t <= xHi + 1e-9; t += xStep) {
+    const X = sx(t);
+    slide.addShape('line', { x: X, y: py, w: 0, h: ph, line: { color: XP.rule2, width: 0.75 } });
+    slide.addText(tickLabel(t, 1),
+      { x: X - 0.4, y: py + ph + 0.04, w: 0.8, h: 0.22, fontFace: F_MONO, fontSize: 8.5, color: XP.mute, align: 'center' });
+  }
+  for (let t = Math.ceil(yLo / yStep) * yStep; t <= yHi + 1e-9; t += yStep) {
+    const Y = sy(t);
+    slide.addShape('line', { x: px, y: Y, w: pw, h: 0, line: { color: XP.rule2, width: 0.75 } });
+    slide.addText(tickLabel(t, 2),
+      { x: px - 0.62, y: Y - 0.11, w: 0.56, h: 0.22, fontFace: F_MONO, fontSize: 8.5, color: XP.mute, align: 'right' });
+  }
+  // district-average crosshair — the quadrant split
+  slide.addShape('line', { x: sx(d.xMean), y: py, w: 0, h: ph, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+  slide.addShape('line', { x: px, y: sy(d.yMean), w: pw, h: 0, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+  // quadrant corner labels
+  const corner = (tx, x, y, align) => slide.addText(tx, { x, y, w: 2.6, h: 0.34, fontFace: F_HEAD,
+    fontSize: 8, italic: true, color: XP.mute, align, valign: 'top', lineSpacingMultiple: 0.95 });
+  corner('lower scores\nfaster growth', px + 0.08, py + 0.07, 'left');
+  corner('higher scores\nfaster growth', px + pw - 2.68, py + 0.07, 'right');
+  corner('lower scores\nslower growth', px + 0.08, py + ph - 0.42, 'left');
+  corner('higher scores\nslower growth', px + pw - 2.68, py + ph - 0.42, 'right');
+  // dots, with the standouts ringed in gold and named in place
+  const standout = new Set([d.best.name, d.worst.name]);
+  for (const p of d.points) {
+    const X = sx(p.x), Y = sy(p.y), R = 0.075;
+    if (standout.has(p.name)) {
+      slide.addShape('ellipse', { x: X - R - 0.035, y: Y - R - 0.035, w: 2 * R + 0.07, h: 2 * R + 0.07,
+        fill: { type: 'none' }, line: { color: XP.gold, width: 1.5 } });
+    }
+    slide.addShape('ellipse', { x: X - R, y: Y - R, w: 2 * R, h: 2 * R,
+      fill: { color: XP.blue }, line: { color: 'FFFFFF', width: 1 } });
+    if (standout.has(p.name)) {
+      const left = X > px + pw * 0.62;
+      slide.addText(p.name, { x: left ? X - 2.62 : X + 0.14, y: Y - 0.12, w: 2.5, h: 0.24,
+        fontFace: F_HEAD, fontSize: 9, bold: true, color: XP.ink, align: left ? 'right' : 'left' });
+    }
+  }
+  slide.addText('This year’s score (standard scale) →', { x: px, y: py + ph + 0.26, w: pw, h: 0.24,
+    fontFace: F_HEAD, fontSize: 9.5, color: XP.mute, align: 'center' });
+  slide.addText('↑ Growth vs. expected', { x: px - 0.05, y: py - 0.32, w: 3, h: 0.24,
+    fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
+  // right rail: standouts + takeaways
+  const rx = 8.95, rw = 3.78;
   slide.addText([
-    { text: 'Strongest growth\n', options: { fontSize: 10, bold: true, color: XP.mute, charSpacing: 1.5 } },
+    { text: 'STRONGEST GROWTH\n', options: { fontSize: 8.5, bold: true, color: XP.mute, charSpacing: 2 } },
     { text: `${d.best.name}\n`, options: { fontSize: 13, bold: true, color: XP.ink } },
     { text: `${d.best.text}\n\n`, options: { fontFace: F_MONO, fontSize: 12, color: XP.blue } },
-    { text: 'Slowest growth\n', options: { fontSize: 10, bold: true, color: XP.mute, charSpacing: 1.5 } },
+    { text: 'SLOWEST GROWTH\n', options: { fontSize: 8.5, bold: true, color: XP.mute, charSpacing: 2 } },
     { text: `${d.worst.name}\n`, options: { fontSize: 13, bold: true, color: XP.ink } },
     { text: d.worst.text, options: { fontFace: F_MONO, fontSize: 12, color: XP.neg } },
-  ], { x: 9.1, y: 1.9, w: 3.5, h: 3.5, fontFace: F_BODY, valign: 'top' });
-  slide.addNotes('Each dot is a school: right = higher scores this year, up = faster growth than expected. The two named schools anchor the range.');
+  ], { x: rx, y: 1.75, w: rw, h: 2.1, fontFace: F_BODY, valign: 'top', lineSpacingMultiple: 1.05 });
+  takeawayBand(slide, d.takeaways, { x: rx, y: 4.0, w: rw, h: 2.85, fontSize: 10 });
+  slide.addNotes('Each dot is a school: right = higher scores this year, up = faster growth than expected. The dashed crosshair is the district average on both measures.');
 }
 
 function layoutGroups(pres, slide, deck, d) {
   chrome(slide, deck, d, subjWord(d.subject), 'Growth by student group');
-  const x0 = 4.0, plotW = 7.6, span = d.domain.max - d.domain.min || 1;
+  const x0 = 4.05, plotW = 7.0, span = d.domain.max - d.domain.min || 1;
   const xOf = (v) => x0 + ((v - d.domain.min) / span) * plotW;
-  // Fixed spacing overflows the slide once a district carries all five
-  // comparisons (4 sections, 9 rows) — compress everything by one factor so
-  // the rows always end above the footnote.
+  // Compress all vertical spacing by one factor so the rows always fit above
+  // the takeaway band, however many comparisons the district carries.
   const nSections = d.sections.length;
   const nGroups = d.sections.reduce((t, s) => t + s.groups.length, 0);
-  const avail = (PAGE_H - 1.2) - 1.8 - 0.35;   // top of rows → above the axis label + footnote
-  const need = nSections * 0.34 + nGroups * 0.42 + nSections * 0.12;
+  const bandY = PAGE_H - 1.75;
+  const avail = bandY - 1.7 - 0.4;   // rows region → above the axis label
+  const need = nSections * 0.3 + nGroups * 0.42 + nSections * 0.1;
   const k = Math.min(1, avail / Math.max(0.1, need));
-  const secH = 0.34 * k, rowStep = 0.42 * k, trail = 0.12 * k;
-  const barH = Math.min(0.22, rowStep * 0.55), diaH = Math.min(0.28, rowStep * 0.68);
-  let y = 1.8;
+  const secH = 0.3 * k, rowStep = 0.42 * k, trail = 0.1 * k;
+  const barH = Math.min(0.2, rowStep * 0.55), diaH = Math.min(0.26, rowStep * 0.68);
+  let y = 1.7;
   const zeroX = xOf(0);
   const yTop = y;
   for (const sec of d.sections) {
-    slide.addText(sec.title.toUpperCase(), { x: 0.6, y, w: 3, h: 0.3, fontFace: F_HEAD, fontSize: 10, bold: true, color: XP.mute, charSpacing: 2 });
+    slide.addText(sec.title.toUpperCase(), { x: 0.6, y, w: 3, h: 0.26, fontFace: F_HEAD, fontSize: 9, bold: true, color: XP.gold, charSpacing: 2 });
     y += secH;
     for (const g of sec.groups) {
-      slide.addText(`${g.label}  ·  n=${g.n.toLocaleString()}`, { x: 0.6, y: y + 0.02, w: 3.2, h: 0.3, fontFace: F_BODY, fontSize: 11, color: XP.ink });
+      // label sits right against the plot so the eye doesn't travel
+      slide.addText([
+        { text: g.label, options: { fontSize: 11, color: XP.ink, bold: true } },
+        { text: `   n=${g.n.toLocaleString()}`, options: { fontSize: 8.5, color: XP.mute } },
+      ], { x: 0.6, y: y + 0.01, w: 3.3, h: 0.28, fontFace: F_BODY, align: 'right' });
       const color = g.median >= 0 ? XP.blue : XP.neg;
       slide.addShape('rect', { x: xOf(g.q1), y: y + (rowStep - barH) / 2, w: Math.max(0.05, xOf(g.q3) - xOf(g.q1)), h: barH,
         fill: { color, transparency: 82 }, line: { color, width: 1 } });
       slide.addShape('diamond', { x: xOf(g.median) - 0.07, y: y + (rowStep - diaH) / 2, w: 0.14, h: diaH,
         fill: { color: 'FFFFFF' }, line: { color, width: 1.25 } });
-      slide.addText(g.text, { x: 12.0, y: y - 0.02, w: 0.95, h: 0.3, fontFace: F_MONO, fontSize: 10.5, color: XP.ink2, align: 'right' });
+      slide.addText(g.text, { x: 11.55, y: y, w: 1.18, h: 0.28, fontFace: F_MONO, fontSize: 10.5, color: XP.ink2, align: 'right' });
       y += rowStep;
     }
     y += trail;
   }
-  slide.addShape('line', { x: zeroX, y: yTop - 0.05, w: 0, h: y - yTop, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
-  slide.addText('typical year of growth', { x: zeroX - 0.9, y: y + 0.03, w: 1.8, h: 0.25, fontFace: F_HEAD, fontSize: 9, color: XP.ink2, align: 'center' });
-  slide.addText('Box = the middle half of that group’s students · diamond = the typical student',
-    { x: 0.6, y: PAGE_H - 0.85, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
+  slide.addShape('line', { x: zeroX, y: yTop - 0.05, w: 0, h: y - yTop + 0.05, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+  slide.addText('↑ typical year of growth', { x: zeroX - 0.9, y: y + 0.04, w: 1.8, h: 0.24, fontFace: F_HEAD, fontSize: 9, color: XP.ink2, align: 'center' });
+  slide.addText('box = the middle half of that group’s students · diamond = the typical student',
+    { x: 7.6, y: y + 0.04, w: 5.1, h: 0.24, fontFace: F_HEAD, fontSize: 9, color: XP.mute, align: 'right' });
+  takeawayBand(slide, d.takeaways, { y: bandY, h: 1.15 });
   slide.addNotes('Same vocabulary as the app’s box plots: where the middle of each group sits, and how much groups overlap.');
 }
 
@@ -189,59 +288,145 @@ function layoutGapsOverview(pres, slide, deck, d) {
   chrome(slide, deck, d, subjWord(d.subject), 'Gaps between student groups');
   const mk = (t, o = {}) => ({ text: t, options: { fontSize: 11, fontFace: F_BODY, color: XP.ink2, align: 'left', ...o } });
   const head = ['Comparison', 'District-wide gap', 'Likely range', 'Schools leaning that way', 'Schools with enough students']
-    .map((t) => mk(t, { bold: true, fontSize: 9.5, color: XP.mute }));
+    .map((t) => mk(t, { bold: true, fontSize: 9.5, color: XP.mute, fill: { color: XP.paper } }));
   const body = d.rows.map((r) => [
     mk(r.label, { bold: true, color: XP.ink }),
-    mk(r.gapText, { fontFace: F_MONO, color: r.reliable ? XP.ink : XP.mute }),
+    // the gap number carries the figure vocabulary: rust behind, blue ahead
+    mk(r.gapText, { fontFace: F_MONO, bold: r.reliable,
+      color: !r.reliable ? XP.mute : (r.gapText.startsWith('−') || r.gapText.startsWith('-') ? XP.neg : XP.blue) }),
     mk(r.rangeText, { fontFace: F_MONO, color: XP.mute, fontSize: 10 }),
     mk(r.leaning), mk(r.coverage),
   ]);
-  slide.addTable([head, ...body], { x: 0.6, y: 1.8, w: 12.1, rowH: 0.5,
-    colW: [3.4, 2.2, 2.7, 2.2, 1.6],
+  slide.addTable([head, ...body], { x: 0.6, y: 1.7, w: 12.13, rowH: 0.48,
+    colW: [3.4, 2.2, 2.73, 2.2, 1.6],
     border: { type: 'solid', color: XP.rule2, pt: 0.75 }, valign: 'middle' });
+  const tableBottom = 1.7 + 0.48 * (d.rows.length + 1);
   if (d.skippedNote) slide.addText(d.skippedNote,
-    { x: 0.6, y: 1.85 + 0.5 * (d.rows.length + 1) + 0.15, w: 12.1, h: 0.6, fontFace: F_BODY, italic: true, fontSize: 11, color: XP.mute });
+    { x: 0.6, y: tableBottom + 0.12, w: 12.1, h: 0.35, fontFace: F_BODY, italic: true, fontSize: 10.5, color: XP.mute });
+  takeawayBand(slide, d.takeaways, { y: PAGE_H - 1.95, h: 1.3 });
   slide.addNotes('Negative = the first-named group grew less. A range crossing zero means the difference could plausibly be nothing — those comparisons get no appendix slide.');
 }
 
+// Shape-drawn histograms — the app's design: a gray statewide silhouette
+// with one visible gold tile per district school. (A stacked chart buries
+// 7 schools invisibly inside 1,000-school bars.)
 function layoutStateHist(pres, slide, deck, d) {
   chrome(slide, deck, d, 'Statewide', `Where your schools land among all Missouri schools · ${d.year}`);
   const blocks = d.levels.flatMap((lv) => (['ela', 'math']).map((sub) => ({ lv, sub })))
-    .filter((b) => b.lv.subjects[b.sub].poolN > 0);
-  const w = Math.min(5.9, 12.1 / Math.min(2, blocks.length) - 0.2);
-  blocks.slice(0, 4).forEach((b, i) => {
-    const x = 0.6 + (i % 2) * (w + 0.35), y = 1.55 + Math.floor(i / 2) * 2.7;
+    .filter((b) => b.lv.subjects[b.sub].poolN > 0).slice(0, 4);
+  const cols = Math.min(2, blocks.length), rows = Math.ceil(blocks.length / cols);
+  const w = cols === 1 ? 9 : 5.95, panelH = rows === 1 ? 4.6 : 2.6;
+  blocks.forEach((b, i) => {
+    const x = (cols === 1 ? 2.15 : 0.6 + (i % 2) * (w + 0.23));
+    const y = 1.5 + Math.floor(i / cols) * (panelH + 0.15);
     const s = b.lv.subjects[b.sub];
-    slide.addText(`${b.lv.heading} · ${subjWord(b.sub)} · ${s.poolN.toLocaleString()} statewide`,
-      { x, y, w, h: 0.28, fontFace: F_HEAD, fontSize: 10.5, bold: true, color: XP.ink2 });
-    slide.addChart(pres.ChartType.bar, [
-      { name: 'Missouri schools', labels: s.bins.map((c) => c.x0.toFixed(2)), values: s.bins.map((c) => c.count - c.district) },
-      { name: 'Your schools', labels: s.bins.map((c) => c.x0.toFixed(2)), values: s.bins.map((c) => c.district) },
-    ], { x, y: y + 0.3, w, h: 2.1, barDir: 'col', barGrouping: 'stacked',
-         chartColors: ['E4E5E9', XP.gold], showLegend: false, catAxisHidden: false,
-         catAxisLabelFontSize: 7, valAxisHidden: true, barGapWidthPct: 8 });
+    const plotY = y + 0.32, plotH = panelH - 1.0, baseline = plotY + plotH;
+    slide.addText([
+      { text: `${b.lv.heading} · ${subjWord(b.sub)}`, options: { fontSize: 11, bold: true, color: XP.ink } },
+      { text: `   ${s.poolN.toLocaleString()} schools statewide`, options: { fontSize: 9, color: XP.mute } },
+    ], { x, y, w, h: 0.28, fontFace: F_HEAD, align: 'left' });
+    const x0 = s.bins[0].x0, x1 = s.bins[s.bins.length - 1].x1;
+    const xOf = (v) => x + ((v - x0) / (x1 - x0 || 1)) * w;
+    const maxC = Math.max(1, ...s.bins.map((c) => c.count));
+    const barW = w / s.bins.length;
+    for (const c of s.bins) {
+      if (c.count === 0) continue;
+      const h = (c.count / maxC) * plotH;
+      slide.addShape('rect', { x: xOf(c.x0) + 0.008, y: baseline - h, w: Math.max(0.02, barW - 0.016), h,
+        fill: { color: 'E8E9EC' }, line: { type: 'none' } });
+    }
+    // one gold tile per district school, stacked from the axis — visible at
+    // any pool size; position carries the meaning
+    const tileH = Math.min(0.16, plotH / 5);
+    const stackCount = {};
+    for (const sch of s.yours) {
+      const bi = s.bins.findIndex((c) => sch.z >= c.x0 && sch.z < c.x1);
+      const k = bi < 0 ? s.bins.length - 1 : bi;
+      const lvl = stackCount[k] || 0;
+      stackCount[k] = lvl + 1;
+      slide.addShape('rect', { x: xOf(s.bins[k].x0) + 0.008, y: baseline - (lvl + 1) * (tileH + 0.015),
+        w: Math.max(0.02, barW - 0.016), h: tileH,
+        fill: { color: XP.gold }, line: { color: 'FFFFFF', width: 0.75 } });
+    }
+    // zero line + sparse axis labels
+    slide.addShape('line', { x: xOf(0), y: plotY - 0.06, w: 0, h: plotH + 0.1, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+    slide.addShape('line', { x, y: baseline, w, h: 0, line: { color: XP.rule, width: 1 } });
+    const step = niceStep(x1 - x0, 5);
+    for (let t = Math.ceil(x0 / step) * step; t <= x1 + 1e-9; t += step) {
+      slide.addText(Math.abs(t) < 1e-9 ? '0' : (t > 0 ? '+' : '−') + Math.abs(t).toFixed(1),
+        { x: xOf(t) - 0.3, y: baseline + 0.03, w: 0.6, h: 0.2, fontFace: F_MONO, fontSize: 8, color: XP.mute, align: 'center' });
+    }
+    slide.addText('↑ typical growth', { x: xOf(0) - 0.75, y: baseline + 0.22, w: 1.5, h: 0.2,
+      fontFace: F_HEAD, fontSize: 8, color: XP.ink2, align: 'center' });
+    const at = s.yours.filter((sch) => sch.z >= 0).length;
+    slide.addText([
+      { text: `${at} of ${s.yours.length}`, options: { bold: true, color: XP.ink } },
+      { text: ` of your schools grew at least as fast as the typical Missouri school`, options: { color: XP.ink2 } },
+    ], { x, y: baseline + 0.42, w, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, align: 'left' });
   });
+  // legend lives top-right, clear of the per-panel captions
+  slide.addText('gold tiles = your schools · gray = every Missouri school of the same type',
+    { x: 5.7, y: 1.02, w: 7.03, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute, align: 'right' });
   const names = d.levels.flatMap((lv) => ['ela', 'math'].flatMap((sub) =>
     lv.subjects[sub].yours.map((s) => `${s.name} (${subjWord(sub)} ${s.z >= 0 ? '+' : '−'}${Math.abs(s.z).toFixed(2)})`)));
   slide.addNotes('Gold = this district’s schools, against every Missouri school of the same type. Zero is a typical year of growth. Yours: ' + names.join('; '));
 }
 
+// Shape-drawn trend — the native line chart bridges the cancelled 2020 year
+// as if it had data; here consecutive years connect solid and the 2020 gap
+// gets a dashed bridge, matching the app.
 function layoutStateTrend(pres, slide, deck, d) {
   chrome(slide, deck, d, 'Statewide', 'Growth over time');
-  const years = d.years;
+  const y0 = Number(d.years[0]), y1 = Number(d.years[d.years.length - 1]);
+  const allZ = ['ela', 'math'].flatMap((s) => (d.series[s] || []).map((p) => p.z));
+  const ext = Math.max(0.05, ...allZ.map(Math.abs)) * 1.25;
   (['ela', 'math']).forEach((sub, i) => {
     const pts = d.series[sub];
     if (!pts || !pts.length) return;
-    const vals = years.map((y) => { const p = pts.find((q) => q.year === y); return p ? p.z : null; });
-    slide.addText(subjWord(sub), { x: 0.6 + i * 6.2, y: 1.6, w: 3, h: 0.3, fontFace: F_HEAD, fontSize: 12, bold: true, color: XP.ink });
-    slide.addChart(pres.ChartType.line, [{ name: 'District average', labels: years, values: vals }],
-      { x: 0.6 + i * 6.2, y: 1.95, w: 5.9, h: 4.4, chartColors: [XP.blue], lineSize: 2.5,
-        lineDataSymbol: 'circle', lineDataSymbolSize: 7, showLegend: false,
-        valAxisLabelFontSize: 9, catAxisLabelFontSize: 9 });
+    const px = 1.05 + i * 6.35, py = 2.0, pw = 5.45, ph = 3.9;
+    const xOf = (yr) => px + (y1 === y0 ? pw / 2 : ((Number(yr) - y0) / (y1 - y0)) * pw);
+    const yOf = (z) => py + ((ext - z) / (2 * ext)) * ph;
+    slide.addText(subjWord(sub), { x: px - 0.1, y: 1.6, w: 3, h: 0.3, fontFace: F_HEAD, fontSize: 12.5, bold: true, color: XP.ink });
+    // y gridlines at ±ext/2 and ±ext, labeled; zero dashed
+    for (const t of [-ext, -ext / 2, ext / 2, ext]) {
+      slide.addShape('line', { x: px, y: yOf(t), w: pw, h: 0, line: { color: XP.rule2, width: 0.75 } });
+      slide.addText((t > 0 ? '+' : '−') + Math.abs(t).toFixed(2),
+        { x: px - 0.62, y: yOf(t) - 0.1, w: 0.56, h: 0.2, fontFace: F_MONO, fontSize: 8, color: XP.mute, align: 'right' });
+    }
+    slide.addShape('line', { x: px, y: yOf(0), w: pw, h: 0, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+    slide.addText('0', { x: px - 0.62, y: yOf(0) - 0.1, w: 0.56, h: 0.2, fontFace: F_MONO, fontSize: 8, color: XP.ink2, align: 'right' });
+    // segments: solid between consecutive years, dashed across the 2020 gap.
+    // A pptx line is its bounding box top-left → bottom-right; flipV makes it
+    // ascend, and height must never be negative.
+    for (let j = 1; j < pts.length; j++) {
+      const a = pts[j - 1], b = pts[j];
+      const gap = Number(b.year) - Number(a.year) > 1;
+      const ax = xOf(a.year), ay = yOf(a.z), bx = xOf(b.year), by = yOf(b.z);
+      slide.addShape('line', { x: ax, y: Math.min(ay, by), w: bx - ax, h: Math.abs(by - ay),
+        line: { color: XP.blue, width: 2.25, dashType: gap ? 'dash' : 'solid' },
+        flipV: by < ay });
+    }
+    // points + first/last value labels
+    pts.forEach((p, j) => {
+      slide.addShape('ellipse', { x: xOf(p.year) - 0.055, y: yOf(p.z) - 0.055, w: 0.11, h: 0.11,
+        fill: { color: XP.blue }, line: { color: 'FFFFFF', width: 1 } });
+      if (j === 0 || j === pts.length - 1) {
+        // clamp the label inside the plot so the last value never clips
+        const lx = Math.max(px - 0.15, Math.min(xOf(p.year) - 0.4, px + pw - 0.65));
+        slide.addText((p.z >= 0 ? '+' : '−') + Math.abs(p.z).toFixed(2),
+          { x: lx, y: yOf(p.z) - 0.34, w: 0.8, h: 0.2, fontFace: F_MONO, fontSize: 8.5, bold: true, color: XP.blue, align: 'center' });
+      }
+    });
+    // year labels — every year in range, the cancelled one ghosted
+    for (let yr = y0; yr <= y1; yr++) {
+      const has = pts.some((p) => Number(p.year) === yr);
+      slide.addText(`’${String(yr).slice(2)}`, { x: xOf(yr) - 0.3, y: py + ph + 0.08, w: 0.6, h: 0.2,
+        fontFace: F_MONO, fontSize: 8.5, color: has ? XP.mute : XP.rule, align: 'center' });
+    }
   });
-  slide.addText('0 = a typical year of growth statewide · the 2020 gap is the year state testing was cancelled',
-    { x: 0.6, y: PAGE_H - 0.85, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
-  slide.addNotes('District average of statewide growth scores per year. The missing 2020 point is the cancelled test year, not missing district data.');
+  slide.addText('0 = a typical year of growth statewide · the dashed stretch crosses 2020, the year state testing was cancelled',
+    { x: 0.6, y: PAGE_H - 0.78, w: 12.1, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
+  slide.addNotes('District average of statewide growth scores per year. The dashed stretch crosses the cancelled 2020 test year, not missing district data.');
 }
 
 function layoutCautions(pres, slide, deck, d) {
@@ -259,34 +444,57 @@ function layoutDivider(pres, slide, deck, d) {
 
 function layoutForest(pres, slide, deck, d) {
   chrome(slide, deck, d, `${subjWord(d.subject)} · appendix`, d.title);
-  const x0 = 4.4, plotW = 7.2, span = d.axis.max - d.axis.min || 1;
-  const xOf = (v) => x0 + ((v - d.axis.min) / span) * plotW;
   const rows = d.rows.slice(0, 11);   // one slide's worth; tall districts trade detail for legibility
-  const rowH = Math.min(0.42, 4.4 / Math.max(1, rows.length));
-  // zero + district reference lines
-  slide.addShape('line', { x: xOf(0), y: 1.6, w: 0, h: rows.length * rowH + 0.3, line: { color: XP.ink2, width: 1 } });
-  slide.addShape('line', { x: xOf(d.district.gap), y: 1.6, w: 0, h: rows.length * rowH + 0.3, line: { color: XP.gold, width: 1.25, dashType: 'dash' } });
+  // Data-driven axis (the engine's symmetric axis wastes half the plot when
+  // every gap leans one way); zero always stays in frame.
+  const ciVals = rows.flatMap((r) => r.ci);
+  const rawLo = Math.min(0, d.district.gap, ...ciVals), rawHi = Math.max(0, d.district.gap, ...ciVals);
+  const padA = Math.max(0.03, (rawHi - rawLo) * 0.08);
+  const lo = rawLo - padA, hi = rawHi + padA;
+  const x0 = 4.35, plotW = 7.1;
+  const xOf = (v) => x0 + ((v - lo) / (hi - lo || 1)) * plotW;
+  const rowH = Math.min(0.58, 4.1 / Math.max(1, rows.length));
+  const top = 1.7, bottom = top + rows.length * rowH;
+  // striped rows behind everything
   rows.forEach((r, i) => {
-    const y = 1.75 + i * rowH;
+    if (i % 2 === 1) slide.addShape('rect', { x: 0.6, y: top + i * rowH, w: 12.13, h: rowH,
+      fill: { color: XP.paper }, line: { type: 'none' } });
+  });
+  // reference lines: solid = no gap, dashed gold = the district-wide gap
+  slide.addShape('line', { x: xOf(0), y: top - 0.08, w: 0, h: bottom - top + 0.16, line: { color: XP.ink2, width: 1 } });
+  slide.addShape('line', { x: xOf(d.district.gap), y: top - 0.08, w: 0, h: bottom - top + 0.16, line: { color: XP.gold, width: 1.5, dashType: 'dash' } });
+  rows.forEach((r, i) => {
+    const yMid = top + i * rowH + rowH / 2;
     const color = r.gap >= 0 ? XP.blue : XP.neg;
     slide.addText([
       { text: r.name, options: { fontSize: 10.5, color: XP.ink } },
       { text: `  n=${(r.nA + r.nB).toLocaleString()}`, options: { fontSize: 8.5, color: XP.mute } },
-    ], { x: 0.6, y: y - 0.05, w: 3.6, h: 0.3, fontFace: F_BODY, align: 'left' });
-    slide.addShape('line', { x: xOf(r.ci[0]), y: y + 0.09, w: xOf(r.ci[1]) - xOf(r.ci[0]), h: 0, line: { color, width: 2 } });
-    slide.addShape('diamond', { x: xOf(r.gap) - 0.055, y: y + 0.01, w: 0.11, h: 0.18, fill: { color }, line: { color: 'FFFFFF', width: 0.75 } });
-    slide.addText(r.text, { x: 11.8, y: y - 0.05, w: 1.1, h: 0.3, fontFace: F_MONO, fontSize: 9.5, color: XP.ink2, align: 'right' });
+    ], { x: 0.66, y: yMid - 0.14, w: 3.55, h: 0.28, fontFace: F_BODY, align: 'left' });
+    slide.addShape('line', { x: xOf(r.ci[0]), y: yMid, w: xOf(r.ci[1]) - xOf(r.ci[0]), h: 0, line: { color, width: 2.25 } });
+    slide.addShape('line', { x: xOf(r.ci[0]), y: yMid - 0.05, w: 0, h: 0.1, line: { color, width: 1.5 } });
+    slide.addShape('line', { x: xOf(r.ci[1]), y: yMid - 0.05, w: 0, h: 0.1, line: { color, width: 1.5 } });
+    slide.addShape('diamond', { x: xOf(r.gap) - 0.06, y: yMid - 0.1, w: 0.12, h: 0.2, fill: { color }, line: { color: 'FFFFFF', width: 0.75 } });
+    slide.addText(r.text, { x: 11.6, y: yMid - 0.14, w: 1.13, h: 0.28, fontFace: F_MONO, fontSize: 10, bold: true, color, align: 'right' });
   });
-  let footY = 1.75 + rows.length * rowH + 0.25;
-  slide.addText(`District-wide: ${d.district.text} (gold dashed line) · bar = the range each school’s true gap most likely falls in`,
-    { x: 0.6, y: footY, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
+  // axis ticks + reference labels below the plot
+  const step = niceStep(hi - lo, 5);
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) {
+    slide.addText(Math.abs(t) < 1e-9 ? '0' : (t > 0 ? '+' : '−') + Math.abs(t).toFixed(2),
+      { x: xOf(t) - 0.35, y: bottom + 0.12, w: 0.7, h: 0.2, fontFace: F_MONO, fontSize: 8.5, color: XP.mute, align: 'center' });
+  }
+  slide.addText('no gap', { x: xOf(0) - 0.5, y: top - 0.34, w: 1.0, h: 0.22, fontFace: F_HEAD, fontSize: 8.5, color: XP.ink2, align: 'center' });
+  slide.addText(`district ${d.district.text}`, { x: xOf(d.district.gap) - 0.9, y: bottom + 0.34, w: 1.8, h: 0.22,
+    fontFace: F_HEAD, fontSize: 8.5, bold: true, color: XP.gold, align: 'center' });
+  let footY = bottom + 0.62;
+  slide.addText(`Bar = the range each school’s true gap most likely falls in · negative = ${d.groupA} students grew less than their ${d.groupB} schoolmates`,
+    { x: 0.6, y: footY, w: 12.1, h: 0.26, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
   if (d.excluded.length) {
-    footY += 0.3;
+    footY += 0.28;
     slide.addText('Not drawn: ' + d.excluded.map((e) => `${e.name} (${e.reason})`).join(' · '),
-      { x: 0.6, y: footY, w: 12.1, h: 0.5, fontFace: F_HEAD, fontSize: 9.5, italic: true, color: XP.mute });
+      { x: 0.6, y: footY, w: 12.1, h: 0.45, fontFace: F_HEAD, fontSize: 9, italic: true, color: XP.mute });
   }
   if (d.rows.length > rows.length) slide.addText(`+ ${d.rows.length - rows.length} more schools — see the app for the full list`,
-    { x: 0.6, y: footY + 0.3, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 9.5, italic: true, color: XP.mute });
+    { x: 0.6, y: footY + 0.3, w: 12.1, h: 0.26, fontFace: F_HEAD, fontSize: 9, italic: true, color: XP.mute });
   slide.addNotes(`${d.groupA} minus ${d.groupB}: negative bars mean ${d.groupA} students grew less than their ${d.groupB} schoolmates at that school.`);
 }
 
@@ -456,6 +664,22 @@ function pvMd(text) {
       : <React.Fragment key={i}>{seg}</React.Fragment>);
 }
 
+// Mini "What stands out" strip — mirrors the PPTX takeawayBand.
+function PvTakeaways({ takeaways, max = 2 }) {
+  if (!takeaways || !takeaways.length) return null;
+  return (
+    <div style={{ marginTop: 6, padding: '4px 7px', background: '#FDFCFA',
+                  border: `1px solid ${SLU.rule2}`, borderLeft: `2px solid ${SLU.gold}` }}>
+      <div style={{ fontFamily: LABEL, fontSize: 6, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: SLU.mute }}>
+        What stands out
+      </div>
+      {takeaways.slice(0, max).map((t, i) => (
+        <div key={i} style={{ fontSize: 7.5, lineHeight: 1.35, color: SLU.ink2, marginTop: 2 }}>{pvMd(t.text)}</div>
+      ))}
+    </div>
+  );
+}
+
 function PvBullets({ bullets, size = 10 }) {
   return (
     <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8,
@@ -549,6 +773,7 @@ function PvHeat({ d, deck }) {
           ))}
         </tbody>
       </table>
+      <PvTakeaways takeaways={d.takeaways} />
     </PvChrome>
   );
 }
@@ -577,6 +802,7 @@ function PvScatter({ d, deck }) {
           <div style={{ fontFamily: LABEL, fontSize: 6.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: SLU.mute }}>Slowest</div>
           <div style={{ fontWeight: 700, color: SLU.ink }}>{d.worst.name}</div>
           <div style={{ fontFamily: MONO, color: SLU.neg }}>{d.worst.text}</div>
+          <PvTakeaways takeaways={d.takeaways} max={1} />
         </div>
       </div>
     </PvChrome>
@@ -610,6 +836,7 @@ function PvGroups({ d, deck }) {
           </div>
         ))}
       </div>
+      <PvTakeaways takeaways={d.takeaways} />
     </PvChrome>
   );
 }
@@ -643,6 +870,7 @@ function PvGapsOverview({ d, deck }) {
       {d.skippedNote && (
         <div style={{ marginTop: 6, fontSize: 7.5, fontStyle: 'italic', color: SLU.mute }}>{d.skippedNote}</div>
       )}
+      <PvTakeaways takeaways={d.takeaways} />
     </PvChrome>
   );
 }
@@ -661,15 +889,23 @@ function PvStateHist({ d, deck }) {
               <div style={{ fontSize: 7, fontWeight: 700, color: SLU.ink2, marginBottom: 2 }}>
                 {b.lv.heading} · {subjWord(b.sub)}
               </div>
+              {/* fixed-size gold tiles per district school (a %-height segment
+                  would be invisible against a 1,000-school pool) */}
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0.5, height: 40 }}>
-                {s.bins.map((c, bi) => (
-                  <div key={bi} style={{ flex: 1, height: `${(c.count / maxC) * 100}%`, minHeight: c.count > 0 ? 1 : 0,
-                                         background: '#E4E5E9', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                    {c.district > 0 && (
-                      <div style={{ height: `${(c.district / c.count) * 100}%`, background: SLU.gold }} />
-                    )}
-                  </div>
-                ))}
+                {s.bins.map((c, bi) => {
+                  const yours = s.yours.filter((sch) => sch.z >= c.x0 && sch.z < c.x1).length;
+                  return (
+                    <div key={bi} style={{ flex: 1, height: '100%', position: 'relative',
+                                           display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                      <div style={{ height: `${(c.count / maxC) * 100}%`, minHeight: c.count > 0 ? 1 : 0,
+                                    background: '#E4E5E9' }} />
+                      {Array.from({ length: yours }, (_, k) => (
+                        <div key={k} style={{ position: 'absolute', bottom: k * 5, left: 0, right: 0,
+                                              height: 4, background: SLU.gold, border: '0.5px solid #fff' }} />
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
