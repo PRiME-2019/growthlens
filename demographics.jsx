@@ -68,10 +68,10 @@ function DemographicsPage({ sliceLabel, ctx }) {
     <>
       <window.BriefHeader eyebrow="Growth by student group" slice={sliceLabel}
                    title="How growth varies from group to group"
-                   blurb={<>For each group, the box shows the middle of the pack and the line shows
-                     the typical student; the whiskers and dots show the full spread. Compare the
-                     typical student and the spread across groups to see whether differences sit in
-                     the middle or out in the tails. To see how any of these gaps plays out school
+                   blurb={<>For each group, the box shows the middle of the pack and the diamond
+                     marks the typical student; the whiskers and dots show the full spread. Compare
+                     the typical student and the spread across groups to see whether differences sit
+                     in the middle or out in the tails. To see how any of these gaps plays out school
                      by school, open{' '}
                      <a href="#" onClick={(e) => { e.preventDefault(); ctx.setPage('gap'); }}
                         style={{ color: window.SLU.blue, fontWeight: 600 }}>Group gaps by school</a>.</>} />
@@ -249,8 +249,8 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
         </h2>
         <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
           The whole district at once — each box covers the middle half of that group’s
-          students, the diamond marks the average, and the dots are individual students
-          far from the pack.
+          students, the diamond marks the typical student, and the dots are individual
+          students far from the pack.
           <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
           Hover any group for its numbers.
         </div>
@@ -297,7 +297,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           const boxH = 36;
           const x_q1 = xToPx(g.q1);
           const x_q3 = xToPx(g.q3);
-          const x_mean = xToPx(g.mean);
+          const x_med = xToPx(g.median);
           const x_wLo = xToPx(g.whiskerLo);
           const x_wHi = xToPx(g.whiskerHi);
           const above = g.median >= 0;
@@ -315,7 +315,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
                   dots painted later keep their own finer-grained hover */}
               <rect x={0} y={row.y} width={width} height={rowH} fill="transparent"
                     tabIndex={0} className="gl-focus" role="img"
-                    aria-label={`${g.label}: typical student ${fmt(g.median)} ${unitLabel}, average ${fmt(g.mean)}, middle half ${fmt(g.q1)} to ${fmt(g.q3)}, n=${g.n.toLocaleString()}`}
+                    aria-label={`${g.label}: typical student ${fmt(g.median)} ${unitLabel}, middle half ${fmt(g.q1)} to ${fmt(g.q3)}, n=${g.n.toLocaleString()}`}
                     onMouseEnter={() => setRowHover(row.id)}
                     onMouseLeave={() => setRowHover((r) => (r === row.id ? null : r))}
                     onFocus={() => setRowHover(row.id)}
@@ -353,8 +353,10 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
               <rect x={x_q1} y={boxTop} width={Math.max(2, x_q3 - x_q1)} height={boxH}
                     fill={boxFill} stroke={boxStroke} strokeWidth={1.4} style={DEMO_TRANSITION} />
 
-              {/* mean diamond (subtle) */}
-              <g transform={`translate(${x_mean} ${cy})`} style={DEMO_TRANSITION}>
+              {/* median diamond — the typical student. The mean is deliberately
+                  not drawn: a handful of outlier students can drag it, which is
+                  exactly the misread the box plot is here to prevent. */}
+              <g transform={`translate(${x_med} ${cy})`} style={DEMO_TRANSITION}>
                 <polygon points="0,-5 5,0 0,5 -5,0" fill="#fff" stroke={boxStroke} strokeWidth={1.2} />
               </g>
               </g>
@@ -469,7 +471,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           const g = row.g;
           const cy = row.y + rowH / 2;
           const stroke = g.median >= 0 ? SLU.blue : SLU.neg;
-          const tipW = 212, tipH = 96;
+          const tipW = 212, tipH = 80;
           const anchorR = xToPx(g.whiskerHi);
           const placeRight = anchorR + tipW + 24 <= width;
           const tx = Math.max(4, placeRight ? anchorR + 14 : xToPx(g.whiskerLo) - tipW - 14);
@@ -497,9 +499,8 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
               <line x1={tx + 8} x2={tx + tipW - 8} y1={ty + 26} y2={ty + 26}
                     stroke={SLU.rule2} strokeWidth={1} />
               {line('Typical student', `${fmt(g.median)} ${unitLabel}`, 42)}
-              {line('Average', `${fmt(g.mean)} ${unitLabel}`, 58)}
-              {line('Middle half', `${fmt(g.q1)} to ${fmt(g.q3)}`, 74)}
-              {line('Full spread', `${fmt(g.whiskerLo)} to ${fmt(g.whiskerHi)}`, 90)}
+              {line('Middle half', `${fmt(g.q1)} to ${fmt(g.q3)}`, 58)}
+              {line('Full spread', `${fmt(g.whiskerLo)} to ${fmt(g.whiskerHi)}`, 74)}
             </g>
           );
         })()}
