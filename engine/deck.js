@@ -123,5 +123,112 @@
       });
   }
 
-  return { buildDemoSections, label, gapsOverview, forestSlides };
+  const GRADES = [3, 4, 5, 6, 7, 8];
+  const cellVal = (c) => (c.rs != null ? c.rs : c.r);
+
+  function heatSlide({ heat, subject, fmt } = {}) {
+    if (!heat || !heat.schools || !heat.schools.length) return null;
+    const grades = GRADES.filter((g) => heat.schools.some((s) => s.grades && s.grades[g] && s.grades[g].n > 0));
+    const rows = heat.schools.map((s) => {
+      const cells = grades.map((g) => {
+        const c = s.grades && s.grades[g];
+        if (!c || !(c.n > 0)) return null;
+        const z = cellVal(c);
+        return { z, n: c.n, ok: !!c.ok, text: fmt.val(z, { grade: g }) };
+      });
+      const ovz = s.overall ? cellVal(s.overall) : null;
+      return {
+        name: label(s), cells,
+        overall: ovz == null ? null : { z: ovz, n: s.overall.n, text: fmt.val(ovz) },
+      };
+    });
+    return { kind: 'heat', subject, grades, rows };
+  }
+
+  function scatterSlide({ ach, subject, mode = 'shrunk', fmt } = {}) {
+    const pts = (ach && ach.school && ach.school.points) || [];
+    if (!pts.length) return null;
+    const y = (p) => (mode === 'raw' || p.y_shrunk == null) ? p.y_raw : p.y_shrunk;
+    const points = pts.map((p) => ({ name: label(p), x: p.x, y: y(p), n: p.n || 1 }));
+    let w = 0, xw = 0, yw = 0;
+    points.forEach((p) => { w += p.n; xw += p.x * p.n; yw += p.y * p.n; });
+    const sorted = [...points].sort((a, b) => b.y - a.y);
+    const best = sorted[0], worst = sorted[sorted.length - 1];
+    return {
+      kind: 'scatter', subject, points,
+      xMean: w ? xw / w : 0, yMean: w ? yw / w : 0,
+      best: { name: best.name, text: fmt.val(best.y) },
+      worst: { name: worst.name, text: fmt.val(worst.y) },
+    };
+  }
+
+  function groupsSlide({ demo, subject, fmt } = {}) {
+    if (!demo) return null;
+    const rawSections = buildDemoSections(demo);
+    if (!rawSections.length) return null;
+    const sections = rawSections.map((sec) => ({
+      title: sec.title,
+      groups: sec.groups.map((g) => ({
+        label: g.label, n: g.n, median: g.median, q1: g.q1, q3: g.q3,
+        text: fmt.val(g.median),
+      })),
+    }));
+    const raw = rawSections.flatMap((s) => s.groups);
+    const lo = Math.min(...raw.map((g) => (g.whiskerLo != null ? g.whiskerLo : g.q1)));
+    const hi = Math.max(...raw.map((g) => (g.whiskerHi != null ? g.whiskerHi : g.q3)));
+    return { kind: 'groups', subject, sections, domain: { min: lo, max: hi } };
+  }
+
+  // Tiles + the first non-caveat takeaway from each page's generator,
+  // scan and gaps first, capped at six bullets.
+  function glanceSlide({ bySubject = {}, mode = 'shrunk', fmt } = {}) {
+    const subjects = Object.keys(bySubject);
+    if (!subjects.length) return null;
+    const tiles = [];
+    for (const s of subjects) {
+      const heat = bySubject[s].heat;
+      const ov = ((heat && heat.schools) || []).map((x) => x.overall).filter(Boolean);
+      if (ov.length) {
+        tiles.push({
+          label: `Schools growing faster than expected · ${s === 'ela' ? 'ELA' : 'Math'}`,
+          value: `${ov.filter((o) => cellVal(o) >= 0).length} / ${ov.length}`,
+          sub: 'after steadying small schools',
+        });
+      }
+    }
+    let widest = null;
+    for (const s of subjects) {
+      for (const k of GAP_KEYS) {
+        const m = bySubject[s].gaps && bySubject[s].gaps[k] && bySubject[s].gaps[k].meta;
+        if (m && Number.isFinite(m.districtGap)
+            && (!widest || Math.abs(m.districtGap) > Math.abs(widest.gap))) {
+          widest = { gap: m.districtGap, label: `${m.groupA} vs. ${m.groupB}`, subject: s };
+        }
+      }
+    }
+    if (widest) tiles.push({
+      label: 'Largest gap between groups',
+      value: fmt.val(widest.gap),
+      sub: `${widest.label} · ${widest.subject === 'ela' ? 'ELA' : 'Math'}`,
+    });
+    const students = subjects.reduce((t, s) =>
+      Math.max(t, (bySubject[s].meta && bySubject[s].meta.nRowsLatest) || 0), 0);
+    if (students) tiles.push({ label: 'Students included', value: students.toLocaleString(), sub: 'latest year' });
+
+    const takeaways = [];
+    const first = (items) => (items || []).find((t) => !t.caveat);
+    for (const s of subjects) {
+      const b = bySubject[s];
+      const picks = [
+        first(I.scanTakeaways({ heat: b.heat, fmt })),
+        first(I.gapTakeaways({ slices: b.gaps, activeKey: GAP_KEYS.find((k) => b.gaps && b.gaps[k]), mode, fmt })),
+        first(I.achievementTakeaways({ ach: b.ach, mode, fmt })),
+        first(b.demo ? I.demographicsTakeaways({ data: { groups: buildDemoSections(b.demo).flatMap((x) => x.groups) }, fmt }) : null),
+      ].filter(Boolean);
+      takeaways.push(...picks);
+    }
+    return { kind: 'glance', tiles, takeaways: takeaways.slice(0, 6) };
+  }
+
+  return { buildDemoSections, label, gapsOverview, forestSlides, heatSlide, scatterSlide, groupsSlide, glanceSlide };
 });
