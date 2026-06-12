@@ -81,13 +81,19 @@
       const ds = resolve(activeSubject);
       return ds ? (ds.shapes.GAPS_DATA_BY_DEMO || {}) : {};
     },
-    // Gaps + heatmap for EVERY available subject — the Resources page spans
-    // subjects instead of following the Subject toggle.
+    // Full shapes + meta for EVERY available subject — the Resources page
+    // reads gaps/heat; the Export deck reads everything.
     allSubjectsData() {
       const out = {};
       for (const s of ['math', 'ela']) {
         const ds = resolve(s);
-        if (ds) out[s] = { gaps: ds.shapes.GAPS_DATA_BY_DEMO || {}, heat: ds.shapes.HEATMAP_DATA || null };
+        if (ds) out[s] = {
+          gaps: ds.shapes.GAPS_DATA_BY_DEMO || {},
+          heat: ds.shapes.HEATMAP_DATA || null,
+          ach: ds.shapes.ACH_DATA || null,
+          demo: ds.shapes.DEMO_DATA || null,
+          meta: ds.meta || null,
+        };
       }
       return out;
     },

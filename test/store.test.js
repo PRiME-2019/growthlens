@@ -182,6 +182,24 @@ test('store: getUploadedMeta returns the uploaded meta for that subject only', (
   assert.equal(store.getUploadedMeta('math'), null);
 });
 
+test('store: allSubjectsData carries ach, demo, and meta alongside gaps and heat', () => {
+  const { store } = freshStore();
+  store.seedDemo();
+  const shapes = {
+    GAPS_DATA_BY_DEMO: { frl: { meta: { subject: 'math' }, schools: [] } },
+    HEATMAP_DATA: { meta: { subject: 'math' }, schools: [] },
+    ACH_DATA: { school: { points: [] }, student: { points: [] } },
+    DEMO_DATA: { frl: { label: 'FRL', groups: [], districtMean: 0 } },
+  };
+  store.putUploaded('math', shapes, { subject: 'math', latestYear: 2025, nSchools: 0 });
+  const all = store.allSubjectsData();
+  assert.ok(all.math.gaps, 'gaps still present');
+  assert.ok(all.math.heat !== undefined, 'heat still present');
+  assert.ok(all.math.ach.school, 'ach present');
+  assert.ok(all.math.demo.frl, 'demo present');
+  assert.equal(all.math.meta.latestYear, 2025, 'meta present');
+});
+
 test('store: availableSubgroups reflects the active dataset (demo = frl only; upload = its keys)', () => {
   const { store } = freshStore();
   store.seedDemo();
