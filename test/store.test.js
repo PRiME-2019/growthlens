@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -194,7 +194,7 @@ test('store: allSubjectsData carries ach, demo, and meta alongside gaps and heat
   store.putUploaded('math', shapes, { subject: 'math', latestYear: 2025, nSchools: 0 });
   const all = store.allSubjectsData();
   assert.ok(all.math.gaps, 'gaps still present');
-  assert.ok(all.math.heat !== undefined, 'heat still present');
+  assert.equal(all.math.heat, shapes.HEATMAP_DATA, 'heat still present');
   assert.ok(all.math.ach.school, 'ach present');
   assert.ok(all.math.demo.frl, 'demo present');
   assert.equal(all.math.meta.latestYear, 2025, 'meta present');
