@@ -14,7 +14,7 @@ GrowthLens shows how each school is doing compared with the district as a whole,
 4. **Scores vs. growth** — two views at once: where students scored this year along the bottom and how much they grew compared with expectations up the side, with dashed lines marking the district average. Available by school (each school's own number or a steadied version) and by individual student.
 5. **Growth by student group** — side-by-side box plots that compare growth from one student group to the next, across the same five comparisons in demo and uploaded data alike (free-or-reduced lunch, students with an IEP, English learners, Black vs. White, and Hispanic vs. White students).
 6. **Group gaps by school** — pick a subject and two student groups and see the gap between them at every school, ranked from largest to smallest. Show results on a standard scale or as weeks of learning, with schools that have too few students to read reliably set apart.
-7. **Export** — builds a board-ready PowerPoint deck of what you're currently looking at, ready to edit.
+7. **Export** — builds a board-ready PowerPoint deck of your district's growth picture: a cover, a plain-language how-to-read page, a district-at-a-glance summary, then per-subject figures (the school-by-grade table, scores vs. growth, student groups, and a gaps overview), where your schools land statewide, a few cautions, and a school-by-school appendix carrying one slide for each group comparison that shows a clear signal. Flip through the on-page carousel to see exactly what will download — then save an editable PowerPoint built in common system fonts, so it opens the same on any machine.
 8. **Resources** — research syntheses, working papers, and practitioner tools matched to clear patterns GrowthLens detects in your data.
 
 Want the details on how the numbers are made? The methods note lives in [methods.html](methods.html), linked from the sidebar and the FAQ.
@@ -105,9 +105,10 @@ heatmap-variants.jsx    Growth by school & grade — H1 diverging heatmap (sorta
 demographics.jsx        Growth by student group — box-and-whisker by subgroup
 achievement.jsx         Scores vs. growth — achievement vs. growth scatter
 district-report.jsx     Statewide comparison — PRiME tile histograms + trends
-export.jsx              Export page — PPTX generation via PptxGenJS
+export.jsx              Export page — renders the deck model as a PptxGenJS PPTX + an on-page carousel
 
 engine/                 real ingestion + computation engine (see Architecture)
+engine/deck.js          deck model for the Export page (Node-tested slide descriptors)
 tools/build-demo.js     regenerates ALL demo fixtures (data.js + heatmap-data.js + demo-data.js)
                         from one synthetic student dataset via engine/stats.js
 vendor/duckdb/          vendored DuckDB-WASM + Apache Arrow, same-origin (has its own README)
