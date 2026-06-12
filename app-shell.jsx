@@ -78,8 +78,12 @@ function AppBody() {
     const d = loadAnalysisPrefs().demo;
     return DEMOS[d] ? d : 'frl';
   });
-  const [estimate, setEstimate] = React.useState(() =>
-    loadAnalysisPrefs().estimate === 'raw' ? 'raw' : 'shrunk');
+  // Pinned to shrunken: the Shrunken/Raw toggle is hidden for now (raw
+  // estimates invite over-reading noisy small-school numbers — the opposite
+  // of everything else this tool does). Deliberately NOT read from persisted
+  // prefs, so a previously saved 'raw' can't silently stick with no visible
+  // control to undo it. The plumbing stays for a future stakeholder decision.
+  const [estimate, setEstimate] = React.useState('shrunk');
   const [unit, setUnit] = React.useState(() =>
     loadAnalysisPrefs().unit === 'weeks' ? 'weeks' : 'z');
   // scanSort is no longer in ctx — HeatmapH1 manages its own column-click sort.
@@ -125,10 +129,11 @@ function AppBody() {
   );
 
   // Persist the analysis settings; failure (private mode) just means no restore.
+  // (estimate is intentionally not persisted while its control is hidden.)
   React.useEffect(() => {
-    try { localStorage.setItem(ANALYSIS_PREFS_KEY, JSON.stringify({ subject, unit, estimate, demo })); }
+    try { localStorage.setItem(ANALYSIS_PREFS_KEY, JSON.stringify({ subject, unit, demo })); }
     catch { /* ignore */ }
-  }, [subject, unit, estimate, demo]);
+  }, [subject, unit, demo]);
   // A subject the store can't serve snaps to one it can — a persisted 'ela'
   // with the Math-only sample, or 'math' right after an ELA upload suppresses
   // the sample. Never dead-end on "No data".
@@ -282,9 +287,9 @@ function AnalysisPanel({ ctx }) {
                   label="Subject" disabledKeys={ctx.disabledSubjects} />
       <CSegmented value={ctx.unit} onChange={ctx.setUnit}
                   options={{ z: 'SD', weeks: 'Weeks' }} label="Units" hint={UNIT_HINT} />
-      <CSegmented value={ctx.estimate} onChange={ctx.setEstimate}
-                  options={METHOD_OPTS} label="Method"
-                  hint={METHOD_HINT} optionHints={METHOD_OPT_HINTS} />
+      {/* The Shrunken/Raw Method control is hidden for now — the app runs on
+          shrunken estimates only (see the `estimate` state in AppBody).
+          Pending a stakeholder decision before the machinery is pruned. */}
     </div>
   );
 }
