@@ -186,7 +186,28 @@
   </table>
   <p>If GrowthLens output is going to leave the analyst's workstation, apply a stricter standard before publishing — many state report cards use <code>n ≥ 30</code> for public-facing tables. The default of 10 is fine for internal triage but is <em>not</em> a suppression rule.</p>
 
-  <h2>5 · The two figures</h2>
+  <h2 id="weeks">5 · Weeks of learning</h2>
+  <p>Every figure can show its numbers two ways: on the standard-deviation (SD) scale the state's residuals arrive in, or converted to <em>weeks of learning</em> — about how many weeks of a typical school year's progress the same difference represents. SD is the honest native unit, but few people outside measurement work carry an intuition for "0.10 SD"; weeks give the same number a familiar size. The toggle lives in the sidebar, and the two are exact rescalings of one another — switching units never changes which schools look strong or weak, only the words on the axis.</p>
+
+  <h3>Where the conversion factor comes from</h3>
+  <p>The factors are built from Missouri's own statewide MAP results — the grade-level means and SDs DESE publishes each year — one factor per year × grade × subject. For, say, grade 5 math in 2025, we ask: how much did the statewide average score rise between grade 4 in 2024 and grade 5 in 2025, measured in grade-4 SDs? That is a year of typical growth, as an effect size:</p>
+  <code class="formula">  annual_growth_es  =  (mean_grade_g_year_t − mean_grade_g−1_year_t−1) / sd_grade_g−1_year_t−1
+  weeks_per_SD      =  38 / annual_growth_es
+  weeks             =  weeks_per_SD · residual
+</code>
+  <p>This pairing — this year's grade 5 against last year's grade 4 — is a <em>synthetic cohort</em>: two adjacent statewide snapshots standing in for one group of students followed over time. Dividing a typical Missouri school year (38 instructional weeks) by the effect size says how many weeks one SD of growth is worth; multiplying by a residual converts it. A student 0.10 SD ahead of expectations, in a grade where a year of growth is 0.38 SD, is about 38 · 0.10 / 0.38 ≈ 10 weeks ahead. The factor table ships with the app (<code>reference/conversion_factors.json</code>), and the script that builds it from the DESE workbooks is in the repository.</p>
+
+  <h3>Which factor each figure uses</h3>
+  <ul>
+    <li><strong>Per-grade cells</strong> — the school × grade heatmap converts each cell with its own grade's factor for the data's year and subject, since a year of growth is worth very different amounts in grade 4 and grade 8.</li>
+    <li><strong>Pooled displays</strong> — school-level gaps, the district box plots, and the overview numbers span several grades, so they use the year × subject average across grades 4–8. Figure footnotes show the multiplier in use.</li>
+    <li><strong>Grade 3</strong> has no factor of its own — there is no grade-2 MAP to grow from — so grade-3 cells use the grade 4–8 average as well.</li>
+    <li><strong>Missing years</strong> fall back to the nearest earlier year with factors. Statewide testing was cancelled in 2020, so neither 2020 nor 2021 can have a factor of its own (2021 lacks its prior-year baseline); data from those years converts with 2019's factors. If the factor table fails to load entirely, a typical MAP constant (≈132 weeks per SD) keeps the toggle working, and the footnotes say so.</li>
+  </ul>
+
+  <aside class="note"><strong>Read weeks as a translation, not a second measurement.</strong> The synthetic cohort compares different students a year apart, so enrollment shifts between years leak into the factor. The arithmetic assumes growth spreads evenly across a 38-week year. And because annual growth differs sharply by grade — a typical year of middle-school ELA growth can run under 0.2 SD statewide — modest SD differences can convert to eye-catching week counts; that is the grade's small typical growth doing the talking, not a bigger underlying gap. Weeks are rounded to whole numbers and are meant for communicating how big a difference is — not for curriculum pacing or instructional-time decisions.</aside>
+
+  <h2>6 · The two figures</h2>
   <p>GrowthLens gives you two main views: one to drill into a single gap school by school, and one to scan the whole district at a glance. Here's how to read each.</p>
   <h3>Group gaps by school (forest plot)</h3>
   <p>One row per school for a single subject and subgroup pair, showing the point estimate, the 95% credible interval (the range the real number most likely falls in), and the shrinkage factor. The district-wide gap sits on top as a vertical reference line. Reach for this when you want to know whether a gap concentrates in a few schools or shows up across the whole system.</p>
@@ -194,7 +215,7 @@
   <h3>Growth by school & grade (heatmap)</h3>
   <p>A school × grade grid of standardized residuals, colored on a diverging scale around zero (blue above expectation, rust below). Start here <em>before</em> you drill into a specific gap — to spot schools and grades that are consistently above or below expectation, and to see whether the district shows a coherent pattern (say, 4th-grade weakness across the board).</p>
 
-  <h2>6 · What GrowthLens is not</h2>
+  <h2>7 · What GrowthLens is not</h2>
   <p>A few honest limits, so you know where to stop. GrowthLens is built to help you ask better questions — not to assign blame or hand down a verdict.</p>
   <ul>
     <li><strong>Not a value-added model.</strong> The state's residuals already account for prior score and grade, but GrowthLens estimates no teacher-, classroom-, or program-level effect. Don't use these results to evaluate individual teachers.</li>
@@ -203,11 +224,11 @@
     <li><strong>Not bulletproof against a badly mismatched model.</strong> If a district's true growth pattern is wildly nonlinear, or leans hard on factors we don't include (like mid-year mobility), the residuals can mislead. Treat GrowthLens as a triage tool, not a final judgment.</li>
   </ul>
 
-  <h2>7 · Privacy and data handling</h2>
+  <h2>8 · Privacy and data handling</h2>
   <p>The short version: your data never leaves your browser tab, and you can check that yourself. All computation runs right in your browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — so loading a data file makes no third-party or CDN request, and once the page itself has opened, the analysis needs no further network access. (The app shell — React and fonts — does load from CDNs when the page first opens; your data is never part of any request.) Your CSV is parsed and queried entirely in the tab; it's never uploaded to a server, and no identifier, aggregate, or partial result is sent off the device. Want to confirm it? Open your browser's developer tools and watch the Network panel — you'll see no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and stores no student records in cookies or local storage.</p>
   <p>The published methods, fixtures, and code are at <a href="https://github.com/andrewmcamp/growthlens" target="_blank" rel="noopener">andrewmcamp/growthlens</a>.</p>
 
-  <h2>8 · Recommended citation</h2>
+  <h2>9 · Recommended citation</h2>
   <p>If you cite GrowthLens in a report or presentation, here's the form we suggest:</p>
   <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.4 preview, 2026.</p>
 
