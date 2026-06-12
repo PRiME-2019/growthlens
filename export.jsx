@@ -150,25 +150,36 @@ function layoutGroups(pres, slide, deck, d) {
   chrome(slide, deck, d, subjWord(d.subject), 'Growth by student group');
   const x0 = 4.0, plotW = 7.6, span = d.domain.max - d.domain.min || 1;
   const xOf = (v) => x0 + ((v - d.domain.min) / span) * plotW;
+  // Fixed spacing overflows the slide once a district carries all five
+  // comparisons (4 sections, 9 rows) — compress everything by one factor so
+  // the rows always end above the footnote.
+  const nSections = d.sections.length;
+  const nGroups = d.sections.reduce((t, s) => t + s.groups.length, 0);
+  const avail = (PAGE_H - 1.2) - 1.8 - 0.35;   // top of rows → above the axis label + footnote
+  const need = nSections * 0.34 + nGroups * 0.42 + nSections * 0.12;
+  const k = Math.min(1, avail / Math.max(0.1, need));
+  const secH = 0.34 * k, rowStep = 0.42 * k, trail = 0.12 * k;
+  const barH = Math.min(0.22, rowStep * 0.55), diaH = Math.min(0.28, rowStep * 0.68);
   let y = 1.8;
   const zeroX = xOf(0);
+  const yTop = y;
   for (const sec of d.sections) {
     slide.addText(sec.title.toUpperCase(), { x: 0.6, y, w: 3, h: 0.3, fontFace: F_HEAD, fontSize: 10, bold: true, color: XP.mute, charSpacing: 2 });
-    y += 0.34;
+    y += secH;
     for (const g of sec.groups) {
       slide.addText(`${g.label}  ·  n=${g.n.toLocaleString()}`, { x: 0.6, y: y + 0.02, w: 3.2, h: 0.3, fontFace: F_BODY, fontSize: 11, color: XP.ink });
       const color = g.median >= 0 ? XP.blue : XP.neg;
-      slide.addShape('rect', { x: xOf(g.q1), y: y + 0.05, w: Math.max(0.05, xOf(g.q3) - xOf(g.q1)), h: 0.22,
+      slide.addShape('rect', { x: xOf(g.q1), y: y + (rowStep - barH) / 2, w: Math.max(0.05, xOf(g.q3) - xOf(g.q1)), h: barH,
         fill: { color, transparency: 82 }, line: { color, width: 1 } });
-      slide.addShape('diamond', { x: xOf(g.median) - 0.07, y: y + 0.02, w: 0.14, h: 0.28,
+      slide.addShape('diamond', { x: xOf(g.median) - 0.07, y: y + (rowStep - diaH) / 2, w: 0.14, h: diaH,
         fill: { color: 'FFFFFF' }, line: { color, width: 1.25 } });
       slide.addText(g.text, { x: 12.0, y: y - 0.02, w: 0.95, h: 0.3, fontFace: F_MONO, fontSize: 10.5, color: XP.ink2, align: 'right' });
-      y += 0.42;
+      y += rowStep;
     }
-    y += 0.12;
+    y += trail;
   }
-  slide.addShape('line', { x: zeroX, y: 1.75, w: 0, h: y - 1.8, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
-  slide.addText('typical year of growth', { x: zeroX - 0.9, y: y + 0.05, w: 1.8, h: 0.25, fontFace: F_HEAD, fontSize: 9, color: XP.ink2, align: 'center' });
+  slide.addShape('line', { x: zeroX, y: yTop - 0.05, w: 0, h: y - yTop, line: { color: XP.ink2, width: 1, dashType: 'dash' } });
+  slide.addText('typical year of growth', { x: zeroX - 0.9, y: y + 0.03, w: 1.8, h: 0.25, fontFace: F_HEAD, fontSize: 9, color: XP.ink2, align: 'center' });
   slide.addText('Box = the middle half of that group’s students · diamond = the typical student',
     { x: 0.6, y: PAGE_H - 0.85, w: 12.1, h: 0.3, fontFace: F_HEAD, fontSize: 10, color: XP.mute });
   slide.addNotes('Same vocabulary as the app’s box plots: where the middle of each group sits, and how much groups overlap.');
