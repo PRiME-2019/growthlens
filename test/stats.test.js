@@ -39,6 +39,31 @@ test('pooledMean: equal weights → simple mean + se', () => {
   assert.ok(Math.abs(r.mu - 1) < 1e-9);
   assert.ok(Math.abs(r.se - Math.sqrt(0.5)) < 1e-9);
 });
+test('pooledMean: CI uses t(k−1), not 1.96', () => {
+  const rows = [{ gap: 0, se: 1 }, { gap: 2, se: 1 }];        // k=2 → t(1) = 12.706
+  const r = S.pooledMean(rows, 0);
+  assert.ok(Math.abs((r.ciHi - r.mu) / r.se - 12.706) < 1e-9);
+  const seven = Array.from({ length: 7 }, (_, i) => ({ gap: i * 0.1, se: 0.5 })); // k=7 → t(6) = 2.447
+  const r7 = S.pooledMean(seven, 0.01);
+  assert.ok(Math.abs((r7.ciHi - r7.mu) / r7.se - 2.447) < 1e-9);
+});
+test('tCrit95: table values, large-df and degenerate-df fallbacks', () => {
+  assert.equal(S.tCrit95(1), 12.706);
+  assert.equal(S.tCrit95(6), 2.447);
+  assert.equal(S.tCrit95(30), 1.96);
+  assert.equal(S.tCrit95(500), 1.96);
+  assert.equal(S.tCrit95(0), 1.96);
+});
+test('shrink: muSe widens the posterior SD by the pooled-mean uncertainty', () => {
+  // B = 0.5: sd² = 0.5·se² + 0.25·muSe²
+  const se = 0.2, tau2 = se * se, muSe = 0.1;
+  const r = S.shrink({ rawGap: 0.4, rawSe: se, tau2, mu: 0, muSe });
+  assert.ok(Math.abs(r.B - 0.5) < 1e-12);
+  assert.ok(Math.abs(r.shrunkSe - Math.sqrt(0.5 * se * se + 0.25 * muSe * muSe)) < 1e-12);
+  // default muSe = 0 keeps the classic μ-known form
+  const r0 = S.shrink({ rawGap: 0.4, rawSe: se, tau2, mu: 0 });
+  assert.ok(Math.abs(r0.shrunkSe - Math.sqrt(0.5) * se) < 1e-12);
+});
 test('dlTau2: zero between-school variance when all gaps equal', () => {
   const rows = [{ gap: 0.2, se: 0.1 }, { gap: 0.2, se: 0.1 }, { gap: 0.2, se: 0.1 }];
   assert.ok(Math.abs(S.dlTau2(rows)) < 1e-12);

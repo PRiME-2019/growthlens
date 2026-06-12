@@ -451,7 +451,7 @@ function TrendCard({ report }) {
 
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${SLU.rule2}`,
                     display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 11.5, color: SLU.mute, lineHeight: 1.5 }}>
-        <span><span style={{ color: SLU.blue, fontWeight: 600 }}>Blue line</span> = district average.</span>
+        <span><span style={{ color: SLU.blue, fontWeight: 600 }}>Blue line</span> = district average, weighting schools equally.</span>
         {overlaySchool && <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold line</span> = {overlaySchool.name}.</span>}
         <span>The gray dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
         <span>Hover any point for its exact score.</span>

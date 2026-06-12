@@ -61,12 +61,19 @@
         }
       }
       const fitRows = schools.filter(s => s.meets_min_cell).map(s => ({ gap: s.raw_gap, se: s.raw_se }));
-      // With <2 fit schools τ² can't be estimated: B would hit 0 and pin every
-      // school to the pooled mean with zero-width CIs — a fabricated exact
-      // value. Shrinkage is undefined there, so fall back to raw (B = 1).
-      const canShrink = fitRows.length >= 2;
-      const tau2 = canShrink ? S.remlTau2(fitRows) : 0;
-      const pooled = S.pooledMean(fitRows, tau2) || { mu: 0, ciLo: 0, ciHi: 0 };
+      // With <2 fit schools — or τ̂² estimated at exactly zero, which happens
+      // routinely in small homogeneous districts — B would hit 0 and pin
+      // every school to the pooled mean with zero-width CIs: a fabricated
+      // exact value. Shrinkage is degenerate there, so fall back to raw
+      // (B = 1). Calibration: tools/validate-stats-3-tauzero.cjs.
+      const enough = fitRows.length >= 2;
+      const tau2 = enough ? S.remlTau2(fitRows) : 0;
+      const canShrink = enough && tau2 > 0;
+      // No reliable schools → no district-wide estimate (null, never a
+      // fabricated 0 with a zero-width interval).
+      const pooled = fitRows.length ? S.pooledMean(fitRows, tau2) : null;
+      // Shrunken intervals use t(k−1) — μ and τ² come from only k schools.
+      const qShrunk = S.tCrit95(fitRows.length - 1);
       for (const s of schools) {
         if (s.raw_gap == null) {
           // Zero-side school — nothing to estimate, nothing to shrink.
@@ -76,9 +83,9 @@
         }
         s.raw_ci95 = [s.raw_gap - 1.96 * s.raw_se, s.raw_gap + 1.96 * s.raw_se];
         if (canShrink) {
-          const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu });
+          const sh = S.shrink({ rawGap: s.raw_gap, rawSe: s.raw_se, tau2, mu: pooled.mu, muSe: pooled.se });
           s.shrunk_gap = sh.shrunkGap; s.shrunk_se = sh.shrunkSe; s.shrinkage_factor = sh.B;
-          s.shrunk_ci95 = [sh.shrunkGap - 1.96 * sh.shrunkSe, sh.shrunkGap + 1.96 * sh.shrunkSe];
+          s.shrunk_ci95 = [sh.shrunkGap - qShrunk * sh.shrunkSe, sh.shrunkGap + qShrunk * sh.shrunkSe];
         } else {
           s.shrunk_gap = s.raw_gap; s.shrunk_se = s.raw_se; s.shrinkage_factor = 1;
           s.shrunk_ci95 = s.raw_ci95.slice();
@@ -86,7 +93,8 @@
       }
       byDemo[sg.key] = {
         meta: { subject, demographic: sg.key, groupA: sg.aLabel, groupB: sg.bLabel,
-                districtGap: pooled.mu, districtCi95: [pooled.ciLo, pooled.ciHi], tauSquared: tau2,
+                districtGap: pooled ? pooled.mu : null,
+                districtCi95: pooled ? [pooled.ciLo, pooled.ciHi] : null, tauSquared: tau2,
                 nSchools: schools.length, nMeetingThreshold: schools.filter(s => s.meets_min_cell).length, minCellSize: MIN_N },
         schools,
       };
@@ -114,8 +122,11 @@
     for (const c of cellsAll) (byGrade[c.grade] = byGrade[c.grade] || []).push(c);
     for (const gradeCells of Object.values(byGrade)) {
       const fit = gradeCells.filter(c => c.n >= MIN_N && isFinite(c.se)).map(c => ({ gap: c.r, se: c.se }));
-      const canShrink = fit.length >= 2;
-      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      // Same degeneracy guard as buildGaps: τ̂² = 0 would pin every cell to
+      // the grade mean, so rs stays null and the UI shows the raw value.
+      const enough = fit.length >= 2;
+      const tau2 = enough ? S.remlTau2(fit) : 0;
+      const canShrink = enough && tau2 > 0;
       const pooled = canShrink ? S.pooledMean(fit, tau2) : null;
       for (const c of gradeCells) {
         c.rs = (canShrink && pooled && isFinite(c.se))
@@ -131,8 +142,9 @@
     {
       const c = await cellsOverall(conn, table);
       const fit = c.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
-      const canShrink = fit.length >= 2;
-      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      const enough = fit.length >= 2;
+      const tau2 = enough ? S.remlTau2(fit) : 0;
+      const canShrink = enough && tau2 > 0;
       const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
       for (const s of c) {
         overallBySchool[s.g] = {
@@ -180,9 +192,10 @@
     const schoolAgg = await (async () => {
       const c = await cellsOverall(conn, table);
       const fit = c.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
-      // Same τ² guard as buildGaps: shrinkage is undefined with <2 fit schools.
-      const canShrink = fit.length >= 2;
-      const tau2 = canShrink ? S.remlTau2(fit) : 0;
+      // Same degeneracy guard as buildGaps: <2 fit schools OR τ̂² = 0 → raw.
+      const enough = fit.length >= 2;
+      const tau2 = enough ? S.remlTau2(fit) : 0;
+      const canShrink = enough && tau2 > 0;
       const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
       return c.map((s, i) => {
         const yShrunk = canShrink

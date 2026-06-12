@@ -137,7 +137,7 @@
   μ   =  Σ w_i · r_i  /  Σ w_i
   SE(μ) =  1 / √(Σ w_i)
 </code>
-  <p>Here <code>r_i</code> is the school's raw gap, <code>SE_i</code> is its within-school standard error, and <code>τ²</code> measures how much schools really differ from one another — the between-school variance component (see <a href="#variance">§3</a>). The 95% confidence interval shown on the overview card — the range of values consistent with the data at 95% confidence — is <code>μ ± 1.96 · SE(μ)</code>. One notational simplification throughout: we write <code>μ</code> for the estimate computed from your data — the quantity statisticians would top with a hat.</p>
+  <p>Here <code>r_i</code> is the school's raw gap, <code>SE_i</code> is its within-school standard error, and <code>τ²</code> measures how much schools really differ from one another — the between-school variance component (see <a href="#variance">§3</a>). The 95% confidence interval shown on the overview card — the range of values consistent with the data at 95% confidence — is <code>μ ± t·SE(μ)</code>, where <code>t</code> is the Student-t critical value with <code>k − 1</code> degrees of freedom and <code>k</code> is the number of schools in the fit. With few schools the usual 1.96 is too narrow because <code>τ²</code> is itself a noisy estimate; the t correction restores honest coverage (with 30+ schools, <code>t ≈ 1.96</code>). One notational simplification throughout: we write <code>μ</code> for the estimate computed from your data — the quantity statisticians would top with a hat.</p>
 
   <h2 id="shrinkage">2 · Shrinkage (empirical Bayes)</h2>
   <p>The idea here is simple: a result built on a handful of students shouldn't swing the whole picture, so we gently nudge each school's number toward the district average — more for small, noisy schools and less for large, well-measured ones. Statisticians call this <em>shrinkage</em>, and the recipe below is the classic <em>empirical-Bayes</em> approach (it learns the right amount of nudging from the data itself). School-level estimates are <em>shrunken</em> toward the district-wide gap, so the shrunken estimate at school <em>i</em> is a precision-weighted average of the school's raw estimate and the district mean:</p>
@@ -151,9 +151,11 @@
   </ul>
   <p>Most schools in a typical district land between 0.6 and 0.9. On the Group gaps by school page, the hover tooltip shows each school's B on the chart, and the Table view includes it as a column.</p>
 
-  <p>The shrunken estimate's standard error is <code>SE(r_i_shrunk) = √(B_i) · SE_i</code> — the spread that remains once we treat the district mean <code>μ</code> as <em>known</em>. The fuller empirical-Bayes version, which also folds in the uncertainty about <code>μ</code> itself, runs about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
+  <p>The shrunken estimate's standard error folds in the uncertainty about the district mean itself: <code>SE(r_i_shrunk) = √( B_i · SE_i² + (1 − B_i)² · SE(μ)² )</code>. Intervals are then built with the Student-t critical value at <code>k − 1</code> degrees of freedom rather than 1.96, because <code>μ</code> and <code>τ²</code> are themselves estimated from only <code>k</code> schools. Two degeneracy guards apply: when fewer than two schools clear the minimum-n threshold, or when <code>τ²</code> is estimated at exactly zero (the schools are statistically indistinguishable on this comparison), shrinkage would pin every school to the district mean with a zero-width interval — a fabricated certainty — so GrowthLens reports the raw estimates instead (<code>B = 1</code>).</p>
+  <p>These choices are calibration-checked by simulation: across districts of 5–30 schools and realistic heterogeneity, the displayed 95% intervals cover the true school effect roughly 92–98% of the time, deliberately erring conservative in the smallest districts. The simulation scripts ship with the source (<code>tools/validate-stats-*.cjs</code>) and can be re-run with plain <code>node</code>.</p>
+  <p>The same machinery runs at three grains, each shrinking toward its natural pool: school-level gaps and overall growth shrink toward the district-wide value, and the heatmap's school × grade cells shrink toward their grade's district-wide mean — within a grade column, schools are the exchangeable units. The demographics box plots are deliberately <em>not</em> shrunken: they display observed student distributions, not model estimates, and rest on hundreds of students each.</p>
 
-  <aside class="note"><strong>Important and a little counter-intuitive.</strong> Shrinkage nudges every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD, in a district whose gap is −0.20 SD, will end up with a shrunken estimate that is slightly negative. That's mathematically correct under the model — with limited data, our best guess for the school sits somewhere between its own (noisy) number and the district norm — but it can look as if the model "invented" a gap. When a school is small, lean on the credible interval (the range the real number most likely falls in) rather than the single point estimate, and use the Raw / Shrunken toggle on the Group gaps by school page to see both side by side.</aside>
+  <aside class="note"><strong>Important and a little counter-intuitive.</strong> Shrinkage nudges every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD, in a district whose gap is −0.20 SD, will end up with a shrunken estimate that is slightly negative. That's mathematically correct under the model — with limited data, our best guess for the school sits somewhere between its own (noisy) number and the district norm — but it can look as if the model "invented" a gap. When a school is small, lean on the credible interval (the range the real number most likely falls in) rather than the single point estimate. (The shrinkage factor <code>B</code> shown with each school says exactly how far its number was nudged.)</aside>
 
   <h2 id="variance">3 · Variance components and τ²</h2>
   <p>This section is about uncertainty — separating two kinds of "wiggle" in the numbers. Some spread comes from having only so many students in a school (sampling noise), and some comes from schools genuinely being different from one another. Telling these apart is what lets us shrink the right amount and draw honest intervals. <code>τ²</code> below is just our measure of how much schools truly differ.</p>
@@ -207,6 +209,12 @@
 
   <aside class="note"><strong>Read weeks as a translation, not a second measurement.</strong> The synthetic cohort compares different students a year apart, so enrollment shifts between years leak into the factor. The arithmetic assumes growth spreads evenly across a 38-week year. And because annual growth differs sharply by grade — a typical year of middle-school ELA growth can run under 0.2 SD statewide — modest SD differences can convert to eye-catching week counts; that is the grade's small typical growth doing the talking, not a bigger underlying gap. Weeks are rounded to whole numbers and are meant for communicating how big a difference is — not for curriculum pacing or instructional-time decisions.</aside>
 
+  <h3>Assumptions worth knowing</h3>
+  <p>Comparing scale-score means across adjacent grades assumes MAP's grade-level scales are articulated well enough for that difference to carry meaning — the same assumption behind the widely used national growth norms (Bloom, Hill, Black &amp; Lipsey, 2008, <em>Journal of Research on Educational Effectiveness</em>), which are built from the identical adjacent-grade design. Our factors show the familiar pattern from that literature: large annual gains in the early grades that shrink through middle school.</p>
+  <p>Pooled displays average the <em>effect sizes</em> first and convert second (<code>38 / mean(es)</code>). Converting each grade first and then averaging the weeks (<code>mean(38/es)</code>) would give a number roughly 20% larger — for 2025 ELA, 96 vs. 116 weeks per SD. GrowthLens uses the first form: it weights grades by their growth on the score scale and yields the more conservative conversion.</p>
+  <p>A worked extreme: in 2024, grade-6 ELA's annual growth was 0.13 SD — one SD is then worth about 295 weeks, so a grade-6 cell of +0.20 SD displays as roughly +59 weeks, over a year and a half of typical grade-6 ELA learning. That is the grade's small typical growth doing the talking, not a larger underlying difference; read such cells with the SD value alongside.</p>
+  <p>The fallback constant above (132 weeks per SD = 38 ÷ 0.29) uses a typical mid-grades annual-growth effect size consistent with the national norms cited here.</p>
+
   <h2>6 · The two figures</h2>
   <p>GrowthLens gives you two main views: one to drill into a single gap school by school, and one to scan the whole district at a glance. Here's how to read each.</p>
   <h3>Group gaps by school (forest plot)</h3>
@@ -224,11 +232,25 @@
     <li><strong>Not bulletproof against a badly mismatched model.</strong> If a district's true growth pattern is wildly nonlinear, or leans hard on factors we don't include (like mid-year mobility), the residuals can mislead. Treat GrowthLens as a triage tool, not a final judgment.</li>
   </ul>
 
-  <h2>8 · Privacy and data handling</h2>
+  <h2>8 · Fixed editorial thresholds</h2>
+  <p>The plain-language takeaways and the Resources matcher use a handful of fixed constants to decide which sentences are worth writing. They are editorial — they choose emphasis, not significance (the interval-based gates described above are separate) — and are listed here so the choices are reviewable:</p>
+  <table class="compact">
+    <thead><tr><th>Constant</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">±0.02 SD</td><td>Direction words ("ahead"/"behind") and gap-reversal mentions stay silent inside this band — differences smaller than this are treated as noise in prose.</td></tr>
+      <tr><td class="mono">0.05 SD</td><td>The fastest-vs-slowest-grade takeaway requires at least this spread between grade means before it appears.</td></tr>
+      <tr><td class="mono">0.15 SD</td><td>A school × grade cell is called a "standout" at or beyond this magnitude.</td></tr>
+      <tr><td class="mono">2/3</td><td>Share of reliable schools leaning the district's direction before a gap is described as district-wide rather than concentrated.</td></tr>
+      <tr><td class="mono">2 × gap</td><td>Within-group spread must exceed twice the between-group gap before the "groups overlap heavily" line appears.</td></tr>
+      <tr><td class="mono">−0.05 SD</td><td>The Resources page flags a grade band as growing below expectations at or below this n-weighted mean.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9 · Privacy and data handling</h2>
   <p>The short version: your data never leaves your browser tab, and you can check that yourself. All computation runs right in your browser via <a href="https://duckdb.org/docs/api/wasm/overview" target="_blank" rel="noopener">DuckDB-WASM</a>, which is <em>vendored and served from the same origin</em> as the app — so loading a data file makes no third-party or CDN request, and once the page itself has opened, the analysis needs no further network access. (The app shell — React and fonts — does load from CDNs when the page first opens; your data is never part of any request.) Your CSV is parsed and queried entirely in the tab; it's never uploaded to a server, and no identifier, aggregate, or partial result is sent off the device. Want to confirm it? Open your browser's developer tools and watch the Network panel — you'll see no off-origin traffic during analysis. Reload the tab and the data is gone &mdash; GrowthLens keeps nothing between sessions and stores no student records in cookies or local storage.</p>
   <p>The published methods, fixtures, and code are at <a href="https://github.com/andrewmcamp/growthlens" target="_blank" rel="noopener">andrewmcamp/growthlens</a>.</p>
 
-  <h2>9 · Recommended citation</h2>
+  <h2>10 · Recommended citation</h2>
   <p>If you cite GrowthLens in a report or presentation, here's the form we suggest:</p>
   <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.4 preview, 2026.</p>
 

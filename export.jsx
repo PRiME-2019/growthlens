@@ -424,7 +424,7 @@ function layoutStateTrend(pres, slide, deck, d) {
         fontFace: F_MONO, fontSize: 8.5, color: has ? XP.mute : XP.rule, align: 'center' });
     }
   });
-  slide.addText('0 = a typical year of growth statewide · the dashed stretch crosses 2020, the year state testing was cancelled',
+  slide.addText('0 = a typical year of growth statewide · schools weighted equally · the dashed stretch crosses 2020, the year state testing was cancelled',
     { x: 0.6, y: PAGE_H - 0.78, w: 12.1, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
   slide.addNotes('District average of statewide growth scores per year. The dashed stretch crosses the cancelled 2020 test year, not missing district data.');
 }

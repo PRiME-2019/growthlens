@@ -67,10 +67,12 @@
       return {
         key: k, groupA: meta.groupA, groupB: meta.groupB,
         label: `${meta.groupA} vs. ${meta.groupB}`,
-        gapText: fmt.val(meta.districtGap),
+        // districtGap is null when no school met the threshold — show a dash,
+        // never a fabricated zero.
+        gapText: Number.isFinite(meta.districtGap) ? fmt.val(meta.districtGap) : '—',
         rangeText: meta.districtCi95
           ? `${fmt.val(meta.districtCi95[0])} to ${fmt.val(meta.districtCi95[1])}` : '—',
-        leaning: `${leaning} of ${meets.length}`,
+        leaning: Number.isFinite(meta.districtGap) ? `${leaning} of ${meets.length}` : '—',
         coverage: `${meta.nMeetingThreshold} of ${meta.nSchools}`,
         reliable,
       };

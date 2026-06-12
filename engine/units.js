@@ -8,7 +8,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const FALLBACK_WEEKS_PER_SD = 132; // ≈ 38 / 0.29 — typical MAP convention if factors unavailable
+  // ≈ 38 instructional weeks ÷ 0.29, a typical mid-grades annual-growth
+  // effect size consistent with the national adjacent-grade growth norms
+  // (Bloom, Hill, Black & Lipsey 2008). Used only when the factor table
+  // fails to load; figure footnotes disclose the fallback.
+  const FALLBACK_WEEKS_PER_SD = 132;
 
   // The factor year actually used for (year, subject): the requested year when
   // factors exist, else the nearest year at or before it, else the earliest
@@ -25,6 +29,10 @@
 
   // weeks per 1 SD of growth residual. Exact-grade factor when grade is given
   // and present; otherwise the year × subject average across available grades.
+  // Convention: average the EFFECT SIZES first, convert second (base/mean(es)).
+  // mean(base/es) would run ~20% larger; this form weights grades by their
+  // growth on the score scale and is the more conservative conversion
+  // (documented in methods.html §5).
   function weeksPerSD(cf, { year, subject, grade = null } = {}) {
     if (!cf || !Array.isArray(cf.factors)) return FALLBACK_WEEKS_PER_SD;
     const base = typeof cf.base_weeks === 'number' ? cf.base_weeks : 38;

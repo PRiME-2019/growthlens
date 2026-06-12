@@ -76,6 +76,21 @@ test('forestSlides: only reliable comparisons; names, sorted by |gap|, zero-side
   assert.deepEqual(f.excluded.map((e) => e.name), ['West Lane Elementary']);
 });
 
+test('gapsOverview: null district gap (zero reliable schools) renders dashes, never +0.00', () => {
+  const empty = {
+    meta: { subject: 'math', demographic: 'el', groupA: 'EL', groupB: 'non-EL',
+            districtGap: null, districtCi95: null, tauSquared: 0,
+            nSchools: 2, nMeetingThreshold: 0, minCellSize: 10 },
+    schools: [SCH('1', 'A School', -0.1, -0.6, 0.4, false)],
+  };
+  const o = D.gapsOverview({ gaps: { el: empty }, mode: 'shrunk', fmt: fmtSD });
+  const row = o.rows[0];
+  assert.equal(row.gapText, '—');
+  assert.equal(row.rangeText, '—');
+  assert.equal(row.leaning, '—');
+  assert.equal(row.reliable, false);
+});
+
 test('forestSlides: raw mode reads the raw gap and interval', () => {
   const slice = gapSlice('frl', 'FRL', 'non-FRL', -0.15, [-0.22, -0.08], [{
     school_id: '1', school_name: 'One', n_a: 25, n_b: 30,

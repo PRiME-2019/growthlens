@@ -211,6 +211,26 @@ display), the weeks arithmetic, the PRiME rank/pool logic, or the consistency
 between Status & Growth and the heatmap Overall column (test-locked). The
 methods note is accurate against the code except as flagged in B2.
 
+## E. Post-review fixes (landed same day — commit history for detail)
+
+| Finding | Status | What shipped |
+|---|---|---|
+| B1 τ̂²=0 collapse | **Resolved** | `compute.js` extends the existing degeneracy guard: τ̂² = 0 (or k < 2) → raw estimates with B = 1, at every grain (gaps, heatmap cells via `rs = null`, school overalls). Test-locked with an identical-gaps fixture. |
+| B2 interval undercoverage + overstated claim | **Resolved** | Posterior SD now `√(B·se² + (1−B)²·SE(μ̂)²)` (`shrink` gained `muSe`); shrunken intervals use t(k−1). methods §2 rewritten to state the actual policy and its simulated coverage; calibration published. |
+| B3 district CI at z | **Resolved** | `pooledMean` and the on-page `districtMeanRE` use t(k−1). |
+| B4 weeks documentation | **Resolved** | methods §5 gains "Assumptions worth knowing": adjacent-grade scale-comparability with the Bloom, Hill, Black & Lipsey (2008) citation; the `38/mean(es)` vs `mean(38/es)` convention (96 vs 116 weeks for 2025 ELA); the grade-6 ELA 2024 worked extreme (295 weeks/SD); fallback-constant provenance. Mirrored in `units.js` comments. |
+| B5 scatter x-axis app/deck mismatch | **Open** | Documented here; alignment deferred (visual change requiring a design pass). |
+| B6 fabricated zero district gap | **Resolved** | `meta.districtGap`/`districtCi95` are null with zero reliable schools; overview card and deck table render an explanation/dash. Test-locked. |
+| B7 statewide trend weighting | **Resolved** | "weighting schools equally" added to the app trend legend and the deck footer. |
+| B8 editorial thresholds | **Resolved** | methods §8 "Fixed editorial thresholds" table. |
+| B9 exchangeability sentences | **Resolved** | methods §2 closing paragraph (three grains + unshrunken box plots). |
+| (incidental) stale methods claim | **Resolved** | §2 aside no longer references the hidden Raw/Shrunken toggle. |
+
+**Shipped-policy calibration** (`tools/validate-stats-4-policy.cjs`, the code path
+as deployed): school-level 95% intervals cover the true effect **91.6–98.3%**
+across k = 5–30 and τ² = 0.005–0.06 (vs 49–94% before the fix), conservative in
+the smallest districts; district-wide t-CIs cover **94.6–98.4%** (vs 87–94%).
+
 ## D. Suggested order of operations before external review
 
 1. Decide the B1 remedy (option 2 or 3 recommended; option 1 is the floor).

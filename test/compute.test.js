@@ -120,15 +120,22 @@ test('computeSlice: heatmap cells shrink toward their grade pool; Overall matche
       `${s.school_id} overall.r equals ACH y_raw`);
     for (const [g, c] of Object.entries(s.grades)) {
       if (!c.ok) continue;
-      assert.ok(Number.isFinite(c.rs), `${s.school_id} grade ${g} has a shrunken value`);
+      // rs is null when that grade's τ̂² estimates 0 (degeneracy guard —
+      // the UI shows the raw value); otherwise it must be a real number.
+      assert.ok(c.rs === null || Number.isFinite(c.rs),
+        `${s.school_id} grade ${g} rs is finite or the τ̂²=0 fallback`);
     }
   }
+  // The school-level (Overall) path must actually shrink in this fixture:
+  // school means differ by ~0.1 with tiny SEs, so τ̂² > 0 there.
+  assert.ok(heat.schools.some((s) => s.overall && s.overall.rs !== s.overall.r),
+    'school-level shrinkage is exercised by the fixture');
   // Shrinkage coherence: within each grade, every cell's shrunken value sits
   // between its raw value and that grade's precision-weighted center (it
   // never overshoots past raw in the wrong direction).
   const grades = [...new Set(heat.schools.flatMap((s) => Object.keys(s.grades)))];
   for (const g of grades) {
-    const cells = heat.schools.map((s) => s.grades[g]).filter((c) => c && c.ok);
+    const cells = heat.schools.map((s) => s.grades[g]).filter((c) => c && c.ok && c.rs != null);
     if (cells.length < 2) continue;
     const lo = Math.min(...cells.map((c) => c.r)), hi = Math.max(...cells.map((c) => c.r));
     for (const c of cells) {
@@ -185,6 +192,47 @@ test('computeSlice: shrinkage falls back to raw when <2 schools meet min-n', asy
   assert.equal(s.shrinkage_factor, 1);
   assert.equal(s.shrunk_gap, s.raw_gap);
   assert.deepEqual(s.shrunk_ci95, s.raw_ci95);
+});
+
+test('computeSlice: τ̂² = 0 (identical school gaps) falls back to raw, never zero-width CIs', async () => {
+  // Residuals depend only on (side, i) — every school has the IDENTICAL gap,
+  // so DL/REML estimate τ̂² = 0. B = 0 would pin each school to the pooled
+  // mean with a zero-width interval; the guard must show raw instead.
+  const rows = [];
+  for (let s = 0; s < 3; s++) {
+    for (let i = 0; i < 60; i++) {
+      const frl = i < 30;
+      rows.push({
+        school_id: `S${s + 1}`, grade: 3 + (i % 6),
+        residual: (frl ? -0.2 : 0) + ((i * 37) % 21 - 10) / 25,
+        residual_se: 0.3, status: 0.1,
+        frl, iep: !frl, el: i % 4 === 0, black: frl, white: !frl, hispanic: i % 5 === 0,
+      });
+    }
+  }
+  const C = freshCompute(rows);
+  const out = await C.computeSlice('math');
+  const slice = out.GAPS_DATA_BY_DEMO.frl;
+  assert.equal(slice.meta.tauSquared, 0, 'identical gaps estimate zero heterogeneity');
+  for (const s of slice.schools) {
+    assert.equal(s.shrinkage_factor, 1, 'raw fallback (B=1) at τ̂²=0');
+    assert.equal(s.shrunk_gap, s.raw_gap);
+    assert.ok(s.shrunk_ci95[1] - s.shrunk_ci95[0] > 0.01, 'interval never collapses to a point');
+  }
+});
+
+test('computeSlice: zero reliable schools → district gap is null, not a fabricated 0', async () => {
+  const C = freshCompute(makeRows({ schools: 3, nPerSide: 5 }));   // 5 < MIN_N on both sides
+  const out = await C.computeSlice('math');
+  const m = out.GAPS_DATA_BY_DEMO.frl.meta;
+  assert.equal(m.nMeetingThreshold, 0);
+  assert.equal(m.districtGap, null);
+  assert.equal(m.districtCi95, null);
+  // schools still carry their raw estimates with the B=1 fallback
+  for (const s of out.GAPS_DATA_BY_DEMO.frl.schools) {
+    assert.ok(Number.isFinite(s.raw_gap));
+    assert.equal(s.shrinkage_factor, 1);
+  }
 });
 
 test('computeSlice: achievement student points exclude null-status rows', async () => {

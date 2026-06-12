@@ -26,9 +26,11 @@ const SUBJECTS = { ela: 'ELA', math: 'Math' };
 // ---- SUBJECT DATA SWAP -> engine/store.js (GLStore) --------------------------
 // The per-subject window.* swap now lives in the store; see AppBody below.
 
-// Random-effects pooled mean + SE over per-school gap estimates.
+// Random-effects pooled mean + SE over per-school gap estimates. The CI uses
+// t(k−1) like engine/stats.pooledMean — the z interval undercovers with few
+// schools (see tools/validate-stats-2-coverage.cjs).
 function districtMeanRE(schools, tauSquared) {
-  let wSum = 0, wxSum = 0;
+  let wSum = 0, wxSum = 0, k = 0;
   for (const s of schools) {
     if (s.meets_min_cell === false) continue;
     const se = (s.raw_se ?? s.shrunk_se);
@@ -38,11 +40,13 @@ function districtMeanRE(schools, tauSquared) {
     const w = 1 / v;
     wSum += w;
     wxSum += w * (s.raw_gap ?? s.shrunk_gap ?? 0);
+    k++;
   }
   if (wSum <= 0) return null;
   const mu = wxSum / wSum;
   const se = 1 / Math.sqrt(wSum);
-  return { mu, se, ciLo: mu - 1.96 * se, ciHi: mu + 1.96 * se };
+  const q = (window.GLStats && window.GLStats.tCrit95) ? window.GLStats.tCrit95(k - 1) : 1.96;
+  return { mu, se, ciLo: mu - q * se, ciHi: mu + q * se };
 }
 window.districtMeanRE = districtMeanRE;
 const DEMOS = {
@@ -1039,6 +1043,16 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
           {(() => {
             const re = (window.districtMeanRE && window.districtMeanRE(schools, meta.tauSquared)) || null;
             const mu = re ? re.mu : meta.districtGap;
+            // districtGap is null when no school meets the threshold — say so
+            // rather than rendering a fabricated +0.00.
+            if (!Number.isFinite(mu)) {
+              return (
+                <div style={{ fontSize: 12, color: SLU.mute, lineHeight: 1.5, maxWidth: 420 }}>
+                  No school has enough students in both groups to estimate a
+                  district-wide gap for this comparison.
+                </div>
+              );
+            }
             return (
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
