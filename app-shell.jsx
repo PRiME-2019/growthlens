@@ -55,11 +55,11 @@ const DEMOS = {
 const PAGES = {
   landing:      { label: 'Overview',             hint: 'Start here · add data' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
-  gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
   achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
   demographics: { label: 'Demographics',         hint: 'Growth by group' },
-  resources:    { label: 'Resources',            hint: 'Evidence for next steps' },
+  gap:          { label: 'Gap Analysis',         hint: 'Compare two groups'  },
   exportpg:     { label: 'Export',               hint: 'Download a deck' },
+  resources:    { label: 'Resources',            hint: 'Evidence for next steps' },
 };
 
 // Global analysis settings persist across sessions. UI preferences only —
