@@ -134,15 +134,15 @@
   <h3>The district-wide number</h3>
   <p>The single district-wide gap is an average across schools that gives steadier, better-measured schools more weight — a <em>random-effects pooled mean</em> over the per-school estimates, weighted by the inverse of each school's combined sampling and between-school variance:</p>
   <code class="formula">  w_i  =  1 / (SE_i²  +  τ²)
-  μ̂   =  Σ w_i · r_i  /  Σ w_i
-  SE(μ̂) =  1 / √(Σ w_i)
+  μ   =  Σ w_i · r_i  /  Σ w_i
+  SE(μ) =  1 / √(Σ w_i)
 </code>
-  <p>Here <code>r_i</code> is the school's raw gap, <code>SE_i</code> is its within-school standard error, and <code>τ²</code> measures how much schools really differ from one another — the between-school variance component (see <a href="#variance">§3</a>). The 95% confidence interval shown on the overview card — the range of values consistent with the data at 95% confidence — is <code>μ̂ ± 1.96 · SE(μ̂)</code>.</p>
+  <p>Here <code>r_i</code> is the school's raw gap, <code>SE_i</code> is its within-school standard error, and <code>τ²</code> measures how much schools really differ from one another — the between-school variance component (see <a href="#variance">§3</a>). The 95% confidence interval shown on the overview card — the range of values consistent with the data at 95% confidence — is <code>μ ± 1.96 · SE(μ)</code>. One notational simplification throughout: we write <code>μ</code> for the estimate computed from your data — the quantity statisticians would top with a hat.</p>
 
   <h2 id="shrinkage">2 · Shrinkage (empirical Bayes)</h2>
   <p>The idea here is simple: a result built on a handful of students shouldn't swing the whole picture, so we gently nudge each school's number toward the district average — more for small, noisy schools and less for large, well-measured ones. Statisticians call this <em>shrinkage</em>, and the recipe below is the classic <em>empirical-Bayes</em> approach (it learns the right amount of nudging from the data itself). School-level estimates are <em>shrunken</em> toward the district-wide gap, so the shrunken estimate at school <em>i</em> is a precision-weighted average of the school's raw estimate and the district mean:</p>
   <code class="formula">  B_i  =  τ²  /  (τ²  +  SE_i²)         ← shrinkage factor
-  r̂_i  =  B_i · r_i_raw  +  (1 − B_i) · μ̂
+  r_i_shrunk  =  B_i · r_i_raw  +  (1 − B_i) · μ
 </code>
   <p>The shrinkage factor <code>B_i</code> tells you how far a school was nudged toward the district average, on a scale from 0 to 1:</p>
   <ul>
@@ -151,7 +151,7 @@
   </ul>
   <p>Most schools in a typical district land between 0.6 and 0.9. On the Group gaps by school page, the hover tooltip shows each school's B on the chart, and the Table view includes it as a column.</p>
 
-  <p>The shrunken estimate's standard error is <code>SE(r̂_i) = √(B_i) · SE_i</code> — the spread that remains once we treat the district mean <code>μ̂</code> as <em>known</em>. The fuller empirical-Bayes version, which also folds in the uncertainty about <code>μ̂</code> itself, runs about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
+  <p>The shrunken estimate's standard error is <code>SE(r_i_shrunk) = √(B_i) · SE_i</code> — the spread that remains once we treat the district mean <code>μ</code> as <em>known</em>. The fuller empirical-Bayes version, which also folds in the uncertainty about <code>μ</code> itself, runs about 1–2 % larger at typical district sizes; GrowthLens reports the μ-known form, the standard empirical-Bayes-caterpillar convention.</p>
 
   <aside class="note"><strong>Important and a little counter-intuitive.</strong> Shrinkage nudges every school toward the district mean — including schools whose raw gap is <em>smaller in magnitude</em> than the district average. A school with a raw gap of 0.00 SD, in a district whose gap is −0.20 SD, will end up with a shrunken estimate that is slightly negative. That's mathematically correct under the model — with limited data, our best guess for the school sits somewhere between its own (noisy) number and the district norm — but it can look as if the model "invented" a gap. When a school is small, lean on the credible interval (the range the real number most likely falls in) rather than the single point estimate, and use the Raw / Shrunken toggle on the Group gaps by school page to see both side by side.</aside>
 
@@ -172,7 +172,7 @@
 </code>
   <p>The <em>between-school SD</em> shown on the Overview card is <code>τ = √τ²</code>. Think of it as how much schools really differ from one another — the spread of the <em>true</em> per-school gaps if the model is correct. It is not the spread of the observed point estimates, which runs larger (because of sampling error) for raw estimates and smaller (because of shrinkage) for shrunken estimates.</p>
   <p>If <code>τ²</code> is small next to the average within-school <code>SE²</code>, schools are mostly hard to tell apart: most of the apparent spread is just sampling noise. If <code>τ²</code> is large, schools really do differ.</p>
-  <p>Under the hood, <code>τ²</code> is found by a bounded one-dimensional maximization of the REML profile log-likelihood over <code>τ² ≥ 0</code> (a golden-section search, anchored by the closed-form DerSimonian–Laird estimate — a fast, classic formula for this same quantity). Schools whose cells fall below the minimum-n threshold (§4) are <em>left out</em> of the <code>τ²</code> fit and the pooled mean — their gaps are too noisy to inform the variance component — but they still show up in the figures, shrunk toward <code>μ̂</code>. Dropping that high-SE tail can pull <code>τ²</code> slightly low; this is a known, documented limitation.</p>
+  <p>Under the hood, <code>τ²</code> is found by a bounded one-dimensional maximization of the REML profile log-likelihood over <code>τ² ≥ 0</code> (a golden-section search, anchored by the closed-form DerSimonian–Laird estimate — a fast, classic formula for this same quantity). Schools whose cells fall below the minimum-n threshold (§4) are <em>left out</em> of the <code>τ²</code> fit and the pooled mean — their gaps are too noisy to inform the variance component — but they still show up in the figures, shrunk toward <code>μ</code>. Dropping that high-SE tail can pull <code>τ²</code> slightly low; this is a known, documented limitation.</p>
 
   <h2>4 · Minimum-n threshold</h2>
   <p>Some groups simply have too few students to read reliably, and we flag those rather than letting them mislead you. Every cell (a school × subgroup cell on the Group gaps by school page, a school × grade cell on Growth by school & grade) is checked against a minimum sample size, <code>n_min</code>, which is fixed at <strong>10</strong> in this build. A configurable threshold is planned for a future release, so you'll be able to match it to your district's student-privacy and small-cell-suppression policies.</p>
