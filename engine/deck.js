@@ -98,6 +98,8 @@
             name: label(s), nA: s.n_a, nB: s.n_b,
             gap: s[gapKey], ci: s[ciKey],
             text: fmt.val(s[gapKey]),
+            // The interval as words, for renderers without a drawn bar
+            // (speaker notes, accessibility text).
             rangeText: `${fmt.val(s[ciKey][0])} to ${fmt.val(s[ciKey][1])}`,
           }));
         const excluded = schools
@@ -280,7 +282,9 @@
     const sample = !metas.some((m) => m && m.source === 'uploaded');
     const district = (metas.map((m) => m && m.districtName).find(Boolean))
       || (sample ? 'Sample district' : 'Your district');
-    const year = metas.map((m) => m && m.latestYear).find(Boolean) || '';
+    // Same fallback the app shell uses: uploads carry latestYear, the seeded
+    // demo only carries a year label ('2024–25').
+    const year = metas.map((m) => m && (m.latestYear || m.year)).find(Boolean) || '';
 
     const slides = [];
     slides.push({ kind: 'cover', district, year, sample, today,

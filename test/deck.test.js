@@ -227,11 +227,14 @@ test('buildDeck: both subjects interleave math-then-ela', () => {
 test('buildDeck: sample data, no prime, no reliable gaps → minimal deck', () => {
   const gapsNoSignal = { frl: gapSlice('frl', 'FRL', 'non-FRL', -0.05, [-0.15, 0.05],
     [SCH('4001', null, -0.05, -0.15, 0.05)]) };
+  // Demo-style meta: a year LABEL only, no latestYear/nRowsLatest (matches
+  // the store's seeded demo) — the deck must fall back like the app shell.
   const bySubject = { math: { gaps: gapsNoSignal, heat: HEAT, ach: ACH, demo: DEMO,
-    meta: { subject: 'math', latestYear: 2025, nSchools: 2, source: 'demo' } } };
-  const deck = D.buildDeck({ bySubject, prime: null, unit: 'z', unitLabel: 'SD', fmt: fmtSD, today: 'x' });
+    meta: { subject: 'math', year: '2024–25', nSchools: 2, source: 'demo' } } };
+  const deck = D.buildDeck({ bySubject, prime: null, unitLabel: 'SD', fmt: fmtSD, today: 'x' });
   const kinds = deck.slides.map((s) => s.kind);
   assert.ok(!kinds.includes('stateHist') && !kinds.includes('forest') && !kinds.includes('divider'));
   assert.equal(deck.meta.sample, true);
   assert.equal(deck.slides[0].district, 'Sample district');
+  assert.equal(deck.meta.year, '2024–25');   // year label fallback, never blank
 });

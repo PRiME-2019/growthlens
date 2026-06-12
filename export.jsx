@@ -269,7 +269,10 @@ function layoutForest(pres, slide, deck, d) {
   rows.forEach((r, i) => {
     const y = 1.75 + i * rowH;
     const color = r.gap >= 0 ? XP.blue : XP.neg;
-    slide.addText(r.name, { x: 0.6, y: y - 0.05, w: 3.6, h: 0.3, fontFace: F_BODY, fontSize: 10.5, color: XP.ink, align: 'left' });
+    slide.addText([
+      { text: r.name, options: { fontSize: 10.5, color: XP.ink } },
+      { text: `  n=${(r.nA + r.nB).toLocaleString()}`, options: { fontSize: 8.5, color: XP.mute } },
+    ], { x: 0.6, y: y - 0.05, w: 3.6, h: 0.3, fontFace: F_BODY, align: 'left' });
     slide.addShape('line', { x: xOf(r.ci[0]), y: y + 0.09, w: xOf(r.ci[1]) - xOf(r.ci[0]), h: 0, line: { color, width: 2 } });
     slide.addShape('diamond', { x: xOf(r.gap) - 0.055, y: y + 0.01, w: 0.11, h: 0.18, fill: { color }, line: { color: 'FFFFFF', width: 0.75 } });
     slide.addText(r.text, { x: 11.8, y: y - 0.05, w: 1.1, h: 0.3, fontFace: F_MONO, fontSize: 9.5, color: XP.ink2, align: 'right' });
