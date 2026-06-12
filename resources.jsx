@@ -96,7 +96,7 @@ function ResourcesPage({ ctx }) {
         )}
         {sections.map((sec, i) => <FindingCard key={i} section={sec} fmtV={fmtV} />)}
         {general.length > 0 && (
-          <window.AuxCard title="Worth knowing regardless">
+          <window.AuxCard title="Useful whatever your data shows">
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5, maxWidth: 720 }}>
               Broad evidence on accelerating student learning — not tied to
               any one pattern above, and useful almost anywhere.
@@ -159,7 +159,7 @@ function FindingCard({ section, fmtV }) {
       : `${a.groupA} students grow behind their ${a.groupB} schoolmates`;
     detail = f.comparisons.map((c) =>
       `${c.groupA} vs. ${c.groupB}: ${fmtV(c.gap, f.subject)} district-wide [${fmtV(c.ci[0], f.subject)}, ${fmtV(c.ci[1], f.subject)}]`).join(' · ')
-      + ' — intervals clear of zero, so these gaps are unlikely to be chance.';
+      + ' — ranges that stay on one side of zero, so these gaps are unlikely to be chance.';
   } else {
     heading = `${BAND_LABEL[f.gradeBand] || f.gradeBand} is growing below expectations`;
     detail = `Average growth ${fmtV(f.mean, f.subject)} across ${f.n.toLocaleString()} students in these grades.`;

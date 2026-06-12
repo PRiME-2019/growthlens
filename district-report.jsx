@@ -210,7 +210,7 @@ function ReportOverviewCard({ report, year }) {
           </div>
         ))}
         <div style={{ flex: '1 1 200px', minWidth: 180 }}>
-          <StatLabel>Typical statewide standing</StatLabel>
+          <StatLabel>Where your schools typically rank</StatLabel>
           {medianPct != null ? (
             <>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
@@ -220,7 +220,8 @@ function ReportOverviewCard({ report, year }) {
                 </span>
               </div>
               <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
-                the middle school-and-subject result, ranked against schools of the same type statewide
+                half of your schools’ results rank higher than this, half lower — each
+                against Missouri schools of the same type
               </div>
             </>
           ) : (
@@ -264,7 +265,7 @@ function HistogramCard({ rows, report, lea, year, setYear }) {
                     flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2 }}>
-            Where your schools land in the statewide distribution
+            Where your schools land among all Missouri schools
           </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2, maxWidth: 720 }}>
             Each gray bar counts Missouri schools of the same type with that growth score in {year};

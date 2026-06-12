@@ -125,13 +125,14 @@ function OverviewCardDemo({ groups, ctx }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 36px', alignItems: 'flex-start' }}>
         {groups.length >= 2 && (
           <div style={{ minWidth: 220 }}>
-            <window.StatLabel>Widest typical-student difference</window.StatLabel>
+            <window.StatLabel>Largest difference between groups</window.StatLabel>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
               <span style={big}>{fmtV(hi.median - lo.median)}</span>
               <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTagFor(hi.median - lo.median)}</span>
             </div>
             <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
-              {hi.label} median minus {lo.label} median — the widest pair across all groupings
+              the typical {hi.label} student vs. the typical {lo.label} student — the
+              farthest-apart pair of groups below
             </div>
           </div>
         )}
@@ -244,14 +245,14 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
     }}>
       <div style={{ marginBottom: 4 }}>
         <h2 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.2, fontFamily: DEMO_PAGE_FONT }}>
-          Every group, one scale
+          Growth for every student group, side by side
         </h2>
         <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-          Across the whole district
+          The whole district at once — each box covers the middle half of that group’s
+          students, the diamond marks the average, and the dots are individual students
+          far from the pack.
           <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-          box = the middle half of students, diamond = the average, dots = individual outliers
-          <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-          hover any group for its numbers
+          Hover any group for its numbers.
         </div>
       </div>
 

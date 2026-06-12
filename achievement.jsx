@@ -263,18 +263,16 @@ function AchievementFigure({ level, ctx }) {
             This year’s score vs. growth — {level === 'school' ? 'school view' : 'student view'}
           </h2>
           <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
-            x: this year’s score
+            Left to right: this year’s scores. Bottom to top: growth compared with
+            expectations ({unitLabel}). The four corners split at the district average.
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            y: growth vs. expected ({unitLabel}) ·
-            <span style={{ marginLeft: 4 }}>
+            <span>
               {sampled
                 ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
                 : `${points.length.toLocaleString()} ${level === 'school'
                     ? (points.length === 1 ? 'school' : 'schools')
                     : (points.length === 1 ? 'student' : 'students')}`}
             </span>
-            <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-            four corners split at the district average
           </div>
         </div>
         <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap',

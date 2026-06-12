@@ -83,12 +83,12 @@ function ExportPage({ ctx }) {
     },
     {
       n: '05', kind: 'hotspots',
-      title: 'Standout spots · school & grade',
+      title: 'Standout schools and grades',
       hot: scanHotspots(heat),
     },
     {
       n: '06', kind: 'methods',
-      title: 'How to read this · a few cautions',
+      title: 'How to read this deck — a few cautions',
     },
   ];
 
@@ -402,7 +402,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
   // ---- 05 system scan hotspots
   const s5 = pres.addSlide();
   s5.addNotes('The standout spots from the school-by-grade view — a good place to start. The ones above the district average are worth studying for practices you could share; the ones below are where extra support is most needed.');
-  addHeader(s5, '05 · Standout spots by school & grade', 'The three school-and-grade cells growing fastest, and the three growing slowest, compared with the district average.');
+  addHeader(s5, '05 · Standout schools and grades', 'The three school-and-grade cells growing fastest, and the three growing slowest, compared with the district average.');
   const hs = scanHotspots(heat);
   if (hs) {
     const cols = [
@@ -426,7 +426,7 @@ async function buildPPTX({ slides, meta, schools, summary, heat, today, sliceTex
   // ---- 06 methods
   const s6 = pres.addSlide();
   s6.addNotes('How to read this slide. Walk through the four points briefly: how the numbers are steadied for small schools, how groups with too few students are flagged, that this describes what’s happening rather than why, and that everything runs privately in the browser. Anyone who wants the full detail can read the methods note linked from the app.');
-  addHeader(s6, '06 · How to read this · a few cautions', null);
+  addHeader(s6, '06 · How to read this deck — a few cautions', null);
   const notes = [
     ['Steadier for small schools', 'Each school’s gap is nudged toward the district average (we call this shrinkage), so a handful of students can’t swing the result. Schools with fewer students are nudged more.'],
     ['Too few students', `Groups with fewer than ${meta.minCellSize ?? 10} students are flagged as too few to read reliably. (A configurable minimum is planned for a future release.)`],

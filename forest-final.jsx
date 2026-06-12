@@ -110,9 +110,9 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
             </h2>
             <div style={{ fontSize: 12, color: SLU.mute, marginTop: 2 }}>
               How much more or less {data.meta.groupA} students grew than their {data.meta.groupB} schoolmates, {unit === 'weeks' ? 'in weeks of learning' : 'in SD (standard scale)'}.
-              The zero line = same growth; each bar is the range the estimate most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
+              The zero line marks equal growth; each bar shows the range the true number most likely falls in (95% {mode === 'shrunk' ? 'credible' : 'confidence'} interval).
               <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
-              {data.meta.nMeetingThreshold}/{data.meta.nSchools} schools meet n≥{data.meta.minCellSize}
+              {data.meta.nMeetingThreshold} of {data.meta.nSchools} schools have at least {data.meta.minCellSize} students in each group
             </div>
           </div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap',

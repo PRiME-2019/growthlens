@@ -276,7 +276,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
   return (
     <HeatmapShell
       title="How each grade is doing, school by school"
-      subtitle={`Each school’s own results vs. the district average. Blue = faster than expected, rust = slower · ${unit === 'weeks' ? 'weeks of learning vs. district' : 'SD vs. district average'}.`}
+      subtitle={`Each school’s results compared with the district average — blue cells grew faster than expected, rust cells slower. Shown in ${unit === 'weeks' ? 'weeks of learning' : 'SD (standard scale)'}.`}
       controls={<CommonControls nMode={nMode} setNMode={setNMode} />}
       footer={
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
