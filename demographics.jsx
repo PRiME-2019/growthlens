@@ -22,42 +22,11 @@ const DEMO_PAGE_FONT = window.FONT;
 const DEMO_PAGE_MONO = window.MONO;
 const DEMO_PAGE_LABEL = window.LABEL;
 
-// Sections: one per demographic dimension, built from whatever comparisons
-// the active dataset carries. A group label that appears in more than one
-// race comparison (White, the shared reference) is kept once, ordered last.
-function buildDemoSections(dd) {
-  const sections = [];
-  const groupsOf = (key) => (dd[key] && dd[key].groups) || [];
-  if (groupsOf('frl').length) sections.push({ title: 'Income', groups: groupsOf('frl') });
-  if (groupsOf('iep').length) sections.push({ title: 'Disability', groups: groupsOf('iep') });
-  if (groupsOf('el').length) sections.push({ title: 'Language', groups: groupsOf('el') });
-
-  const raceKeys = ['race_bw', 'race_hw'].filter((k) => groupsOf(k).length);
-  if (raceKeys.length) {
-    const counts = {};
-    raceKeys.forEach((k) => groupsOf(k).forEach((g) => { counts[g.label] = (counts[g.label] || 0) + 1; }));
-    const seen = new Set();
-    const focal = [], shared = [];
-    raceKeys.forEach((k) => groupsOf(k).forEach((g) => {
-      if (seen.has(g.label)) return;
-      seen.add(g.label);
-      (counts[g.label] > 1 ? shared : focal).push(g);
-    }));
-    sections.push({ title: 'Race', groups: [...focal, ...shared] });
-  }
-
-  // Future-proofing: any comparison beyond the engine's five gets its own section.
-  const known = new Set(['frl', 'iep', 'el', 'race_bw', 'race_hw']);
-  for (const [key, v] of Object.entries(dd)) {
-    if (known.has(key) || !v || !v.groups || !v.groups.length) continue;
-    sections.push({ title: v.label || key, groups: v.groups });
-  }
-  return sections;
-}
-
 function DemographicsPage({ sliceLabel, ctx }) {
   const dd = window.DEMO_DATA || {};
-  const sections = buildDemoSections(dd);
+  // Sections come from engine/deck.js (shared with the Export deck): one per
+  // demographic dimension, shared White reference merged into one Race section.
+  const sections = window.GLDeck.buildDemoSections(dd);
   const allGroups = sections.flatMap((s) => s.groups);
   // Default to 0 (the residual scale's natural center) if the dataset doesn't
   // carry a districtMean, so the reference line never silently disappears.
