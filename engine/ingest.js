@@ -66,7 +66,7 @@
     await db.registerFileText(`${v.subject}.csv`, text);
     await conn.query(`CREATE TABLE ${table}_all AS SELECT * FROM read_csv_auto('${v.subject}.csv', header=true, all_varchar=true)`);
 
-    const P = v.prefix;
+    const SUBJECT = v.prefix;
     const yrRow = (await conn.query(`SELECT max(TRY_CAST("GROWTH_YEAR" AS INTEGER)) AS y FROM ${table}_all`)).toArray()[0];
     const latestYear = yrRow && yrRow.y != null ? Number(yrRow.y) : null;
     if (latestYear == null) return { ok: false, error: 'no_year' };
@@ -79,9 +79,9 @@
       SELECT
         "SCHOOL_CODE"::VARCHAR AS school_id,
         TRY_CAST("GRADE" AS INTEGER) AS grade,
-        CAST("${P}_Z_RESIDUAL" AS DOUBLE) AS residual,
-        TRY_CAST("${P}_Z_RESIDUAL_SE" AS DOUBLE) AS residual_se,
-        TRY_CAST("${P}_Z_T" AS DOUBLE) AS status,
+        CAST("${SUBJECT}_Z_RESIDUAL" AS DOUBLE) AS residual,
+        TRY_CAST("${SUBJECT}_Z_RESIDUAL_SE" AS DOUBLE) AS residual_se,
+        TRY_CAST("${SUBJECT}_Z_T" AS DOUBLE) AS status,
         lower(trim("FREE_OR_REDUCED_LUNCH")) IN ('y','1','t','true','yes') AS frl,
         lower(trim("IEP_DISABILITY")) IN ('y','1','t','true','yes') AS iep,
         lower(trim("ENGLISH_LANGUAGE_LEARNER")) IN ('y','1','t','true','yes') AS el,
@@ -90,7 +90,7 @@
         lower(trim("HISPANIC")) IN ('y','1','t','true','yes') AS hispanic
       FROM ${table}_all
       WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
-        AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${SUBJECT}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
         AND TRY_CAST("GRADE" AS INTEGER) BETWEEN 3 AND 8
     `);
 
@@ -99,7 +99,7 @@
     const gradeDropRow = (await conn.query(`
       SELECT count(*) AS n FROM ${table}_all
       WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
-        AND TRY_CAST("${P}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${SUBJECT}_Z_RESIDUAL" AS DOUBLE) IS NOT NULL
         AND (TRY_CAST("GRADE" AS INTEGER) IS NULL OR TRY_CAST("GRADE" AS INTEGER) NOT BETWEEN 3 AND 8)
     `)).toArray()[0];
     const nDroppedGrades = Number(gradeDropRow.n);
@@ -114,7 +114,7 @@
     return {
       ok: true, table,
       meta: {
-        subject: v.subject, prefix: P, latestYear,
+        subject: v.subject, prefix: SUBJECT, latestYear,
         nSchools: Number(stat.schools), nRowsLatest, nDropped: totalAll - nRowsLatest,
         nDroppedGrades,
         districtCode: null,

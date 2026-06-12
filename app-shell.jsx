@@ -652,15 +652,15 @@ function OverviewPage({ ctx }) {
           <p style={{ margin: '0 0 10px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
             This is the standard Missouri DESE / MOSIS growth export — one file per subject, and
             most assessment systems can produce it. GrowthLens figures out the subject from the
-            growth column’s prefix (<code style={{ fontFamily: MONO }}>{'{P}'}</code> is{' '}
+            growth column’s prefix (<code style={{ fontFamily: MONO }}>{'{SUBJECT}'}</code> is{' '}
             <code style={{ fontFamily: MONO }}>MATH</code> or <code style={{ fontFamily: MONO }}>COMM_ARTS</code>),
             so you don’t need a separate subject column. Column names don’t have to match upper- or
             lower-case exactly.
           </p>
           <ColumnTable rows={[
-            ['{P}_Z_RESIDUAL',           'float',  'Each student’s growth compared with what was expected, on a standard scale.'],
-            ['{P}_Z_RESIDUAL_SE',        'float',  'How precise that growth number is for the student.'],
-            ['{P}_Z_T',                  'float',  'Where the student started — this year’s score on a standard scale.'],
+            ['{SUBJECT}_Z_RESIDUAL',     'float',  'Each student’s growth compared with what was expected, on a standard scale.'],
+            ['{SUBJECT}_Z_RESIDUAL_SE',  'float',  'How precise that growth number is for the student.'],
+            ['{SUBJECT}_Z_T',            'float',  'Where the student started — this year’s score on a standard scale.'],
             ['SCHOOL_CODE',              'string', 'Which school the student attends (one district per file).'],
             ['GRADE',                    'int',    'Grades 3–8 are supported in this version.'],
             ['GROWTH_YEAR',              'int',    'The school year. The most recent year in the file is used automatically.'],

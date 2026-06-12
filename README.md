@@ -38,13 +38,13 @@ The app shell (React 18.3.1, Babel Standalone, PptxGenJS, Google Fonts) loads fr
 
 To analyze real data, drop a Missouri DESE/MOSIS **Math** and/or **ELA** growth CSV into the matching dropzone. Without a file, the app shows the bundled Math demo.
 
-**Required columns** (matched case-insensitively; `{P}` = `MATH` or `COMM_ARTS`, detected from the residual prefix):
+**Required columns** (matched case-insensitively; `{SUBJECT}` = `MATH` or `COMM_ARTS`, detected from the residual prefix):
 
 | Column | Meaning |
 |---|---|
-| `{P}_Z_RESIDUAL` | standardized growth residual (state-computed, SD units) |
-| `{P}_Z_RESIDUAL_SE` | per-student SE of that residual |
-| `{P}_Z_T` | standardized current-year score (status axis) |
+| `{SUBJECT}_Z_RESIDUAL` | standardized growth residual (state-computed, SD units) |
+| `{SUBJECT}_Z_RESIDUAL_SE` | per-student SE of that residual |
+| `{SUBJECT}_Z_T` | standardized current-year score (status axis) |
 | `SCHOOL_CODE`, `GRADE`, `GROWTH_YEAR` | identity / grade / year (latest year auto-selected) |
 | `FREE_OR_REDUCED_LUNCH`, `IEP_DISABILITY`, `ENGLISH_LANGUAGE_LEARNER` | subgroup flags (Y/N or 1/0) |
 | `BLACK`, `WHITE`, `HISPANIC` | race one-hots for the two race comparisons |
