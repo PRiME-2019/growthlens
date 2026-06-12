@@ -38,8 +38,8 @@ function cellR(s, g, missing) {
 // Every key here must be reachable by clicking a column header (ColumnHeader
 // cycles desc ↔ asc per column); there is no separate sort dropdown.
 const ROW_SORTS = {
-  alpha: { label: 'School ID', fn: (a, b) => a.school_id.localeCompare(b.school_id) },
-  alpha_rev: { label: 'School ID (Z → A)', fn: (a, b) => b.school_id.localeCompare(a.school_id) },
+  alpha: { label: 'School', fn: (a, b) => schoolLabel(a).localeCompare(schoolLabel(b)) },
+  alpha_rev: { label: 'School (Z → A)', fn: (a, b) => schoolLabel(b).localeCompare(schoolLabel(a)) },
   mean_desc: { label: 'Overall (strongest first)', fn: (a, b) => rowMean(b) - rowMean(a) },
   mean_asc:  { label: 'Overall (weakest first)', fn: (a, b) => rowMean(a) - rowMean(b) },
   ...Object.fromEntries(GRADES.flatMap(g => [
@@ -243,7 +243,7 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
   const [nMode, setNMode] = React.useState('hover');
   const [hover, setHover] = React.useState(null);
   const sorted = [...data.schools].sort(ROW_SORTS[sort].fn);
-  const cellW = 100, idW = 80;
+  const cellW = 100, idW = schoolColW(data.schools, 80);
 
   // Keyboard grid: Tab enters at the first cell, arrows move cell-to-cell,
   // focus reveals the student count (same affordance as hover).
@@ -296,19 +296,23 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
       <div style={{ minWidth: idW + 7 * cellW }} role="grid"
            aria-label="Growth by school and grade, compared with the district average">
       <ColumnHeader cellW={cellW} idW={idW} sort={sort} setSort={setSort} showOverall stretch />
-      {sorted.map((s, i) => (
+      {sorted.map((s, i) => {
+        const sLabel = schoolLabel(s);
+        const hasName = !!(s.school_name && s.school_name !== s.school_id);
+        return (
         <div key={s.school_id} role="row" style={{
           display: 'flex', alignItems: 'stretch', height: 26, width: '100%',
           background: i % 2 === 0 ? '#fff' : '#FAFAFB',
         }}>
-          <div role="rowheader" style={{ width: idW, boxSizing: 'border-box', padding: '0 10px', display: 'flex', alignItems: 'center',
-                        fontFamily: MONO, fontSize: 12, color: SLU.ink2 }}>
-            {s.school_id}
+          <div role="rowheader" title={hasName ? `${sLabel} (${s.school_id})` : undefined}
+               style={{ width: idW, boxSizing: 'border-box', padding: '0 10px', display: 'flex', alignItems: 'center',
+                        fontFamily: hasName ? FONT : MONO, fontSize: 12, color: SLU.ink2 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sLabel}</span>
           </div>
           {GRADES.map((g, gi) => {
             const raw = getResidual(s, g);
             if (!raw) return (
-              <div key={g} {...gridCellProps(i, gi, null, `${s.school_id}, grade ${g}: grade not served`)}
+              <div key={g} {...gridCellProps(i, gi, null, `${sLabel}, grade ${g}: grade not served`)}
                    style={{ width: cellW, boxSizing: 'border-box', flex: '1 1 0', minWidth: cellW,
                             background: '#fff', border: `1px solid ${SLU.rule2}`, outline: 'none' }} />
             );
@@ -316,8 +320,8 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
             const hoverKey = `${s.school_id}-${g}`;
             const showN = nMode === 'inline' || (nMode === 'hover' && hover === hoverKey);
             const label = c.ok
-              ? `${s.school_id}, grade ${g}: ${formatUnit(c.r, unit, { grade: g })}${unit === 'weeks' ? ' weeks' : ' SD'}, ${c.n} students`
-              : `${s.school_id}, grade ${g}: too few students to read reliably (${c.n})`;
+              ? `${sLabel}, grade ${g}: ${formatUnit(c.r, unit, { grade: g })}${unit === 'weeks' ? ' weeks' : ' SD'}, ${c.n} students`
+              : `${sLabel}, grade ${g}: too few students to read reliably (${c.n})`;
             return (
               <div key={g} onMouseEnter={() => setHover(hoverKey)}
                             onMouseLeave={() => setHover(null)}
@@ -369,8 +373,8 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
             const above = overall >= 0;
             const hoverKey = `${s.school_id}-overall`;
             const label = totalN > 0
-              ? `${s.school_id}, overall: ${formatUnit(overall, unit)}${unit === 'weeks' ? ' weeks' : ' SD'}, ${totalN} students`
-              : `${s.school_id}, overall: no reliable cells`;
+              ? `${sLabel}, overall: ${formatUnit(overall, unit)}${unit === 'weeks' ? ' weeks' : ' SD'}, ${totalN} students`
+              : `${sLabel}, overall: no reliable cells`;
             return (
               <div onMouseEnter={() => setHover(hoverKey)}
                    onMouseLeave={() => setHover(null)}
@@ -403,7 +407,8 @@ function HeatmapH1({ estimate = 'shrunk', unit = 'z' } = {}) {
             );
           })()}
         </div>
-      ))}
+        );
+      })}
       </div>
       </div>
     </HeatmapShell>

@@ -89,7 +89,9 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
   // pixel measurement is needed. (Divs are content-box: the floor math adds
   // each column's horizontal padding.)
   const PLOT_MIN_W = 560;
-  const MIN_CHART_W = (86 + 20) + 2 * (60 + 20) + (PLOT_MIN_W + 16);
+  // School column widens when the crosswalk delivered real names.
+  const ID_COL_W = schoolColW(data.schools);
+  const MIN_CHART_W = (ID_COL_W + 20) + 2 * (60 + 20) + (PLOT_MIN_W + 16);
   const ROW_H = 26;
 
   return (
@@ -131,13 +133,13 @@ function ForestFinal({ estimate, unit: unitProp, demo, setDemo, demoOptions = {}
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: MIN_CHART_W }}>
-            <HeaderRow plotMinW={PLOT_MIN_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
-            {showDistrict && <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} />}
-            {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} showDistrict={showDistrict} />)}
+            <HeaderRow plotMinW={PLOT_MIN_W} idColW={ID_COL_W} unit={unit} groupA={data.meta.groupA} groupB={data.meta.groupB} axis={axis} />
+            {showDistrict && <DistrictRow data={data} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} idColW={ID_COL_W} rowH={ROW_H} />}
+            {meets.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} idColW={ID_COL_W} rowH={ROW_H} stripe={i % 2 === 1} showDistrict={showDistrict} />)}
             {below.length > 0 && (
               <>
                 <SectionDivider label="Too few students to read reliably — handle with care" count={below.length} />
-                {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed showDistrict={showDistrict} />)}
+                {below.map((s, i) => <ForestRow key={s.school_id} s={s} mode={mode} unit={unit} axis={axis} plotMinW={PLOT_MIN_W} idColW={ID_COL_W} rowH={ROW_H} stripe={i % 2 === 1} dimmed showDistrict={showDistrict} />)}
               </>
             )}
             </div>
@@ -298,7 +300,7 @@ function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA
                   opacity: dimmed ? 0.5 : 1,
                   background: i % 2 === 1 ? '#FAFAFB' : '#fff',
                 }}>
-                  <TD align="left" mono>{s.school_id}</TD>
+                  <TD align="left" mono={!(s.school_name && s.school_name !== s.school_id)}>{schoolLabel(s)}</TD>
                   <TD mono mute>{s.n_a}</TD>
                   <TD mono mute>{s.n_b}</TD>
                   <TD mono bold={!noEst} mute={noEst} color={noEst ? undefined : (isNeg ? SLU.neg : SLU.pos)}>
@@ -341,7 +343,7 @@ function TD({ children, align = 'right', mono, bold, mute, color }) {
   );
 }
 
-function HeaderRow({ plotMinW, unit, groupA, groupB, axis }) {
+function HeaderRow({ plotMinW, idColW = 86, unit, groupA, groupB, axis }) {
   const colHead = (label, w, align = 'right') => (
     <div style={{ width: w, padding: '0 10px 6px', textAlign: align,
                   fontSize: 10.5, fontFamily: LABEL, color: SLU.mute, textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
@@ -350,7 +352,7 @@ function HeaderRow({ plotMinW, unit, groupA, groupB, axis }) {
   );
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', borderBottom: `1px solid ${SLU.rule}` }}>
-      {colHead('School', 86, 'left')}
+      {colHead('School', idColW, 'left')}
       {colHead(`n ${groupA}`, 60)}
       {colHead(`n ${groupB}`, 60)}
       <div style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px' }}>
@@ -431,7 +433,7 @@ function UnitAxis({ groupA, groupB, unit, axis }) {
 // runs through the school rows. The pooled mean comes only from schools
 // meeting the cell-size floor, so the n columns sum over those schools. The
 // estimate is the shrinkage prior — it doesn't change with the Method toggle.
-function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
+function DistrictRow({ data, unit, axis, plotMinW, idColW = 86, rowH }) {
   const [hover, setHover] = React.useState(false);
   const ax = axis;
   const gap = data.meta.districtGap;
@@ -448,7 +450,7 @@ function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', height: h,
                   background: 'rgba(154, 118, 17, 0.07)' }}>
-      <div style={{ width: 86, padding: '0 10px', fontFamily: FONT, fontSize: 12,
+      <div style={{ width: idColW, padding: '0 10px', fontFamily: FONT, fontSize: 12,
                     fontWeight: 700, color: SLU.ink }}>
         District
       </div>
@@ -506,7 +508,7 @@ function DistrictRow({ data, unit, axis, plotMinW, rowH }) {
   );
 }
 
-function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDistrict = true }) {
+function ForestRow({ s, mode, unit, axis, plotMinW, idColW = 86, rowH, stripe, dimmed, showDistrict = true }) {
   const [hover, setHover] = React.useState(false);
   const ax = axis || AXIS;
   const gap = mode === 'raw' ? s.raw_gap : s.shrunk_gap;
@@ -532,15 +534,19 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDi
   const tipOnLeft = !noEst && (gap - ax.min) / (ax.max - ax.min) > 0.55;
   const dirText = noEst ? null : `${meta.groupA} ${isNeg ? 'behind' : 'ahead'}`;
   const magnitude = noEst ? null : fmtVal(gap, unit).replace(/^[+−]/, '');
+  const label = schoolLabel(s);
+  const hasName = !!(s.school_name && s.school_name !== s.school_id);
 
   return (
     <div style={{
       display: 'flex', alignItems: 'center', height: rowH,
       background: stripe ? '#FAFAFB' : '#fff',
     }}>
-      <div style={{ width: 86, padding: '0 10px', fontFamily: MONO, fontSize: 12, color: dimmed ? SLU.mute : SLU.ink2,
+      <div title={hasName ? `${label} (${s.school_id})` : undefined}
+           style={{ width: idColW, boxSizing: 'content-box', padding: '0 10px',
+                    fontFamily: hasName ? FONT : MONO, fontSize: 12, color: dimmed ? SLU.mute : SLU.ink2,
                     display: 'flex', alignItems: 'center', gap: 6 }}>
-        {s.school_id}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </div>
       <NumCell w={60} value={s.n_a} dim={dimmed} mute />
       <NumCell w={60} value={s.n_b} dim={dimmed} mute />
@@ -551,8 +557,8 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDi
            className="gl-focus"
            role="img"
            aria-label={noEst
-             ? `${s.school_id}: no ${missing} students — nothing to compare`
-             : `${s.school_id}: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
+             ? `${label}: no ${missing} students — nothing to compare`
+             : `${label}: ${dirText} by ${magnitude}${unit === 'weeks' ? '' : ' SD'}, 95% CI ${fmtCI(ci, unit)}, n ${s.n_a + s.n_b}, shrinkage B ${s.shrinkage_factor.toFixed(2)}`}
            style={{ flex: '1 1 0%', minWidth: plotMinW, padding: '0 8px', position: 'relative', height: rowH,
                     background: hover && !noEst ? 'rgba(0, 61, 165, 0.04)' : 'transparent',
                     cursor: noEst ? 'default' : 'crosshair',
@@ -600,7 +606,7 @@ function ForestRow({ s, mode, unit, axis, plotMinW, rowH, stripe, dimmed, showDi
         </div>
         {hover && !noEst && (
           <Tooltip
-            schoolId={s.school_id}
+            schoolId={label}
             gap={gap} ci={ci} unit={unit} mode={mode}
             n_a={s.n_a} n_b={s.n_b}
             B={s.shrinkage_factor}

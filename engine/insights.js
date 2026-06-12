@@ -20,6 +20,8 @@
 
   const fmtSDDefault = { val: (z) => (z >= 0 ? '+' : '−') + Math.abs(z).toFixed(2) + ' SD' };
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  // School display name: the crosswalk-stamped name when present, code otherwise.
+  const sName = (s) => (s.school_name && s.school_name !== s.school_id ? s.school_name : s.school_id);
 
   // Three insights max, then the caveat — never more than four items total.
   function select(candidates, caveat) {
@@ -66,7 +68,7 @@
     let pervasiveness = null;
     if (meets.length === 1) {
       pervasiveness = {
-        text: `**${meets[0].school_id}** is the only school with enough students to compare here, `
+        text: `**${sName(meets[0])}** is the only school with enough students to compare here, `
           + `so the district-wide gap is just this school's gap.`,
       };
     } else if (meets.length >= 2 && Math.abs(districtGap) > 1e-9) {
@@ -102,7 +104,7 @@
         .sort((a, b) => Math.abs(b[gapKey]) - Math.abs(a[gapKey]))
         .slice(0, 2);
       if (rev.length > 0) {
-        const names = rev.map((s) => `**${s.school_id}** (${fmt.val(s[gapKey])})`).join(' and ');
+        const names = rev.map((s) => `**${sName(s)}** (${fmt.val(s[gapKey])})`).join(' and ');
         reversal = {
           text: `The gap reverses at ${names} — ${groupA} students grow ${dirWord(rev[0][gapKey])} of their `
             + `${groupB} peers there.`,
@@ -116,8 +118,8 @@
       const byAbs = [...meets].sort((a, b) => Math.abs(b[gapKey]) - Math.abs(a[gapKey]));
       const widest = byAbs[0], closest = byAbs[byAbs.length - 1];
       extremes = {
-        text: `**${widest.school_id}** has the widest school-level gap (${fmt.val(widest[gapKey])}, `
-          + `${groupA} ${dirWord(widest[gapKey])}); **${closest.school_id}** comes closest to parity `
+        text: `**${sName(widest)}** has the widest school-level gap (${fmt.val(widest[gapKey])}, `
+          + `${groupA} ${dirWord(widest[gapKey])}); **${sName(closest)}** comes closest to parity `
           + `(${fmt.val(closest[gapKey])}).`,
       };
     }
@@ -149,7 +151,7 @@
     for (const s of heat.schools) {
       for (const [g, c] of Object.entries(s.grades || {})) {
         if (!c || !(c.n > 0)) continue;
-        if (c.ok) cells.push({ school: s.school_id, grade: g, n: c.n, r: val(c) });
+        if (c.ok) cells.push({ school: s.school_id, label: sName(s), grade: g, n: c.n, r: val(c) });
         else suppressed++;
       }
     }
@@ -165,7 +167,7 @@
     // n-weighted mean across the school's readable grades.
     let schoolExtremes = null;
     const bySchool = heat.schools
-      .map((s) => ({ id: s.school_id, overall: s.overall, cells: cells.filter((c) => c.school === s.school_id) }))
+      .map((s) => ({ id: sName(s), overall: s.overall, cells: cells.filter((c) => c.school === s.school_id) }))
       .filter((s) => s.overall || s.cells.length > 0)
       .map((s) => ({ id: s.id, mean: s.overall ? val(s.overall) : wMean(s.cells) }));
     if (bySchool.length >= 2) {
@@ -209,7 +211,7 @@
       .slice(0, 2);
     if (notable.length > 0) {
       const items = notable.map((c) =>
-        `**${c.school} · grade ${c.grade}** (${fmt.val(c.r, { grade: c.grade })}, n=${c.n})`).join('; ');
+        `**${c.label} · grade ${c.grade}** (${fmt.val(c.r, { grade: c.grade })}, n=${c.n})`).join('; ');
       standout = { text: `The cells that stand out most: ${items}.` };
     }
 

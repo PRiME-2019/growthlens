@@ -54,6 +54,7 @@ const DEMOS = {
 };
 const PAGES = {
   landing:      { label: 'Overview',             hint: 'Start here · add data' },
+  report:       { label: 'District Report',      hint: 'Your schools statewide' },
   scan:         { label: 'System Scan',          hint: 'Where to look first' },
   achievement:  { label: 'Status & Growth',      hint: 'Score vs. growth' },
   demographics: { label: 'Demographics',         hint: 'Growth by group' },
@@ -181,7 +182,7 @@ function AppBody() {
       <LeftNav page={page} setPage={setPage} ctx={ctx} />
       <main style={{ minWidth: 0, padding: '22px 28px 40px', display: 'flex',
                      flexDirection: 'column', gap: 20 }}>
-        {(page === 'landing' || page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'resources' || page === 'exportpg') && <DatasetStrip />}
+        {(page === 'landing' || page === 'report' || page === 'scan' || page === 'gap' || page === 'demographics' || page === 'achievement' || page === 'resources' || page === 'exportpg') && <DatasetStrip />}
         {page === 'landing'      && <OverviewPage ctx={ctx} />}
         <div key={subject + ':' + demo} style={{ display: 'contents' }}>
           {page === 'scan'         && <ScanPage sliceLabel={subjectLabel} ctx={ctx} />}
@@ -192,6 +193,7 @@ function AppBody() {
             elements can tween between positions instead of re-mounting. */}
         {page === 'demographics' && window.DemographicsPage && <window.DemographicsPage sliceLabel={subjectLabel} ctx={ctx} />}
         {page === 'achievement'  && window.AchievementPage  && <window.AchievementPage  sliceLabel={subjectLabel} ctx={ctx} />}
+        {page === 'report'       && window.DistrictReportPage && <window.DistrictReportPage ctx={ctx} />}
         {page === 'resources'    && window.ResourcesPage    && <window.ResourcesPage    ctx={ctx} />}
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
@@ -347,7 +349,7 @@ function DatasetStrip({ placeholder }) {
   const yr = m && (m.latestYear || m.year);
   const isDemo = m && m.source !== 'uploaded';
   const rest = m
-    ? `${m.districtCode ? m.districtCode + ' · ' : ''}`
+    ? `${m.districtName ? m.districtName + ' · ' : (m.districtCode ? m.districtCode + ' · ' : '')}`
       + `${m.source === 'uploaded' ? m.subject.toUpperCase() + ' upload · ' : ''}`
       + `${m.nSchools} school${m.nSchools === 1 ? '' : 's'}${yr ? ' · ' + yr : ''}`
     : 'No data loaded yet';
@@ -474,7 +476,17 @@ function OverviewPage({ ctx }) {
         const res = await window.GLIngest.loadSubjectFile(file, conn, key);
         if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
         const shapes = await window.GLCompute.computeSlice(key);
-        window.GLStore.putUploaded(key, shapes, { ...res.meta, filename: file.name });
+        // School names: when the file carries a district code and the PRiME
+        // database is reachable, stamp real names onto the shapes. A failed
+        // lookup never blocks the upload — figures just keep showing codes.
+        let districtName = null;
+        if (res.meta.districtCode && window.GLPrime && window.loadPrimeDb) {
+          try {
+            const rows = await window.loadPrimeDb();
+            districtName = window.GLPrime.enrichShapes(shapes, res.meta.districtCode, rows);
+          } catch (err) { console.warn('School-name lookup unavailable:', err); }
+        }
+        window.GLStore.putUploaded(key, shapes, { ...res.meta, filename: file.name, districtName });
         setNotes((n) => ({
           ...n,
           [key]: res.meta.nDroppedGrades > 0

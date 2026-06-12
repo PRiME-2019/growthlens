@@ -161,7 +161,7 @@ function scanHotspots(heat) {
   for (const s of heat.schools) {
     for (const g of [3, 4, 5, 6, 7, 8]) {
       const c = s.grades?.[g];
-      if (c && c.ok) cells.push({ school: s.school_id, grade: g, r: c.rs != null ? c.rs : c.r, n: c.n });
+      if (c && c.ok) cells.push({ school: window.schoolLabel(s), grade: g, r: c.rs != null ? c.rs : c.r, n: c.n });
     }
   }
   cells.sort((a, b) => a.r - b.r);
@@ -241,7 +241,8 @@ function SlideBody({ slide, meta, sliceText, today, summary }) {
             {slide.rows.map((s, i) => (
               <div key={s.school_id} style={{ display: 'flex', alignItems: 'baseline', gap: 6,
                                                 fontFamily: MONO, fontSize: 8 }}>
-                <span style={{ width: 36, color: SLU.ink2 }}>{s.school_id}</span>
+                <span style={{ width: s.school_name ? 90 : 36, color: SLU.ink2,
+                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{schoolLabel(s)}</span>
                 <span style={{ flex: 1, color: s.shrunk_gap >= 0 ? SLU.blue : SLU.neg, fontWeight: 600 }}>
                   {fmt2(s.shrunk_gap)}
                 </span>
@@ -477,7 +478,7 @@ function addGapTable(slide, pres, rows, BLUE, RUST, MUTE, RULE, INK, FONT_FACE, 
     { text: 'Nudge (0–1)',options: { bold: true, color: MUTE, fontSize: 10, fontFace: FONT_FACE, charSpacing: 3, align: 'right' } },
   ];
   const body = rows.map(r => [
-    { text: r.school_id, options: { fontFace: MONO_FACE, fontSize: 14, color: INK } },
+    { text: window.schoolLabel(r), options: { fontFace: r.school_name ? FONT_FACE : MONO_FACE, fontSize: 14, color: INK } },
     { text: fmt2(r.shrunk_gap), options: { fontFace: MONO_FACE, fontSize: 14, color: r.shrunk_gap >= 0 ? BLUE : RUST, bold: true, align: 'right' } },
     { text: `[${fmt2(r.shrunk_ci95[0])}, ${fmt2(r.shrunk_ci95[1])}]`, options: { fontFace: MONO_FACE, fontSize: 12, color: '3F4147', align: 'right' } },
     { text: String(r.n_a + r.n_b), options: { fontFace: MONO_FACE, fontSize: 13, color: '3F4147', align: 'right' } },

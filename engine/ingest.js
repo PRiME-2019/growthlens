@@ -37,6 +37,16 @@
     return [`${prefix}_Z_RESIDUAL`, `${prefix}_Z_RESIDUAL_SE`, `${prefix}_Z_T`, ...STRUCT_COLS, ...FLAG_COLS];
   }
 
+  // District codes in the PRiME database are 6 digits with leading zeros
+  // ("016090"); uploads that passed through Excel often lose the padding.
+  // Restore it for plain digit strings; anything else passes through as-is.
+  function normalizeDistrictCode(raw) {
+    if (raw == null) return null;
+    const s = String(raw).trim();
+    if (s === '') return null;
+    return /^\d{1,6}$/.test(s) ? s.padStart(6, '0') : s;
+  }
+
   function validate(headers) {
     const up = new Set(headers.map(canonHeader));
     const det = detectPrefix(headers);
@@ -104,6 +114,20 @@
     `)).toArray()[0];
     const nDroppedGrades = Number(gradeDropRow.n);
 
+    // Optional district identity: the modal COUNTY_DISTRICT_CODE among
+    // latest-year rows (files without the column load exactly as before).
+    let districtCode = null;
+    const cdcHeader = headers.find((h) => canonHeader(h) === 'COUNTY_DISTRICT_CODE');
+    if (cdcHeader) {
+      const cdcRow = (await conn.query(`
+        SELECT trim("${cdcHeader}") AS code, count(*) AS n FROM ${table}_all
+        WHERE TRY_CAST("GROWTH_YEAR" AS INTEGER) = ${latestYear}
+          AND trim("${cdcHeader}") <> ''
+        GROUP BY 1 ORDER BY n DESC LIMIT 1
+      `)).toArray()[0];
+      if (cdcRow && cdcRow.code != null) districtCode = normalizeDistrictCode(cdcRow.code);
+    }
+
     const stat = (await conn.query(`
       SELECT count(*) AS n, count(DISTINCT school_id) AS schools FROM ${table}
     `)).toArray()[0];
@@ -117,10 +141,10 @@
         subject: v.subject, prefix: SUBJECT, latestYear,
         nSchools: Number(stat.schools), nRowsLatest, nDropped: totalAll - nRowsLatest,
         nDroppedGrades,
-        districtCode: null,
+        districtCode,
       },
     };
   }
 
-  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, requiredColumns, validate, loadSubjectFile };
+  return { SUBGROUPS, PREFIX_TO_SUBJECT, FLAG_COLS, canonHeader, detectPrefix, requiredColumns, normalizeDistrictCode, validate, loadSubjectFile };
 });

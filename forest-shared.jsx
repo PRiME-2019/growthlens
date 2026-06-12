@@ -60,6 +60,13 @@ function xScale(x, width) {
 const fmt2 = (x) => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2);
 const fmt2plain = (x) => x.toFixed(2);
 
+// School display label: the real name when the PRiME crosswalk matched the
+// upload's district, the code otherwise (demo data and unmatched uploads).
+const schoolLabel = (s) => (s && (s.school_name || s.school_id)) || '';
+// Label-column width for school lists: names need room; bare codes don't.
+const schoolColW = (schools, narrow = 86, wide = 168) =>
+  (schools || []).some((s) => s && s.school_name && s.school_name !== s.school_id) ? wide : narrow;
+
 // Unit conversion: weeks-of-learning depends on year × grade × subject growth
 // effect sizes from reference/conversion_factors.json (loaded into
 // window.CONVERSION_FACTORS at boot). The display uses the magnitude form
@@ -153,6 +160,6 @@ function SectionDivider({ label, count }) {
 
 Object.assign(window, {
   SLU, FONT, MONO, LABEL, SERIF, AXIS, xScale, MOTION_OK,
-  fmt2, fmt2plain, weeksPerSD, wolFactorYear, zToWeeks, fmtVal, fmtCI,
+  fmt2, fmt2plain, schoolLabel, schoolColW, weeksPerSD, wolFactorYear, zToWeeks, fmtVal, fmtCI,
   Select, SectionDivider,
 });

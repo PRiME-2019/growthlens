@@ -52,6 +52,18 @@ test('gapTakeaways: pervasiveness counts same-direction and clear-of-zero school
   assert.match(perv.text, /2 /); // two schools clear of zero
 });
 
+test('gapTakeaways: crosswalk-stamped school names replace codes in the text', () => {
+  const named = slice('frl', 'FRL', 'non-FRL', -0.13, [
+    sch('S1', -0.20, -0.30, -0.10, true, { school_name: 'West Lane Elementary' }),
+    sch('S2', -0.05, -0.15, 0.05, true, { school_name: 'North Elementary' }),
+  ]);
+  const out = I.gapTakeaways({ slices: { frl: named }, activeKey: 'frl', mode: 'shrunk', fmt: fmtSD });
+  const ext = out.find((t) => /widest school-level gap/.test(t.text));
+  assert.ok(ext, 'extremes takeaway present');
+  assert.match(ext.text, /\*\*West Lane Elementary\*\*/);
+  assert.doesNotMatch(ext.text, /\*\*S1\*\*/);
+});
+
 test('gapTakeaways: flags schools where the gap reverses', () => {
   const rev = slice('frl', 'FRL', 'non-FRL', -0.13, [
     sch('S1', -0.20, -0.30, -0.10),

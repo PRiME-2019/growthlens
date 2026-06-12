@@ -56,7 +56,7 @@
   }
 
   const store = {
-    seedDemo, available, putUploaded,
+    seedDemo, available, putUploaded, anyUploaded,
     // Forget an uploaded subject: the demo (if any) shows through again, and if
     // nothing backs the active subject anymore the store moves to one that works.
     // DuckDB table cleanup is the caller's job — the store is pure JS.

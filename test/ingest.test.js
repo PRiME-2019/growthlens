@@ -26,3 +26,11 @@ test('validate: no recognizable prefix → error no_prefix', () => {
   assert.equal(r.ok, false);
   assert.equal(r.error, 'no_prefix');
 });
+test('normalizeDistrictCode: restores Excel-stripped leading zeros to 6 digits', () => {
+  assert.equal(I.normalizeDistrictCode('16090'), '016090');
+  assert.equal(I.normalizeDistrictCode('016090'), '016090');
+  assert.equal(I.normalizeDistrictCode(' 1090 '), '001090');
+  assert.equal(I.normalizeDistrictCode('X-12'), 'X-12');   // non-numeric passes through
+  assert.equal(I.normalizeDistrictCode(''), null);
+  assert.equal(I.normalizeDistrictCode(null), null);
+});
