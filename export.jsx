@@ -505,7 +505,28 @@ const PPTX_LAYOUTS = {
   cautions: layoutCautions, divider: layoutDivider, forest: layoutForest,
 };
 
+// PptxGenJS (466 KB) is fetched only when a deck is actually exported — the
+// script tag is injected on first use and the promise cached for the session.
+let PPTXGEN_LOADER = null;
+function loadPptxGen() {
+  if (window.PptxGenJS) return Promise.resolve();
+  if (!PPTXGEN_LOADER) {
+    PPTXGEN_LOADER = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+      s.integrity = 'sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ';
+      s.crossOrigin = 'anonymous';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('PptxGenJS failed to load'));
+      document.head.appendChild(s);
+    });
+    PPTXGEN_LOADER.catch(() => { PPTXGEN_LOADER = null; });   // a failed fetch retries next click
+  }
+  return PPTXGEN_LOADER;
+}
+
 async function buildPPTX(deck) {
+  await loadPptxGen();
   if (typeof window.PptxGenJS !== 'function') throw new Error('PptxGenJS failed to load');
   const pres = new window.PptxGenJS();
   pres.defineLayout({ name: 'GL_WIDE', width: PAGE_W, height: PAGE_H });

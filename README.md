@@ -35,7 +35,16 @@ npx serve .
 
 Then visit `http://localhost:8000`.
 
-The app shell (React 18.3.1, Babel Standalone, PptxGenJS, Google Fonts) loads from CDN at page load. The **data engine** (DuckDB-WASM + Apache Arrow) is vendored under `vendor/duckdb/` and served **same-origin** — instantiated lazily on the first file upload, so the landing page and the bundled demo pay zero WASM cost and make no third-party request during analysis.
+The app shell (React 18.3.1 production builds, Babel Standalone, Google Fonts) loads from CDN at page load. The **data engine** (DuckDB-WASM + Apache Arrow) is vendored under `vendor/duckdb/` and served **same-origin** — instantiated lazily on the first file upload, so the landing page and the bundled demo pay zero WASM cost and make no third-party request during analysis.
+
+### Hosting notes (bandwidth)
+
+Everything is static files, and the heavy ones load lazily: the 983 KB statewide PRiME database is fetched only when first needed (the Statewide comparison page, the Export page, or an upload carrying a district code); PptxGenJS (466 KB, CDN) only when a deck is actually exported; DuckDB-WASM (33 MB, same-origin) only on the first file upload. Two server settings carry most of the remaining cost:
+
+- **Compression** — enable gzip or brotli for `.js`, `.jsx`, `.csv`, `.json`, and `.wasm`. The PRiME CSV compresses by ~75% and the WASM bundle to roughly a third.
+- **Cache headers** — `vendor/duckdb/` and `reference/` change rarely; serve them with a long `Cache-Control` max-age so repeat visitors don't refetch.
+
+When a refreshed PRiME export lands in `reference/`, run `node tools/trim-prime-db.cjs` to round its full-precision z columns to four decimals (the app displays two) — about an 18% size cut.
 
 To analyze real data, drop a Missouri DESE/MOSIS **Math** and/or **ELA** growth CSV into the matching dropzone. Without a file, the app shows the bundled Math demo.
 

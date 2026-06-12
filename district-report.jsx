@@ -39,9 +39,10 @@ function loadPrimeDb() {
   return PRIME_DB_CACHE;
 }
 window.loadPrimeDb = loadPrimeDb;
-// Warm the cache once the first paint has settled, so both the report page
-// and the first upload's name lookup usually find it already resolved.
-(window.requestIdleCallback || ((fn) => setTimeout(fn, 2500)))(() => { loadPrimeDb().catch(() => {}); });
+// Deliberately NOT prefetched: the 1.2 MB CSV is fetched on first need (this
+// page mounting, an upload carrying a district code, or the Export page) and
+// cached for the session — most visits never pay for it. Each consumer
+// already shows a loading state for the one-time fetch.
 
 const DEMO_DISTRICT = '016090';   // Jackson R-II — the sample data's worked example
 const RPT_BIN_W = 0.05;
