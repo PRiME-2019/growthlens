@@ -62,26 +62,8 @@ const LEVEL_NOUN = {
 };
 
 const fmtZSigned = (z) => (z >= 0 ? '+' : '−') + Math.abs(z).toFixed(2);
-
-// Charts render at the container's real pixel width (ResizeObserver) instead
-// of scaling a fixed viewBox — wider windows get more plot, not bigger text.
-function useMeasuredWidth(fallback) {
-  const ref = React.useRef(null);
-  const [w, setW] = React.useState(fallback);
-  React.useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const measure = () => {
-      const next = Math.floor(el.getBoundingClientRect().width);
-      if (next > 0) setW(next);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, w];
-}
+// Width-responsive rendering uses the shared useMeasuredWidth hook from
+// forest-shared.jsx (native pixel size, no viewBox scaling).
 function rptOrdinal(n) {
   const t = n % 100;
   if (t >= 11 && t <= 13) return `${n}th`;

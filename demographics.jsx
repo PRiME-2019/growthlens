@@ -156,6 +156,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
   const SLU = window.SLU;
   const [hover, setHover] = React.useState(null); // outlier dots: {rowId, oi, px, py, record, boxStroke}
   const [rowHover, setRowHover] = React.useState(null); // whole-row hover/focus: row.id
+  const [measureRef, measuredW] = window.useMeasuredWidth(920);
   const allGroups = sections.flatMap((s) => s.groups);
   if (allGroups.length === 0) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -192,7 +193,10 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
   xMax += pad;
   const xLo = xMin, xHi = xMax;
 
-  const width = 920;
+  // Native pixel width from the card (no viewBox scaling — keeps row heights
+  // and type the same size as every other page); floor + sideways scroll
+  // protect the fixed label/stats columns at narrow widths.
+  const width = Math.max(700, measuredW);
   const leftPad = 220; // group label column
   const rightPad = 140; // stats column
   const topPad = 36;
@@ -251,7 +255,8 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
         </div>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
+      <div ref={measureRef} style={{ overflowX: 'auto' }}>
+      <svg width={width} height={height} style={{ display: 'block' }}
            role="img" aria-label={`Box plots of growth for every demographic group, ${allGroups.length} groups in ${sections.length} sections`}>
         {/* district mean reference — computed from pooled student residuals */}
         {toUnit(xLo) <= toUnit(districtMean) && toUnit(districtMean) <= toUnit(xHi) && (
@@ -498,6 +503,7 @@ function DemographicsFigure({ sections, districtMean = 0, ctx }) {
           );
         })()}
       </svg>
+      </div>
     </section>
   );
 }

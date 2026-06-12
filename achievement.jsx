@@ -136,6 +136,7 @@ function AchievementFigure({ level, ctx }) {
   // Drop any open tooltip when the view re-plots under it — a stale hover
   // would otherwise pin a phantom tooltip from the previous slice.
   React.useEffect(() => { setHover(null); }, [level, ctx.subject, ctx.estimate, ctx.unit]);
+  const [measureRef, measuredW] = window.useMeasuredWidth(920);
   const data = window.ACH_DATA && window.ACH_DATA[level];
   if (!data) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -171,7 +172,9 @@ function AchievementFigure({ level, ctx }) {
   const xVar = xs.reduce((a, b) => a + (b - xBar) ** 2, 0) / Math.max(1, xs.length);
   const xSd = Math.sqrt(xVar) || 1;
   const toZ = (v) => (v - xBar) / xSd;
-  const width = 920;
+  // Native pixel width from the card (no viewBox scaling — keeps dot sizes
+  // and type consistent with every other page); height stays fixed.
+  const width = Math.max(700, measuredW);
   const height = 540;
   const padL = 64, padR = 28, padT = 36, padB = 56;
   const plotW = width - padL - padR;
@@ -285,7 +288,8 @@ function AchievementFigure({ level, ctx }) {
         </div>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
+      <div ref={measureRef} style={{ overflowX: 'auto' }}>
+      <svg width={width} height={height} style={{ display: 'block' }}
            role="img" aria-label={`Scatter of this year's score versus growth, ${level} view, ${points.length} points`}>
         {/* plot bg */}
         <rect x={padL} y={padT} width={plotW} height={plotH}
@@ -451,6 +455,7 @@ function AchievementFigure({ level, ctx }) {
           Growth vs. expected ({unitLabel})
         </text>
       </svg>
+      </div>
 
       {/* School color legend — hue was the only school encoding, which left
           non-hovering (and colorblind) users with nothing to read. */}

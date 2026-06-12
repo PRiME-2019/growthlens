@@ -125,6 +125,27 @@ function fmtCI(ci, unit, opts) {
   return `[${fmt2(ci[0])}, ${fmt2(ci[1])}]`;
 }
 
+// SVG charts render at their container's real pixel width (measured with a
+// ResizeObserver) instead of scaling a fixed viewBox — wider windows get more
+// plot, not bigger text, keeping type sizes consistent across pages.
+function useMeasuredWidth(fallback) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(fallback);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const next = Math.floor(el.getBoundingClientRect().width);
+      if (next > 0) setW(next);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w];
+}
+
 // Reusable control-bar atoms. (The older Segmented helper was removed; the
 // shell defines its own CSegmented with a different visual treatment.)
 function Select({ value, onChange, options, label }) {
@@ -160,6 +181,7 @@ function SectionDivider({ label, count }) {
 
 Object.assign(window, {
   SLU, FONT, MONO, LABEL, SERIF, AXIS, xScale, MOTION_OK,
-  fmt2, fmt2plain, schoolLabel, schoolColW, weeksPerSD, wolFactorYear, zToWeeks, fmtVal, fmtCI,
+  fmt2, fmt2plain, schoolLabel, schoolColW, useMeasuredWidth,
+  weeksPerSD, wolFactorYear, zToWeeks, fmtVal, fmtCI,
   Select, SectionDivider,
 });
