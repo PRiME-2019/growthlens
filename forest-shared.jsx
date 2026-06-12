@@ -108,7 +108,7 @@ function fmtVal(z, unit, opts) {
   if (unit === 'weeks') {
     const w = zToWeeks(z, opts);
     const r = Math.round(w);
-    return `${r >= 0 ? '+' : '−'}${Math.abs(r)} wk`;
+    return `${r >= 0 ? '+' : '−'}${Math.abs(r)} week${Math.abs(r) === 1 ? '' : 's'}`;
   }
   return fmt2(z);
 }

@@ -42,7 +42,10 @@ function OverviewCardAch({ ctx }) {
     const x = isWk ? window.zToWeeks(v) : v;
     return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
   };
-  const unitTag = isWk ? 'wk' : 'SD';
+  // Spelled out, with the singular handled — "1 week", "12 weeks".
+  const unitTagFor = (v) => isWk
+    ? (Math.abs(Math.round(window.zToWeeks(v))) === 1 ? 'week' : 'weeks')
+    : 'SD';
   const yOf = (p) => (mode === 'raw' || p.y_shrunk == null) ? p.y_raw : p.y_shrunk;
   const schools = ach.school.points;
   const above = schools.filter((p) => yOf(p) >= 0).length;
@@ -51,7 +54,7 @@ function OverviewCardAch({ ctx }) {
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
   const takeaways = window.GLInsights
-    ? window.GLInsights.achievementTakeaways({ ach, mode, fmt: { val: (v) => `${fmtV(v)} ${unitTag}` } })
+    ? window.GLInsights.achievementTakeaways({ ach, mode, fmt: { val: (v) => `${fmtV(v)} ${unitTagFor(v)}` } })
     : [];
   const big = { fontSize: 36, fontWeight: 600, fontFamily: window.MONO,
                 color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };

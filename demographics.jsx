@@ -70,7 +70,10 @@ function OverviewCardDemo({ data, label, ctx }) {
     const x = isWk ? window.zToWeeks(v) : v;
     return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
   };
-  const unitTag = isWk ? 'wk' : 'SD';
+  // Spelled out, with the singular handled — "1 week", "12 weeks".
+  const unitTagFor = (v) => isWk
+    ? (Math.abs(Math.round(window.zToWeeks(v))) === 1 ? 'week' : 'weeks')
+    : 'SD';
   const groups = data.groups;
   const sorted = [...groups].sort((a, b) => b.median - a.median);
   const hi = sorted[0], lo = sorted[sorted.length - 1];
@@ -78,7 +81,7 @@ function OverviewCardDemo({ data, label, ctx }) {
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
   const takeaways = window.GLInsights
-    ? window.GLInsights.demographicsTakeaways({ data, fmt: { val: (v) => `${fmtV(v)} ${unitTag}` } })
+    ? window.GLInsights.demographicsTakeaways({ data, fmt: { val: (v) => `${fmtV(v)} ${unitTagFor(v)}` } })
     : [];
   const big = { fontSize: 36, fontWeight: 600, fontFamily: DEMO_PAGE_MONO,
                 color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };
@@ -90,7 +93,7 @@ function OverviewCardDemo({ data, label, ctx }) {
             <window.StatLabel>Typical-student difference</window.StatLabel>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
               <span style={big}>{fmtV(hi.median - lo.median)}</span>
-              <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTag}</span>
+              <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTagFor(hi.median - lo.median)}</span>
             </div>
             <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6, lineHeight: 1.4 }}>
               {hi.label} median minus {lo.label} median

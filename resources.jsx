@@ -68,9 +68,9 @@ function ResourcesPage({ ctx }) {
   // Cross-subject page: weeks conversion uses each finding's own subject
   // factor, not the active toggle's.
   const fmtV = (v, subject) => {
-    const x = isWk ? window.zToWeeks(v, { subject }) : v;
-    return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2))
-      + (isWk ? ' wk' : ' SD');
+    if (!isWk) return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' SD';
+    const w = Math.round(window.zToWeeks(v, { subject }));
+    return (w >= 0 ? '+' : '−') + Math.abs(w) + ` week${Math.abs(w) === 1 ? '' : 's'}`;
   };
 
   let body = null;

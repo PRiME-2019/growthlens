@@ -990,7 +990,10 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
     const x = isWk ? window.zToWeeks(v) : v;
     return (x >= 0 ? '+' : '−') + (isWk ? Math.abs(Math.round(x)) : Math.abs(x).toFixed(2));
   };
-  const unitTag = isWk ? 'wk' : 'SD';
+  // Spelled out, with the singular handled — "1 week", "12 weeks".
+  const unitTagFor = (v) => isWk
+    ? (Math.abs(Math.round(window.zToWeeks(v))) === 1 ? 'week' : 'weeks')
+    : 'SD';
 
   // Generated takeaways follow the global subject/units/method, but read
   // across every comparison the dataset carries, not just the one on screen.
@@ -999,7 +1002,7 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
         slices: window.GLStore.allGapSlices(),
         activeKey: meta.demographic,
         mode: estimate,
-        fmt: { val: (v) => `${fmtBig(v)} ${unitTag}` },
+        fmt: { val: (v) => `${fmtBig(v)} ${unitTagFor(v)}` },
       })
     : [];
 
@@ -1022,7 +1025,7 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
                                   color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
                     {fmtBig(mu)}
                   </span>
-                  <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTag}</span>
+                  <span style={{ fontSize: 13, color: SLU.mute, fontWeight: 500 }}>{unitTagFor(mu)}</span>
                 </div>
                 {re && (
                   <div style={{ fontSize: 11, color: SLU.mute, marginTop: 4, fontFamily: MONO }}>
@@ -1051,7 +1054,7 @@ function OverviewCardGap({ unit = 'z', estimate = 'shrunk' }) {
                                     color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 }}>
                       {isWk ? Math.abs(Math.round(window.zToWeeks(tauSD))) : tauSD.toFixed(2)}
                     </span>
-                    <span style={{ fontSize: 13, color: SLU.mute }}>{unitTag}</span>
+                    <span style={{ fontSize: 13, color: SLU.mute }}>{unitTagFor(tauSD)}</span>
                   </div>
                   <div style={{ fontSize: 11, color: SLU.mute, marginTop: 6 }}>
                     between schools only
@@ -1183,7 +1186,7 @@ function OverviewCardScan({ unit = 'z' }) {
         fmt: { val: (v, o) => {
           if (!isWk) return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' SD';
           const w = Math.round(window.zToWeeks(v, o));
-          return (w >= 0 ? '+' : '−') + Math.abs(w) + ' wk';
+          return (w >= 0 ? '+' : '−') + Math.abs(w) + ` week${Math.abs(w) === 1 ? '' : 's'}`;
         } },
       })
     : [];
@@ -1263,7 +1266,7 @@ function OverviewCardScan({ unit = 'z' }) {
                         {above ? '▲' : '▼'}
                       </span>
                       <span>{abs}</span>
-                      <span style={{ fontSize: 10, fontWeight: 500, color: SLU.mute, marginLeft: 2 }}>{isWk ? 'wk' : 'SD'}</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: SLU.mute, marginLeft: 2 }}>{isWk ? (abs === '1' ? 'week' : 'weeks') : 'SD'}</span>
                     </div>
                     <div style={{ fontSize: 10, color: SLU.mute, fontFamily: MONO, marginTop: 4 }}>
                       n={n.toLocaleString()}

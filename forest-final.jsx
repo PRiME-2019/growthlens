@@ -250,7 +250,7 @@ function ForestTable({ meets, below, mode, unit, districtGap, districtCi, groupA
             <TH align="left">School</TH>
             <TH>n {groupA}</TH>
             <TH>n {groupB}</TH>
-            <TH>{groupA} vs. {groupB} ({unit === 'weeks' ? 'wk' : 'SD'})</TH>
+            <TH>{groupA} vs. {groupB} ({unit === 'weeks' ? 'weeks' : 'SD'})</TH>
             <TH>95% CI</TH>
             <TH>vs. district</TH>
             <TH>Shrinkage B</TH>
