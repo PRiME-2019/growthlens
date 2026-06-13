@@ -272,7 +272,7 @@ function LeftNav({ page, setPage, ctx }) {
       {/* Secondary nav */}
       <div style={{ padding: '12px 12px 0', display: 'flex', flexDirection: 'column', gap: 1,
                      borderTop: `1px solid ${SLU.rule2}`, marginTop: 8, paddingTop: 14 }}>
-        <NavItem label="Methods note" href="methods.html" external />
+        <NavItem label="Methods" href="methods.html" external />
       </div>
 
       <span style={{ flex: 1 }} />
