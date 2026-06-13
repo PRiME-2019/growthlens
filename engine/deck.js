@@ -254,11 +254,21 @@
   // Statewide section: latest year with district data; per level present that
   // year, per subject: histogram bins + the district's named schools; plus a
   // growth-over-time district-mean series per subject.
-  function statewideSlides({ prime } = {}) {
+  //
+  // Units: positions stay on the PRiME z scale; weeks mode stamps one
+  // weeks-per-SD factor per subject (the latest year's grade-average, via the
+  // injected wps) so renderers can relabel axes and the trend keeps its shape
+  // — a single factor per panel is a pure relabeling, never a reshaping.
+  function statewideSlides({ prime, unit = 'z', fmt = null, wps = () => 1, factorYear = () => null } = {}) {
     if (!prime || !prime.rows || !prime.rows.length || !prime.lea || !P) return [];
     const report = P.districtReport(prime.rows, prime.lea);
     if (!report) return [];
     const year = report.years[report.years.length - 1];
+    const yearN = Number(year);
+    const weeks = unit === 'weeks';
+    const val = (fmt && fmt.val) ? fmt.val : (z) => (z >= 0 ? '+' : '−') + Math.abs(z).toFixed(2);
+    const factor = {};
+    for (const sub of ['ela', 'math']) factor[sub] = weeks ? wps(sub, yearN) : 1;
     const levels = LEVEL_ORDER.filter((lv) =>
       report.schools.some((s) => ['ela', 'math'].some((sub) =>
         (s.series[sub] || []).some((p) => p.year === year && p.level === lv))));
@@ -271,23 +281,35 @@
         subjects[sub] = {
           poolN: h.poolN,
           bins: h.bins.map((b) => ({ x0: b.x0, x1: b.x1, count: b.count, district: b.district })),
-          yours: h.schools.map((s) => ({ name: s.name, z: s.z, rank: s.rank })),
+          yours: h.schools.map((s) => ({ name: s.name, z: s.z, rank: s.rank,
+            text: val(s.z, { subject: sub, year: yearN }) })),
+          wps: factor[sub],
         };
       }
       return { level: lv, heading: LEVEL_HEADING[lv], subjects };
     });
     const series = {};
     for (const sub of ['ela', 'math']) series[sub] = P.districtMeanSeries(report, sub);
+    const fy = weeks ? factorYear('ela', yearN) : null;
+    const factorsClause = weeks
+      ? `ELA SD × ${Math.round(factor.ela)}, Math SD × ${Math.round(factor.math)}`
+        + (fy ? ` — ${fy} grade 4–8 averages` : ' — typical MAP averages')
+      : null;
     return [
-      { kind: 'stateHist', district: report.name, year, levels: histLevels },
-      { kind: 'stateTrend', district: report.name, years: report.years, series },
+      { kind: 'stateHist', district: report.name, year, levels: histLevels, unit,
+        weeksNote: weeks ? `Weeks of learning: ${factorsClause}; see the methods note.` : null },
+      { kind: 'stateTrend', district: report.name, years: report.years, series, unit, wps: factor,
+        weeksNote: weeks
+          ? `Weeks of learning: ${factorsClause}; one factor for every year, so the line’s shape matches the SD view.`
+          : null },
     ];
   }
 
-  // No `unit` param: the unit choice is already baked into the injected fmt;
-  // the engine only needs unitLabel for display copy.
-  function buildDeck({ bySubject = {}, prime = null, unitLabel = 'SD (standard scale)',
-                       mode = 'shrunk', fmt, today = '' } = {}) {
+  // The unit choice is baked into the injected fmt for every value string;
+  // `unit` + `wps`/`factorYear` exist only for the statewide figures, whose
+  // axes need the numeric weeks-per-SD factor, not just formatted text.
+  function buildDeck({ bySubject = {}, prime = null, unit = 'z', unitLabel = 'SD (standard scale)',
+                       mode = 'shrunk', fmt, today = '', wps = () => 1, factorYear = () => null } = {}) {
     const subjects = ['math', 'ela'].filter((s) => bySubject[s]);
     const metas = subjects.map((s) => bySubject[s].meta).filter(Boolean);
     const sample = !metas.some((m) => m && m.source === 'uploaded');
@@ -317,7 +339,7 @@
       const ov = gapsOverview({ gaps: b.gaps, mode, fmt });
       if (ov.rows.length) slides.push({ ...ov, subject: s });
     }
-    slides.push(...statewideSlides({ prime }));
+    slides.push(...statewideSlides({ prime, unit, fmt, wps, factorYear }));
     slides.push({ kind: 'cautions', unitLabel, bullets: [
       'Numbers are nudged toward the district average (shrinkage), so a few students can\'t swing a school.',
       'Groups with fewer than 10 students are flagged, not trusted.',

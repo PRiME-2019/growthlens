@@ -264,7 +264,10 @@
         ? ` — ${ordinal(best.p.rank)} of ${best.p.poolN.toLocaleString()} ${LEVEL_WORD[best.p.level] || ''} schools statewide`
         : '';
       standout = {
-        text: `**${best.s.name}** posted the district's strongest growth: ${fmt.val(best.p.z)} in `
+        // Subject + year ride along so a weeks-mode fmt can pick the right
+        // conversion factor; the SD default ignores them.
+        text: `**${best.s.name}** posted the district's strongest growth: `
+          + `${fmt.val(best.p.z, { subject: best.sub, year: Number(y) })} in `
           + `${best.sub === 'ela' ? 'ELA' : 'math'}${rankClause}.`,
       };
     }

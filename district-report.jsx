@@ -14,8 +14,10 @@
 // growth distribution, and how they've moved over time. Built on the bundled
 // reference/prime_growth_database.csv (public data, fetched same-origin so no
 // request ever reveals which district someone is looking at). Shows both
-// subjects and ignores the sidebar Subject/Units toggles: PRiME growth scores
-// are their own scale, with 0 = a typical year of growth.
+// subjects and ignores the sidebar Subject toggle; the Units toggle applies,
+// converting through the same weeksPerSD machinery as every other page (each
+// chart's own year × subject grade-average factor; the trend uses one factor
+// for all years so switching units never reshapes the line).
 //
 // District detection: an upload's COUNTY_DISTRICT_CODE (meta.districtCode)
 // wins; the sample data browses Jackson R-II as a worked example; the picker
@@ -63,6 +65,21 @@ const LEVEL_NOUN = {
 };
 
 const fmtZSigned = (z) => (z >= 0 ? '+' : '−') + Math.abs(z).toFixed(2);
+// Unit-aware value text: weeks mode converts through the chart's own
+// year × subject grade-average factor (the same conversion as every other
+// page); SD mode keeps the signed two-decimal form.
+const rptVal = (z, unit, opts) => (unit === 'weeks' ? fmtVal(z, 'weeks', opts) : fmtZSigned(z));
+// Short signed axis label: whole-ish weeks ("+25") or SD ("+0.20").
+const rptTick = (t, unit) => (Math.abs(t) < 1e-9 ? '0'
+  : unit === 'weeks' ? (t > 0 ? '+' : '−') + Math.abs(Number(t.toFixed(1))) : fmtZSigned(t));
+// Same nice-step ladder the deck figures use, so the page and the exported
+// slides pick identical week gridlines.
+function rptNiceStep(span, target) {
+  const raw = Math.abs(span) / target || 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
 // Width-responsive rendering uses the shared useMeasuredWidth hook from
 // forest-shared.jsx (native pixel size, no viewBox scaling).
 function rptOrdinal(n) {
@@ -72,6 +89,7 @@ function rptOrdinal(n) {
 }
 
 function DistrictReportPage({ ctx }) {
+  const unit = ctx.unit || 'z';
   const [db, setDb] = React.useState({ status: 'loading', rows: null });
   React.useEffect(() => {
     let alive = true;
@@ -123,9 +141,9 @@ function DistrictReportPage({ ctx }) {
   } else {
     body = (
       <>
-        <ReportOverviewCard report={report} year={shownYear} />
-        <HistogramCard rows={rows} report={report} lea={lea} year={shownYear} setYear={setYear} />
-        <TrendCard report={report} />
+        <ReportOverviewCard report={report} year={shownYear} unit={unit} />
+        <HistogramCard rows={rows} report={report} lea={lea} year={shownYear} setYear={setYear} unit={unit} />
+        <TrendCard report={report} unit={unit} />
       </>
     );
   }
@@ -134,7 +152,7 @@ function DistrictReportPage({ ctx }) {
     <>
       <BriefHeader eyebrow="Statewide comparison" slice={report ? report.name : 'Statewide'}
                    title="How your schools compare statewide"
-                   blurb={'Every Missouri public school gets a growth score each year — how much its students learned compared with students who started at the same place. These charts show where each of your schools lands among all schools statewide, and how that has moved over time. A score of 0 means a typical year of growth; this is the state’s scale, separate from the subject, units, and group settings used elsewhere in this tool.'} />
+                   blurb={'Every Missouri public school gets a growth score each year — how much its students learned compared with students who started at the same place. These charts show where each of your schools lands among all schools statewide, and how that has moved over time. A score of 0 means a typical year of growth. This is the state’s scale — separate from the subject and group settings used elsewhere in this tool — but the Units toggle applies: switch to weeks to read every score as weeks of learning.'} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontFamily: LABEL, color: SLU.mute,
                        textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>
@@ -171,7 +189,7 @@ function RptStateCard({ children }) {
 }
 
 // ---- Overview ----------------------------------------------------------------
-function ReportOverviewCard({ report, year }) {
+function ReportOverviewCard({ report, year, unit }) {
   const pointAt = (s, sub) => (s.series[sub] || []).find((p) => p.year === year) || null;
   const counts = RPT_SUBJECTS.map((sub) => {
     const pts = report.schools.map((s) => pointAt(s, sub)).filter(Boolean);
@@ -190,8 +208,12 @@ function ReportOverviewCard({ report, year }) {
   const medianPct = pcts.length
     ? pcts[Math.floor((pcts.length - 1) / 2)] : null;
 
+  // primeTakeaways passes { subject, year } on value calls so weeks mode can
+  // pick the right conversion factor; SD mode ignores them.
   const takeaways = window.GLPrime
-    ? window.GLPrime.primeTakeaways({ report, year, fmt: { val: fmtZSigned } })
+    ? window.GLPrime.primeTakeaways({ report, year, fmt: { val: (z, opts = {}) =>
+        rptVal(z, unit, { subject: opts.subject || 'ela',
+                          year: Number(opts.year != null ? opts.year : year) }) } })
     : [];
 
   return (
@@ -248,7 +270,7 @@ function ReportOverviewCard({ report, year }) {
 }
 
 // ---- Tile histograms -----------------------------------------------------------
-function HistogramCard({ rows, report, lea, year, setYear }) {
+function HistogramCard({ rows, report, lea, year, setYear, unit }) {
   // The displayed year decides which level each school counts under — a
   // school reclassified between years moves pools with the year picker.
   const levels = LEVEL_ORDER.filter((lv) =>
@@ -298,7 +320,7 @@ function HistogramCard({ rows, report, lea, year, setYear }) {
           </h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px 28px' }}>
             {RPT_SUBJECTS.map((sub) => (
-              <TileHistogram key={sub} level={lv} subject={sub}
+              <TileHistogram key={sub} level={lv} subject={sub} year={year} unit={unit}
                              hist={window.GLPrime.histogram(rows, { year, level: lv, subject: sub, binWidth: RPT_BIN_W, lea })} />
             ))}
           </div>
@@ -309,12 +331,20 @@ function HistogramCard({ rows, report, lea, year, setYear }) {
                     display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 11.5, color: SLU.mute, lineHeight: 1.5 }}>
         <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold tile</span> = one of your schools — hover it for the school’s name and statewide rank.</span>
         <span>Schools are ranked only against schools of the same type, so an elementary school is never compared with a middle school.</span>
+        {unit === 'weeks' && (
+          <span>
+            <span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = about
+            how many weeks each step stands for (ELA SD × {Math.round(weeksPerSD({ subject: 'ela', year: Number(year) }))},
+            Math × {Math.round(weeksPerSD({ subject: 'math', year: Number(year) }))};{' '}
+            {(() => { const fy = wolFactorYear({ subject: 'ela', year: Number(year) }); return fy ? `${fy} grade 4–8 averages` : 'typical MAP averages'; })()} — see methods).
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function TileHistogram({ hist, subject, level }) {
+function TileHistogram({ hist, subject, level, year, unit }) {
   const [hov, setHov] = React.useState(null);   // index into hist.schools
   const [ref, W] = useMeasuredWidth(380);
   if (!hist || hist.poolN === 0) {
@@ -337,9 +367,14 @@ function TileHistogram({ hist, subject, level }) {
   // carries the meaning; the caption and hover carry the exact rank.
   const tileH = Math.min(9, Math.max(5, plotH / 16));
   const atOrAbove = hist.schools.filter((s) => s.z >= 0).length;
-  // Ticks every 0.2 within the data range, 0 always included.
+  // Ticks: every 0.2 SD, or nice week multiples in weeks mode — positions stay
+  // on the z scale (k = weeks per SD), so the bars never move between units.
+  const k = unit === 'weeks' ? weeksPerSD({ subject, year: Number(year) }) : 1;
+  const tickStep = unit === 'weeks' ? rptNiceStep((x1 - x0) * k, 6) : 0.2;
   const ticks = [];
-  for (let t = Math.ceil(x0 / 0.2) * 0.2; t <= x1 + 1e-9; t += 0.2) ticks.push(Math.round(t * 10) / 10);
+  for (let t = Math.ceil((x0 * k) / tickStep) * tickStep; t <= x1 * k + 1e-9; t += tickStep) {
+    ticks.push(Math.round(t * 10) / 10);
+  }
 
   return (
     <div ref={ref} style={{ flex: '1 1 360px', minWidth: 300, position: 'relative' }}>
@@ -362,7 +397,7 @@ function TileHistogram({ hist, subject, level }) {
           const stackPos = hist.schools.filter((o, j) => o.bin === s.bin && j < i).length;
           const bx = xOf(hist.bins[s.bin].x0);
           const by = padT + plotH - (stackPos + 1) * (tileH + 1);
-          const tip = `${s.name}: ${fmtZSigned(s.z)}${s.rank != null ? ` — ${rptOrdinal(s.rank)} of ${hist.poolN.toLocaleString()} ${LEVEL_NOUN[level]}s` : ''}`;
+          const tip = `${s.name}: ${rptVal(s.z, unit, { subject, year: Number(year) })}${s.rank != null ? ` — ${rptOrdinal(s.rank)} of ${hist.poolN.toLocaleString()} ${LEVEL_NOUN[level]}s` : ''}`;
           return (
             <rect key={`${s.school_id}-${i}`} x={bx + 0.5} y={by}
                   width={Math.max(0.5, barW - 1)} height={tileH}
@@ -381,10 +416,10 @@ function TileHistogram({ hist, subject, level }) {
         <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} stroke={SLU.rule} strokeWidth={1} />
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={xOf(t)} x2={xOf(t)} y1={padT + plotH} y2={padT + plotH + 4} stroke={SLU.rule} strokeWidth={1} />
-            <text x={xOf(t)} y={padT + plotH + 15} textAnchor="middle"
+            <line x1={xOf(t / k)} x2={xOf(t / k)} y1={padT + plotH} y2={padT + plotH + 4} stroke={SLU.rule} strokeWidth={1} />
+            <text x={xOf(t / k)} y={padT + plotH + 15} textAnchor="middle"
                   style={{ fontSize: 9.5, fontFamily: MONO, fill: SLU.mute }}>
-              {t === 0 ? '0' : fmtZSigned(t)}
+              {rptTick(t, unit)}
             </text>
           </g>
         ))}
@@ -409,9 +444,12 @@ function TileHistogram({ hist, subject, level }) {
 }
 
 // ---- Growth over time ----------------------------------------------------------
-function TrendCard({ report }) {
+function TrendCard({ report, unit }) {
   const [overlay, setOverlay] = React.useState('');
   const overlaySchool = report.schools.find((s) => s.school_id === overlay) || null;
+  // One factor per subject (the latest year's), applied to every year — a pure
+  // axis relabel, so switching units never reshapes the lines.
+  const fYear = Number(report.years[report.years.length - 1]);
 
   return (
     <div style={{
@@ -446,7 +484,7 @@ function TrendCard({ report }) {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px 28px' }}>
         {RPT_SUBJECTS.map((sub) => (
-          <TrendChart key={sub} report={report} subject={sub} overlaySchool={overlaySchool} />
+          <TrendChart key={sub} report={report} subject={sub} overlaySchool={overlaySchool} unit={unit} />
         ))}
       </div>
 
@@ -456,14 +494,25 @@ function TrendCard({ report }) {
         {overlaySchool && <span><span style={{ color: SLU.gold, fontWeight: 600 }}>Gold line</span> = {overlaySchool.name}.</span>}
         <span>The gray dashed line is a typical year of growth — above it, students gained more ground than similar students statewide.</span>
         <span>Hover any point for its exact score.</span>
+        {unit === 'weeks' && (
+          <span>
+            <span style={{ color: SLU.ink2, fontWeight: 600 }}>Weeks of learning</span> = ELA
+            SD × {Math.round(weeksPerSD({ subject: 'ela', year: fYear }))},
+            Math × {Math.round(weeksPerSD({ subject: 'math', year: fYear }))}{' '}
+            ({(() => { const fy = wolFactorYear({ subject: 'ela', year: fYear }); return fy ? `${fy} grade 4–8 averages` : 'typical MAP averages'; })()})
+            — one factor for every year, so the lines keep their shape (see methods).
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function TrendChart({ report, subject, overlaySchool }) {
+function TrendChart({ report, subject, overlaySchool, unit }) {
   const [hov, setHov] = React.useState(null);
   const [ref, W] = useMeasuredWidth(380);
+  const fYear = Number(report.years[report.years.length - 1]);
+  const k = unit === 'weeks' ? weeksPerSD({ subject, year: fYear }) : 1;
   const mean = window.GLPrime.districtMeanSeries(report, subject);
   const over = overlaySchool ? (overlaySchool.series[subject] || []) : [];
   if (mean.length === 0) {
@@ -497,7 +546,16 @@ function TrendChart({ report, subject, overlaySchool }) {
     return segs;
   };
   const path = (seg) => seg.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(p.year)},${yOf(p.z)}`).join(' ');
-  const yTicks = [-lim, -lim / 2, 0, lim / 2, lim].map((t) => Math.round(t * 100) / 100);
+  // Gridlines: quarter-extents in SD; nice week multiples in weeks mode,
+  // positioned back on the z scale through the panel's single factor.
+  const yTicks = [];
+  if (unit === 'weeks') {
+    const wext = lim * k, wstep = rptNiceStep(wext, 3);
+    yTicks.push(0);
+    for (let t = wstep; t <= wext + 1e-9; t += wstep) yTicks.push(-t, t);
+  } else {
+    yTicks.push(...[-lim, -lim / 2, 0, lim / 2, lim].map((t) => Math.round(t * 100) / 100));
+  }
   // Dashed bridges across missing years (2020): the line itself continues
   // point-to-point, dashed, so the series reads as one school's story while
   // the dashes admit there was no measurement in between.
@@ -510,7 +568,7 @@ function TrendChart({ report, subject, overlaySchool }) {
     return out;
   };
 
-  const pointTip = (p, who) => `${who}, ${p.year}: ${fmtZSigned(p.z)}`
+  const pointTip = (p, who) => `${who}, ${p.year}: ${rptVal(p.z, unit, { subject, year: fYear })}`
     + (p.rank != null && p.poolN ? ` — ${rptOrdinal(p.rank)} of ${p.poolN.toLocaleString()}` : '');
 
   const renderPoints = (pts, color, who, shape) => pts.map((p) => (
@@ -544,12 +602,12 @@ function TrendChart({ report, subject, overlaySchool }) {
         </text>
         {yTicks.map((t) => (
           <g key={t}>
-            <line x1={padL} x2={W - padR} y1={yOf(t)} y2={yOf(t)}
+            <line x1={padL} x2={W - padR} y1={yOf(t / k)} y2={yOf(t / k)}
                   stroke={t === 0 ? SLU.ink2 : SLU.rule2} strokeWidth={1}
                   strokeDasharray={t === 0 ? '3 3' : 'none'} />
-            <text x={padL - 6} y={yOf(t) + 3} textAnchor="end"
+            <text x={padL - 6} y={yOf(t / k) + 3} textAnchor="end"
                   style={{ fontSize: 9.5, fontFamily: MONO, fill: SLU.mute }}>
-              {t === 0 ? '0' : fmtZSigned(t)}
+              {rptTick(t, unit)}
             </text>
           </g>
         ))}

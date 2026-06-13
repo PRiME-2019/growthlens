@@ -174,10 +174,14 @@
       }
       b += line(xOf(0), plotY - 6, xOf(0), baseline + 4, C.ink2, 1.2, '5 4');
       b += line(ox, baseline, ox + PW, baseline, C.rule, 1);
-      const step = niceStep(x1 - x0, 5);
-      for (let t = Math.ceil(x0 / step) * step; t <= x1 + 1e-9; t += step) {
-        const tx = Math.max(ox + 13, Math.min(xOf(t), ox + PW - 13));
-        b += text(tx, baseline + 15, tickLabel(t, 1), { size: 9.5, fill: C.mute, anchor: 'middle', mono: true });
+      // Weeks mode relabels the axis through the panel's weeks-per-SD factor
+      // (k); positions stay on the z scale, so the bars never move.
+      const k = d.unit === 'weeks' ? (s.wps || 1) : 1;
+      const step = niceStep((x1 - x0) * k, d.unit === 'weeks' ? 6 : 5);
+      const dp = d.unit === 'weeks' ? (Number.isInteger(step) ? 0 : 1) : 1;
+      for (let t = Math.ceil((x0 * k) / step) * step; t <= x1 * k + 1e-9; t += step) {
+        const tx = Math.max(ox + 13, Math.min(xOf(t / k), ox + PW - 13));
+        b += text(tx, baseline + 15, tickLabel(t, dp), { size: 9.5, fill: C.mute, anchor: 'middle', mono: true });
       }
       b += text(xOf(0), baseline + 30, '↑ typical growth', { size: 9.5, fill: C.ink2, anchor: 'middle' });
       const at = s.yours.filter((sch) => sch.z >= 0).length;
@@ -205,9 +209,21 @@
       const xOf = (yr) => ox + padL + (y1 === y0 ? pw / 2 : ((Number(yr) - y0) / (y1 - y0)) * pw);
       const yOf = (z) => padT + ((ext - z) / (2 * ext)) * ph;
       b += text(ox + padL - 6, 20, subjWord(sub), { size: 13.5, fill: C.ink, bold: true });
-      for (const t of [-ext, -ext / 2, ext / 2, ext]) {
-        b += line(ox + padL, yOf(t), ox + padL + pw, yOf(t), C.rule2, 1);
-        b += text(ox + padL - 8, yOf(t) + 3.5, tickLabel(t, 2), { size: 9.5, fill: C.mute, anchor: 'end', mono: true });
+      // Weeks mode: gridlines at nice week multiples, positioned back on the z
+      // scale through this panel's single factor — the line keeps its shape.
+      const k = d.unit === 'weeks' ? ((d.wps && d.wps[sub]) || 1) : 1;
+      const dp = d.unit === 'weeks' ? 0 : 2;
+      let gridTicks;
+      if (d.unit === 'weeks') {
+        const wext = ext * k, wstep = niceStep(wext, 3);
+        gridTicks = [];
+        for (let t = wstep; t <= wext + 1e-9; t += wstep) gridTicks.push(-t, t);
+      } else {
+        gridTicks = [-ext, -ext / 2, ext / 2, ext];
+      }
+      for (const t of gridTicks) {
+        b += line(ox + padL, yOf(t / k), ox + padL + pw, yOf(t / k), C.rule2, 1);
+        b += text(ox + padL - 8, yOf(t / k) + 3.5, tickLabel(t, dp), { size: 9.5, fill: C.mute, anchor: 'end', mono: true });
       }
       b += line(ox + padL, yOf(0), ox + padL + pw, yOf(0), C.ink2, 1.2, '5 4');
       b += text(ox + padL - 8, yOf(0) + 3.5, '0', { size: 9.5, fill: C.ink2, anchor: 'end', mono: true });
@@ -221,7 +237,7 @@
         b += `<circle cx="${xOf(p.year)}" cy="${yOf(p.z)}" r="5" fill="${C.blue}" stroke="#FFFFFF" stroke-width="1.5"/>`;
         if (j === 0 || j === pts.length - 1) {
           const lx = Math.max(ox + padL + 16, Math.min(xOf(p.year), ox + padL + pw - 16));
-          b += text(lx, yOf(p.z) - 12, tickLabel(p.z, 2), { size: 10, fill: C.blue, anchor: 'middle', mono: true, bold: true, halo: true });
+          b += text(lx, yOf(p.z) - 12, tickLabel(p.z * k, dp), { size: 10, fill: C.blue, anchor: 'middle', mono: true, bold: true, halo: true });
         }
       });
       for (let yr = y0; yr <= y1; yr++) {

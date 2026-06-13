@@ -250,8 +250,10 @@ function layoutStateHist(pres, slide, deck, d, figs) {
     altText: 'Statewide growth histograms per school type and subject; gold tiles mark this district’s schools, the dashed line a typical year of growth.' });
   slide.addText('gold tiles = your schools · gray = every Missouri school of the same type',
     { x: 5.7, y: 1.02, w: 7.03, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute, align: 'right' });
+  if (d.weeksNote) slide.addText(d.weeksNote,
+    { x: 0.6, y: PAGE_H - 0.78, w: 12.1, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
   const names = d.levels.flatMap((lv) => ['ela', 'math'].flatMap((sub) =>
-    lv.subjects[sub].yours.map((s) => `${s.name} (${subjWord(sub)} ${s.z >= 0 ? '+' : '−'}${Math.abs(s.z).toFixed(2)})`)));
+    lv.subjects[sub].yours.map((s) => `${s.name} (${subjWord(sub)} ${s.text})`)));
   slide.addNotes('Gold = this district’s schools, against every Missouri school of the same type. Zero is a typical year of growth. Yours: ' + names.join('; '));
 }
 
@@ -261,6 +263,8 @@ function layoutStateTrend(pres, slide, deck, d, figs) {
   const { w, h } = fitFig(f, 12.13, 4.85);
   slide.addImage({ data: f.png, x: 0.6 + (12.13 - w) / 2, y: 1.6, w, h,
     altText: 'District-average statewide growth score per year, by subject; the dashed stretch bridges the cancelled 2020 test year.' });
+  if (d.weeksNote) slide.addText(d.weeksNote,
+    { x: 0.6, y: PAGE_H - 1.02, w: 12.1, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
   slide.addText('0 = a typical year of growth statewide · schools weighted equally · the dashed stretch crosses 2020, the year state testing was cancelled',
     { x: 0.6, y: PAGE_H - 0.78, w: 12.1, h: 0.24, fontFace: F_HEAD, fontSize: 9.5, color: XP.mute });
   slide.addNotes('District average of statewide growth scores per year. The dashed stretch crosses the cancelled 2020 test year, not missing district data.');
@@ -374,7 +378,13 @@ function ExportPage({ ctx }) {
   const prime = primeRows && lea ? { rows: primeRows, lea } : null;
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
-  const deck = window.GLDeck.buildDeck({ bySubject, prime, unitLabel, mode: ctx.estimate || 'shrunk', fmt, today });
+  const deck = window.GLDeck.buildDeck({
+    bySubject, prime, unit, unitLabel, mode: ctx.estimate || 'shrunk', fmt, today,
+    // The statewide figures need the numeric factor (axis relabeling), not
+    // just formatted strings — same conversion as everywhere else.
+    wps: (subject, year) => window.weeksPerSD({ subject, year }),
+    factorYear: (subject, year) => window.wolFactorYear({ subject, year }),
+  });
 
   const exportPPTX = async () => {
     if (busy) return;
@@ -684,6 +694,9 @@ function PvStateHist({ d, deck }) {
   return (
     <PvChrome d={d} deck={deck} eyebrow="Statewide">
       <PvFig d={d} />
+      {d.weeksNote && (
+        <div style={{ marginTop: 5, fontSize: 7, fontStyle: 'italic', color: SLU.mute }}>{d.weeksNote}</div>
+      )}
     </PvChrome>
   );
 }
@@ -692,6 +705,9 @@ function PvStateTrend({ d, deck }) {
   return (
     <PvChrome d={d} deck={deck} eyebrow="Statewide">
       <PvFig d={d} />
+      {d.weeksNote && (
+        <div style={{ marginTop: 5, fontSize: 7, fontStyle: 'italic', color: SLU.mute }}>{d.weeksNote}</div>
+      )}
     </PvChrome>
   );
 }

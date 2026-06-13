@@ -63,6 +63,18 @@ test('stateHist: one gold tile per district school; empty subject pools skipped'
   assert.ok(svg.includes('1,000 schools statewide'));
 });
 
+test('stateHist: weeks mode relabels the axis in week multiples, bars unmoved', () => {
+  const weekly = JSON.parse(JSON.stringify(HIST));
+  weekly.unit = 'weeks';
+  weekly.levels[0].subjects.ela.wps = 130;
+  const { svg } = F.stateHist(weekly);
+  const sd = F.stateHist(HIST).svg;
+  assert.ok(svg.includes('>−10<') && svg.includes('>+5<'), 'week tick labels');
+  assert.ok(!svg.includes('>−0.1<'), 'no SD tick labels remain');
+  // Geometry is identical: same rects in both units (axis relabel only).
+  assert.deepEqual(svg.match(/<rect[^>]*>/g), sd.match(/<rect[^>]*>/g));
+});
+
 const TREND = {
   kind: 'stateTrend', district: 'X', years: ['2018', '2019', '2021', '2022'],
   series: {
@@ -76,6 +88,17 @@ test('stateTrend: dashed bridge across the 2020 gap, solid elsewhere, ghosted ye
   assert.equal(count(svg, /stroke-dasharray="7 6"/g), 1, 'exactly one dashed bridge (2019→2021)');
   assert.equal(count(svg, /<circle/g), 4, 'one point per year with data');
   assert.ok(svg.includes('’20'), '2020 tick still labeled (ghosted)');
+});
+
+test('stateTrend: weeks mode converts gridlines and endpoint labels, line unmoved', () => {
+  const { svg } = F.stateTrend({ ...TREND, unit: 'weeks', wps: { ela: 130 } });
+  const sd = F.stateTrend(TREND).svg;
+  assert.ok(svg.includes('>+5<') && svg.includes('>−5<'), 'week gridline labels');
+  assert.ok(svg.includes('>−8<'), 'endpoint −0.06 SD × 130 ≈ −8 weeks');
+  assert.ok(!svg.includes('>−0.06<'), 'no SD endpoint label remains');
+  assert.equal(count(svg, /stroke-dasharray="7 6"/g), 1, 'bridge unchanged');
+  // Points sit at the same coordinates in both units (axis relabel only).
+  assert.deepEqual(svg.match(/<circle[^>]*>/g), sd.match(/<circle[^>]*>/g));
 });
 
 const FOREST = {

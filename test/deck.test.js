@@ -217,8 +217,32 @@ test('statewideSlides: histogram + trend descriptors when the district resolves'
   assert.equal(hist.levels[0].level, 'Elementary');
   assert.ok(hist.levels[0].subjects.ela.bins.length > 0);
   assert.equal(hist.levels[0].subjects.ela.yours[0].name, 'Orchard Drive Elementary');
+  // SD defaults: unitless factors, SD-formatted tile values, no weeks footnote.
+  assert.equal(hist.unit, 'z');
+  assert.equal(hist.levels[0].subjects.ela.wps, 1);
+  assert.equal(hist.levels[0].subjects.ela.yours[0].text, '+0.07');
+  assert.equal(hist.weeksNote, null);
   const trend = slides.find((s) => s.kind === 'stateTrend');
   assert.deepEqual(trend.series.math.map((p) => p.year), ['2024', '2025']);
+  assert.deepEqual(trend.wps, { ela: 1, math: 1 });
+});
+
+test('statewideSlides: weeks mode stamps factors, converted texts, and the footnote', () => {
+  const fmtW = { val: (z, opts = {}) => `${Math.round(z * (opts.subject === 'ela' ? 131 : 119))} weeks` };
+  const slides = D.statewideSlides({
+    prime: { rows: PRIME_ROWS, lea: '016090' }, unit: 'weeks', fmt: fmtW,
+    wps: (sub, year) => (sub === 'ela' ? 131 : 119) + (year === 2025 ? 0 : NaN),
+    factorYear: () => 2025,
+  });
+  const hist = slides.find((s) => s.kind === 'stateHist');
+  assert.equal(hist.unit, 'weeks');
+  assert.equal(hist.levels[0].subjects.ela.wps, 131);
+  assert.equal(hist.levels[0].subjects.math.wps, 119);
+  assert.equal(hist.levels[0].subjects.ela.yours[0].text, '9 weeks');   // 0.07 × 131
+  assert.match(hist.weeksNote, /ELA SD × 131, Math SD × 119 — 2025 grade 4–8 averages/);
+  const trend = slides.find((s) => s.kind === 'stateTrend');
+  assert.deepEqual(trend.wps, { ela: 131, math: 119 });
+  assert.match(trend.weeksNote, /one factor for every year/);
 });
 
 test('statewideSlides: empty when no district', () => {
