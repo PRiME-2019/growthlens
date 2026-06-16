@@ -20,8 +20,9 @@
 // for all years so switching units never reshapes the line).
 //
 // District detection: an upload's COUNTY_DISTRICT_CODE (meta.districtCode)
-// wins; the sample data browses Jackson R-II as a worked example; the picker
-// can always pull up any district in the database.
+// wins; with no upload (or an upload that names no district) the page starts
+// blank until the user picks one — we never default to a district that isn't
+// theirs. The picker can always pull up any district in the database.
 
 // ---- PRiME database loader ---------------------------------------------------
 // Module-level singleton, shared with the upload flow's name crosswalk
@@ -46,7 +47,6 @@ window.loadPrimeDb = loadPrimeDb;
 // cached for the session — most visits never pay for it. Each consumer
 // already shows a loading state for the one-time fetch.
 
-const DEMO_DISTRICT = '016090';   // Jackson R-II — the sample data's worked example
 const RPT_BIN_W = 0.05;
 const RPT_SUBJECTS = ['ela', 'math'];
 const RPT_SUBJ_LABEL = { ela: 'ELA', math: 'Math' };
@@ -100,15 +100,16 @@ function DistrictReportPage({ ctx }) {
     return () => { alive = false; };
   }, []);
 
-  // Detected district: an upload's COUNTY_DISTRICT_CODE wins; with uploads
-  // but no code there is nothing to detect (prompt instead of guessing);
-  // the sample data browses the worked example.
+  // Detected district: an upload's COUNTY_DISTRICT_CODE wins. With no upload —
+  // or an upload that names no district — there is nothing to detect, so we
+  // start blank (null) and let the user pick or upload, rather than guessing a
+  // default district that isn't theirs.
   const [lea, setLea] = React.useState(() => {
     const metas = ['ela', 'math']
       .map((k) => (window.GLStore && window.GLStore.getUploadedMeta) ? window.GLStore.getUploadedMeta(k) : null)
       .filter(Boolean);
     if (metas.length) return metas.map((m) => m.districtCode).find(Boolean) || null;
-    return DEMO_DISTRICT;
+    return null;
   });
   const [year, setYear] = React.useState(null);       // null → district's latest
   const pickLea = (v) => { setLea(v || null); setYear(null); };
@@ -127,8 +128,9 @@ function DistrictReportPage({ ctx }) {
   } else if (!lea) {
     body = (
       <RptStateCard>
-        Your file doesn’t name its district, so pick yours from the list above
-        to see where your schools land statewide.
+        {anyUploaded
+          ? 'Your file doesn’t name its district, so pick yours from the list above to see where your schools land statewide.'
+          : 'Pick a district from the list above to see where its schools land statewide — or upload your data from the Home page and GrowthLens will detect your district automatically.'}
       </RptStateCard>
     );
   } else if (!report) {
@@ -167,11 +169,6 @@ function DistrictReportPage({ ctx }) {
             <option key={d.lea_id} value={d.lea_id}>{d.name}</option>
           ))}
         </select>
-        {!anyUploaded && lea === DEMO_DISTRICT && (
-          <span style={{ fontSize: 11.5, color: SLU.mute }}>
-            Showing one real district as an example — pick yours from the list.
-          </span>
-        )}
       </div>
       {body}
     </>

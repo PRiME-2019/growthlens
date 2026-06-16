@@ -213,7 +213,7 @@ function LeftNav({ page, setPage, ctx }) {
     <aside style={{
       borderRight: `1px solid ${SLU.rule2}`, background: SLU.bg,
       display: 'flex', flexDirection: 'column', position: 'sticky', top: 0,
-      height: '100vh', alignSelf: 'flex-start',
+      height: '100vh', alignSelf: 'flex-start', overflowY: 'auto',
     }}>
       {/* Brand block — measurement-bar glyph (V8) inline before the serif
           wordmark (V1), with a short gold rule beneath. The glyph echoes the
@@ -270,7 +270,7 @@ function LeftNav({ page, setPage, ctx }) {
       <AnalysisPanel ctx={ctx} />
 
       {/* Secondary nav */}
-      <div style={{ padding: '12px 12px 0', display: 'flex', flexDirection: 'column', gap: 1,
+      <div style={{ padding: '12px 12px 16px', display: 'flex', flexDirection: 'column', gap: 1,
                      borderTop: `1px solid ${SLU.rule2}`, marginTop: 8, paddingTop: 14 }}>
         <NavItem label="Methods" href="methods.html" external />
       </div>
@@ -548,7 +548,7 @@ function OverviewPage({ ctx }) {
           background: 'rgba(0, 61, 165, 0.08)', color: SLU.blue,
           fontSize: 11, fontFamily: LABEL, fontWeight: 700,
           textTransform: 'uppercase', letterSpacing: 1.0, whiteSpace: 'nowrap',
-        }}>GrowthLens · v0.4 preview</span>
+        }}>GrowthLens · v0.7 preview</span>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: SLU.ink,
                      letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance',
                      maxWidth: 760 }}>
