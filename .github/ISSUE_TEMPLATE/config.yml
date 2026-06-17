@@ -1,0 +1,7 @@
+# Set to false to force every new issue through one of the templates above.
+# Left true so you can still file a quick freeform issue when you want.
+blank_issues_enabled: true
+contact_links:
+  - name: Project discussions
+    url: https://github.com/andrewmcamp/growthlens/discussions
+    about: General questions, ideas, and show-and-tell that aren't quite an issue. Update OWNER, or delete this line if Discussions isn't enabled.
