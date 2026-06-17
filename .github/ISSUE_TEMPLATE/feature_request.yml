@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep it concrete. The most useful feature requests describe a problem and a workflow, not just a solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and where does GrowthLens currently get in the way?
+      placeholder: "When I'm comparing two districts' weeks-of-learning by grade, I have to ..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like it to do? Sketch the behavior, not the implementation (unless you have one in mind).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you're using now, or other approaches you weighed.
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Rough scope
+      description: Your gut sense — helps with prioritization, not binding.
+      options:
+        - "Small (tweak / quality-of-life)"
+        - "Medium (new view or option)"
+        - "Large (new subsystem or data dependency)"
+        - "Not sure"
+    validations:
+      required: false
