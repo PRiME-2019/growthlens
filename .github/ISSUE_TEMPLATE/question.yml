@@ -1,0 +1,35 @@
+name: Question / support
+description: Ask a question about using GrowthLens, interpreting its output, or its methodology.
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions are welcome. If your question is "is this number right?", the Data / calculation issue template will get you a faster, more specific answer.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - "Using the app / a feature"
+        - "Interpreting the output (what does this number mean?)"
+        - "Methodology (how is X computed?)"
+        - "Data sources / coverage"
+        - "Setup / running it locally"
+        - "Other"
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Anything that helps answer — district, what you've tried, screenshots.
+    validations:
+      required: false
