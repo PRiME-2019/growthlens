@@ -1,0 +1,63 @@
+name: Data / calculation issue
+description: A number looks wrong — weeks-of-learning, residuals, percentiles, or an import that doesn't match the source data.
+title: "[Data]: "
+labels: ["data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the app runs fine but the **output looks wrong** — e.g. a district's weeks-of-learning seems implausible, residuals don't match your own computation, or an NCE-to-z conversion is off. For crashes or blank screens, use the Bug report template instead.
+  - type: input
+    id: district
+    attributes:
+      label: District (name + DESE ID)
+      description: Which district / building is affected?
+      placeholder: "e.g. Northwest R-I (050001)"
+    validations:
+      required: true
+  - type: input
+    id: cohort
+    attributes:
+      label: Grade / subject / year
+      placeholder: "e.g. Grade 5 Math, SY2023-24"
+    validations:
+      required: true
+  - type: dropdown
+    id: metric
+    attributes:
+      label: Which metric looks wrong?
+      options:
+        - "Weeks of learning"
+        - "VAM residual / value-added estimate"
+        - "Percentile / rank"
+        - "NCE to z-score conversion"
+        - "Counts / N"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: expected-vs-observed
+    attributes:
+      label: Expected vs. observed
+      description: What value did GrowthLens show, and what did you expect? Show your source or computation if you have one.
+      placeholder: |
+        GrowthLens shows: +18.2 weeks
+        I expected: roughly +3 to +5 weeks, based on the underlying residual of ~0.12 SD
+    validations:
+      required: true
+  - type: textarea
+    id: source-data
+    attributes:
+      label: Input data details
+      description: Where did the input come from (the school-keyed VA JSON, a fresh R prep run, etc.)? Note the prep-pipeline version if known, and whether you can attach a minimal reproducing slice.
+    validations:
+      required: false
+  - type: checkboxes
+    id: data-checks
+    attributes:
+      label: Checks
+      options:
+        - label: I verified the input JSON passed gzip validation and isn't truncated.
+          required: false
+        - label: I can share a minimal anonymized data slice if needed to reproduce.
+          required: false
