@@ -1,0 +1,78 @@
+name: Bug report
+description: Something in GrowthLens is broken or behaving incorrectly (UI, auth, data load, or compute).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. GrowthLens runs entirely in the browser (DuckDB-WASM, no server-side compute), so environment details matter a lot. The more of the below you fill in, the faster this gets fixed.
+
+        Before filing, please confirm it reproduces on a hard refresh — the service worker can serve a stale build.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Where does the problem show up?
+      options:
+        - "Auth (magic link / Google OAuth / Supabase session)"
+        - "Data load (file import, DuckDB-WASM, gzip/JSON parsing)"
+        - "Compute (residuals, NCE to z, weeks-of-learning conversion)"
+        - "UI / rendering (tables, charts, layout)"
+        - "PWA / install / offline / service worker"
+        - "Other / not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what actually happened?
+      placeholder: |
+        1. Imported the district VA JSON for ...
+        2. Opened the grade 4 ELA view
+        3. Expected weeks-of-learning to render; instead the table was blank.
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console / network errors
+      description: Open DevTools (F12), check the Console and Network tabs, and paste any red errors or failed requests. For a frontend-only app this is the single most useful thing.
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: install-mode
+    attributes:
+      label: How are you running it?
+      options:
+        - "Browser tab (hosted)"
+        - "Installed PWA"
+        - "Local dev (vite)"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser & OS
+      placeholder: "e.g. Chrome 126 / macOS 14.5, or Safari 17 / iOS 17"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: App version / build
+      description: Shown in the footer or Settings, or paste the commit SHA if running locally.
+      placeholder: "e.g. v0.4.2 or commit a1b2c3d"
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Sanity checks
+      options:
+        - label: I reproduced this after a hard refresh (cleared the service worker cache).
+          required: false
+        - label: This is a crash/breakage, not a question about whether a number is correct (if it's the latter, use the Data / calculation issue template).
+          required: false
