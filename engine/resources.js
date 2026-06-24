@@ -39,9 +39,10 @@
   }
 
   // ---- finding detection ------------------------------------------------------
-  // App comparison keys → crosswalk population keys. The two race comparisons
-  // share one key and merge into a single finding.
-  const SUBGROUP_KEY = { el: 'mll', iep: 'swd', frl: 'frl', race_bw: 'race', race_hw: 'race' };
+  // App comparison keys → crosswalk population keys. Comparisons that share a
+  // key merge into one finding: the two race comparisons, and the two income
+  // measures (FRL + direct certification) all collapse to a single finding.
+  const SUBGROUP_KEY = { el: 'mll', iep: 'swd', frl: 'frl', direct_cert: 'frl', race_bw: 'race', race_hw: 'race' };
   const BANDS = { elementary: ['3', '4', '5'], middle: ['6', '7', '8'] };
   const LOW_GROWTH_FLOOR = -0.05;
 

@@ -40,6 +40,15 @@
     for (const sg of I.SUBGROUPS) {
       const A = await cells(conn, table, 'school_id', predicate(sg.a));
       const B = await cells(conn, table, 'school_id', predicate(sg.b));
+      // Optional subgroups: a file missing this column (or with no students on a
+      // side) has nothing to compare, so omit the slice entirely — the store
+      // derives the "Groups to compare" options from the keys present here, so
+      // the UI only offers splits the data actually supports. The canonical
+      // column always exists (NULL when the source header is absent), so the
+      // predicate above is valid SQL regardless.
+      const totalA = A.reduce((s, c) => s + c.n, 0);
+      const totalB = B.reduce((s, c) => s + c.n, 0);
+      if (totalA === 0 || totalB === 0) continue;
       const aById = Object.fromEntries(A.map(c => [c.g, c]));
       const bById = Object.fromEntries(B.map(c => [c.g, c]));
       // Union of both sides: a school with zero students in one group has no
@@ -179,37 +188,57 @@
         if (!stat) continue; // empty subgroup side (no students) — skip rather than spread null
         groups.push({ key, label, ...stat, outliers: sampleOutliers(stat.outliers) });
       }
+      // Both sides must be present to show a comparison — drops optional
+      // subgroups whose column the file lacks (same rule as buildGaps).
+      if (groups.length < 2) continue;
       demoData[sg.key] = { label: sg.label, groups, districtMean };
     }
     return { demoData };
   }
 
+  // School-level scatter points (status x vs residual y) from per-school cells,
+  // with the same degeneracy-guarded shrinkage everywhere. `cells` is a list of
+  // { g, n, rbar, se, status }; idx/hue keep colors stable across grade filters.
+  function schoolPointsFromCells(cells, idx, nSchoolsTotal) {
+    const fit = cells.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
+    const enough = fit.length >= 2;
+    const tau2 = enough ? S.remlTau2(fit) : 0;
+    const canShrink = enough && tau2 > 0;
+    const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
+    return cells.map((s, i) => {
+      const ix = idx ? (idx[s.g] ?? 0) : i;
+      const yShrunk = canShrink ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap : s.rbar;
+      return { school_id: s.g, school_name: s.g, school_idx: ix, hue: (ix * 360 / nSchoolsTotal) % 360,
+               x: s.status, y_raw: s.rbar, y_shrunk: yShrunk, n: s.n };
+    });
+  }
+
   async function buildAchievement(conn, table) {
     // Student points (raw only) + school points (status vs overall residual, raw + shrunk overall).
     // Rows with no status score would otherwise plot at x=0 (Number(null) === 0).
-    const students = (await conn.query(`SELECT school_id, status AS x, residual AS y FROM ${table} WHERE status IS NOT NULL`)).toArray()
-      .map((r, i) => ({ school_id: r.school_id, school_idx: 0, hue: 0, x: Number(r.x), y_raw: Number(r.y) }));
-    const schoolAgg = await (async () => {
-      const c = await cellsOverall(conn, table);
-      const fit = c.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
-      // Same degeneracy guard as buildGaps: <2 fit schools OR τ̂² = 0 → raw.
-      const enough = fit.length >= 2;
-      const tau2 = enough ? S.remlTau2(fit) : 0;
-      const canShrink = enough && tau2 > 0;
-      const pooled = S.pooledMean(fit, tau2) || { mu: 0 };
-      return c.map((s, i) => {
-        const yShrunk = canShrink
-          ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2, mu: pooled.mu }).shrunkGap
-          : s.rbar;
-        return { school_id: s.g, school_name: s.g, school_idx: i, hue: (i * 360 / c.length) % 360,
-                 x: s.status, y_raw: s.rbar, y_shrunk: yShrunk, n: s.n };
-      });
-    })();
-    const idx = Object.fromEntries(schoolAgg.map((s, i) => [s.school_id, i]));
+    // grade rides along so the page's grade filter can subset the student view.
+    const students = (await conn.query(`SELECT school_id, grade, status AS x, residual AS y FROM ${table} WHERE status IS NOT NULL`)).toArray()
+      .map((r) => ({ school_id: r.school_id, grade: r.grade == null ? null : Number(r.grade), school_idx: 0, hue: 0, x: Number(r.x), y_raw: Number(r.y) }));
+    const c = await cellsOverall(conn, table);
+    const idx = Object.fromEntries(c.map((s, i) => [s.g, i]));
+    const schoolAgg = schoolPointsFromCells(c, idx, c.length);
     students.forEach(p => { p.school_idx = idx[p.school_id] ?? 0; p.hue = (p.school_idx * 360 / schoolAgg.length) % 360; });
+
+    // Per-grade school points so the School view can filter to one grade. Each
+    // grade pools its own schools (shrinkage within grade, like the heatmap);
+    // colors reuse the all-grades idx so a school keeps its hue across grades.
+    const gradeCells = await cellsOverallByGrade(conn, table);
+    const byGradeGroups = {};
+    for (const cell of gradeCells) (byGradeGroups[cell.grade] = byGradeGroups[cell.grade] || []).push(cell);
+    const byGrade = {};
+    for (const [g, cells] of Object.entries(byGradeGroups)) {
+      // A cell with no non-null status has no x to plot — drop it from the scatter.
+      const plottable = cells.filter(s => s.status != null);
+      if (plottable.length) byGrade[g] = schoolPointsFromCells(plottable, idx, schoolAgg.length);
+    }
     return {
       student: { points: students },
-      school: { points: schoolAgg },
+      school: { points: schoolAgg, byGrade },
     };
   }
   async function cellsOverall(conn, table) {
@@ -219,6 +248,19 @@
       FROM ${table} GROUP BY school_id
     `)).toArray();
     return rows.map(r => ({ g: r.school_id ?? r.g, n: Number(r.n), rbar: Number(r.rbar), status: Number(r.status),
+      se: S.cellSE({ s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2), n: Number(r.n) }) }));
+  }
+  // Same per-school aggregate as cellsOverall, but split by grade — backs the
+  // School view's grade filter. status is null when a (school, grade) cell has
+  // no scored students (kept null, not coerced to 0, so the caller can drop it).
+  async function cellsOverallByGrade(conn, table) {
+    const rows = (await conn.query(`
+      SELECT school_id AS g, CAST(grade AS VARCHAR) AS grade, count(*) AS n, avg(residual) AS rbar,
+             var_samp(residual) AS s2, avg(residual_se*residual_se) AS ms2, avg(status) AS status
+      FROM ${table} GROUP BY school_id, grade
+    `)).toArray();
+    return rows.map(r => ({ g: r.school_id ?? r.g, grade: String(r.grade), n: Number(r.n), rbar: Number(r.rbar),
+      status: r.status == null ? null : Number(r.status),
       se: S.cellSE({ s2: r.s2 == null ? NaN : Number(r.s2), ms2: Number(r.ms2), n: Number(r.n) }) }));
   }
 

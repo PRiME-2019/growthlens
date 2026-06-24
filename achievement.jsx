@@ -28,6 +28,52 @@ function AchievementPage({ sliceLabel, ctx }) {
   );
 }
 
+// ---- grade filter helpers ---------------------------------------------------
+// The grade list comes from the School view's per-grade buckets (the engine
+// emits one per grade present); falls back to the grades on student points for
+// older shapes. Empty → no dropdown.
+function achGradeList() {
+  const ach = window.ACH_DATA;
+  const school = ach && ach.school;
+  if (school && school.byGrade) return Object.keys(school.byGrade).sort((a, b) => Number(a) - Number(b));
+  const sp = ach && ach.student && ach.student.points;
+  if (sp) return [...new Set(sp.map((p) => p.grade).filter((g) => g != null).map(String))].sort((a, b) => Number(a) - Number(b));
+  return [];
+}
+// Points for a (level, grade): all-grades uses the precomputed `points`; a grade
+// filters student points directly, or reads the School view's per-grade bucket.
+function achPointsFor(level, gradeOpt) {
+  const d = window.ACH_DATA && window.ACH_DATA[level];
+  if (!d) return [];
+  if (!gradeOpt || gradeOpt === 'all') return d.points || [];
+  if (level === 'student') return (d.points || []).filter((p) => String(p.grade) === String(gradeOpt));
+  return (d.byGrade && d.byGrade[String(gradeOpt)]) || [];
+}
+// Guard a stale selection (e.g. a grade that the new subject's data lacks after
+// a subject swap) — fall back to all grades rather than render an empty plot.
+function activeGrade(ctx) {
+  const g = (ctx && ctx.achGrade) || 'all';
+  return (g === 'all' || achGradeList().includes(String(g))) ? String(g) : 'all';
+}
+
+function GradeSelect({ value, grades, onChange }) {
+  const SLU = window.SLU;
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 11, fontFamily: window.LABEL, color: SLU.mute,
+                      textTransform: 'uppercase', letterSpacing: 1.0, fontWeight: 700 }}>Grade</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+              aria-label="Filter by grade"
+              style={{ fontFamily: window.FONT, fontSize: 12.5, fontWeight: 500, color: SLU.ink,
+                       padding: '6px 10px', borderRadius: 999, border: `1px solid ${SLU.rule}`,
+                       background: '#fff', cursor: 'pointer' }}>
+        <option value="all">All grades</option>
+        {grades.map((g) => <option key={g} value={g}>Grade {g}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // District-level context — same scaffolding as the Gap/Scan overview cards:
 // a couple of headline numbers plus generated takeaways, tracking the global
 // units/method settings.
@@ -47,9 +93,12 @@ function OverviewCardAch({ ctx }) {
     ? (Math.abs(Math.round(window.zToWeeks(v))) === 1 ? 'week' : 'weeks')
     : 'SD';
   const yOf = (p) => (mode === 'raw' || p.y_shrunk == null) ? p.y_raw : p.y_shrunk;
-  const schools = ach.school.points;
+  // Headline numbers follow the grade filter; the written takeaways below stay
+  // district-wide (all grades) — they read the full `ach` straight through.
+  const grade = activeGrade(ctx);
+  const schools = achPointsFor('school', grade);
   const above = schools.filter((p) => yOf(p) >= 0).length;
-  const studs = (ach.student && ach.student.points) || [];
+  const studs = achPointsFor('student', grade);
   const pct = studs.length ? Math.round(100 * studs.filter((p) => p.y_raw >= 0).length / studs.length) : null;
   const ds = window.GLStore && window.GLStore.getActiveMeta();
   const yr = (ds && (ds.latestYear || ds.year)) || '2024–25';
@@ -59,7 +108,7 @@ function OverviewCardAch({ ctx }) {
   const big = { fontSize: 36, fontWeight: 600, fontFamily: window.MONO,
                 color: SLU.ink, letterSpacing: -1.0, lineHeight: 1 };
   return (
-    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · score vs. growth · ${yr}`}>
+    <window.AuxCard title={`Overview · ${(ctx.subject || 'math').toUpperCase()} · score vs. growth · ${yr}${grade !== 'all' ? ` · grade ${grade}` : ''}`}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px 36px', alignItems: 'flex-start' }}>
         <div style={{ minWidth: 200 }}>
           <window.StatLabel>Schools growing faster than expected</window.StatLabel>
@@ -135,8 +184,10 @@ function AchievementFigure({ level, ctx }) {
   const [hover, setHover] = React.useState(null); // school-level tooltip
   // Drop any open tooltip when the view re-plots under it — a stale hover
   // would otherwise pin a phantom tooltip from the previous slice.
-  React.useEffect(() => { setHover(null); }, [level, ctx.subject, ctx.estimate, ctx.unit]);
+  React.useEffect(() => { setHover(null); }, [level, ctx.subject, ctx.estimate, ctx.unit, ctx.achGrade]);
   const [measureRef, measuredW] = window.useMeasuredWidth(920);
+  const grade = activeGrade(ctx);
+  const grades = achGradeList();
   const data = window.ACH_DATA && window.ACH_DATA[level];
   if (!data) {
     return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
@@ -154,14 +205,26 @@ function AchievementFigure({ level, ctx }) {
   // Cap the student view — a large district would otherwise mount tens of
   // thousands of animated SVG circles. Stride-sampling keeps the shape.
   const MAX_STUDENT_DOTS = 2000;
-  const allPoints = data.points;
+  const allPoints = achPointsFor(level, grade);
   const sampled = level === 'student' && allPoints.length > MAX_STUDENT_DOTS;
   const points = sampled
     ? allPoints.filter((_, i) => i % Math.ceil(allPoints.length / MAX_STUDENT_DOTS) === 0)
     : allPoints;
   if (points.length === 0) {
-    return <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
-                          padding: 40, color: SLU.mute, fontSize: 13 }}>No data to show yet.</div>;
+    const noun = level === 'school' ? 'schools' : 'students';
+    return (
+      <div style={{ background: '#fff', border: `1px solid ${SLU.rule2}`, borderRadius: 8,
+                    padding: 40, color: SLU.mute, fontSize: 13 }}>
+        {grade === 'all' ? 'No data to show yet.' : (
+          <>No {noun} have grade {grade} data in this dataset.{' '}
+            <button onClick={() => ctx.setAchGrade('all')}
+                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                             color: SLU.blue, fontWeight: 600, fontFamily: 'inherit', fontSize: 'inherit',
+                             textDecoration: 'underline' }}>Show all grades</button>
+          </>
+        )}
+      </div>
+    );
   }
 
   // Standardize prior achievement against this dataset's own mean / sd
@@ -267,6 +330,7 @@ function AchievementFigure({ level, ctx }) {
             expectations ({unitLabel}). The four corners split at the district average.
             <span style={{ opacity: 0.5, margin: '0 6px' }}>·</span>
             <span>
+              {grade !== 'all' && <strong style={{ color: SLU.ink2, fontWeight: 700 }}>grade {grade} · </strong>}
               {sampled
                 ? `showing ${points.length.toLocaleString()} of ${allPoints.length.toLocaleString()} students`
                 : `${points.length.toLocaleString()} ${level === 'school'
@@ -280,6 +344,9 @@ function AchievementFigure({ level, ctx }) {
           <PillToggle label="View" value={level}
                       options={[['school', 'School'], ['student', 'Student']]}
                       onChange={ctx.setAchLevel} />
+          {grades.length > 0 && (
+            <GradeSelect value={grade} grades={grades} onChange={ctx.setAchGrade} />
+          )}
           <PillToggle label="District average" value={ctx.achShowMeans !== false ? 'show' : 'hide'}
                       options={[['show', 'Show'], ['hide', 'Hide']]}
                       onChange={(v) => ctx.setAchShowMeans(v === 'show')} />

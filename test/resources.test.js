@@ -52,6 +52,22 @@ test('detectFindings: only CI-clear-of-zero negative gaps fire', () => {
   assert.deepEqual(keys, ['frl', 'race']);
 });
 
+test('detectFindings: FRL and direct certification merge into one income finding', () => {
+  const bySubject = {
+    math: {
+      gaps: {
+        frl: slice('frl', 'FRL', 'non-FRL', -0.13, [-0.21, -0.06]),                       // fires
+        direct_cert: slice('direct_cert', 'Direct cert', 'non-Direct cert', -0.16, [-0.25, -0.07]), // fires — same income key
+      },
+      heat: HEAT,
+    },
+  };
+  const out = R.detectFindings({ bySubject });
+  const income = out.filter((f) => f.subgroup === 'frl');
+  assert.equal(income.length, 1, 'one merged income finding, not two');
+  assert.deepEqual(income[0].comparisons.map((c) => c.groupA), ['FRL', 'Direct cert']);
+});
+
 test('detectFindings: the two race comparisons merge into one race finding', () => {
   const out = R.detectFindings({ bySubject: BY_SUBJECT });
   const race = out.find((f) => f.subgroup === 'race');

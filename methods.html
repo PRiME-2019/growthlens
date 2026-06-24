@@ -118,7 +118,7 @@
 <body>
 <div class="doc">
   <a class="back" href="index.html">Back to GrowthLens</a>
-  <div class="eyebrow">PRiME Center · Saint Louis University · Methods Note v0.7</div>
+  <div class="eyebrow">PRiME Center · Saint Louis University · Methods Note <span class="gl-version">v0.7</span></div>
   <h1>What GrowthLens measures, and how much to trust it</h1>
   <p class="lede">GrowthLens starts from one number the state already computes for every student and turns it into a school-by-school reading of where a district is beating expectations, where it is falling short, and where the gaps between student groups are widest. This note explains what those readings are built from, the judgment calls behind them, and where they stop being reliable.</p>
   <div class="rule"></div>
@@ -204,15 +204,30 @@
 
   <h2>10 · How to cite this</h2>
   <p>If you cite GrowthLens in a report or presentation, this form works:</p>
-  <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> v0.7 preview, 2026.</p>
+  <p class="mono" style="font-size: 13px; color: var(--ink-2); line-height: 1.7;">PRiME Center, Saint Louis University. <em>GrowthLens: an in-browser tool for descriptive analysis of district achievement data.</em> <span class="gl-version-label">v0.7 preview</span>, 2026.</p>
 
   <div class="meta-row">
     <span>PRiME Center</span>
     <span>·</span>
     <span>Saint Louis University</span>
     <span>·</span>
-    <span>Methods Note v0.7</span>
+    <span>Methods Note <span class="gl-version">v0.7</span></span>
   </div>
 </div>
+<!-- Keep the version stamps in sync with the app's changelog (single source of
+     truth). The hardcoded "v0.7" above is the fallback if the script can't load. -->
+<script src="changelog.js"></script>
+<script>
+  (function () {
+    var label = window.GL_VERSION_LABEL;                       // e.g. "v0.7 preview"
+    var bare = window.GL_VERSION ? 'v' + window.GL_VERSION : null; // e.g. "v0.7"
+    if (bare) {
+      document.querySelectorAll('.gl-version').forEach(function (el) { el.textContent = bare; });
+    }
+    if (label) {
+      document.querySelectorAll('.gl-version-label').forEach(function (el) { el.textContent = label; });
+    }
+  })();
+</script>
 </body>
 </html>

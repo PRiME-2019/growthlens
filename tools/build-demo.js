@@ -444,10 +444,35 @@ function buildAchievement() {
   }));
   const idx = Object.fromEntries(schoolPoints.map((s, i) => [s.school_id, i]));
   const studentPoints = students.map(st => ({
-    school_id: st.sid, hue: schoolPoints[idx[st.sid]].hue,
+    school_id: st.sid, grade: st.grade, hue: schoolPoints[idx[st.sid]].hue,
     x: round(st.status_z, 3), y_raw: round(st.resid, 3),
   }));
-  return { student: { points: studentPoints }, school: { points: schoolPoints } };
+  // Per-grade school points (mirror engine/compute.js buildAchievement): each
+  // grade pools its own schools with the same τ²>0 shrinkage guard, and reuses
+  // the all-grades idx/hue so a school keeps its color across grade filters.
+  const byGrade = {};
+  for (const g of GRADES) {
+    const cells = SCHOOLS.map(sc => {
+      const mine = students.filter(st => st.sid === sc.id && st.grade === g);
+      if (!mine.length) return null;
+      const c = cellStats(mine);
+      return { sc, n: c.n, rbar: c.rbar, se: c.se, status: mean(mine.map(st => st.status_z)) };
+    }).filter(Boolean);
+    if (!cells.length) continue;
+    const gfit = cells.filter(s => s.n >= MIN_N).map(s => ({ gap: s.rbar, se: s.se }));
+    const genough = gfit.length >= 2;
+    const gtau2 = genough ? S.remlTau2(gfit) : 0;
+    const gShrink = genough && gtau2 > 0;
+    const gpool = S.pooledMean(gfit, gtau2) || { mu: 0 };
+    byGrade[String(g)] = cells.map(s => ({
+      school_id: s.sc.id, school_name: SCHOOL_NAMES[s.sc.id] || s.sc.id,
+      school_idx: idx[s.sc.id], hue: schoolPoints[idx[s.sc.id]].hue,
+      x: round(s.status, 4), y_raw: round(s.rbar, 4),
+      y_shrunk: round(gShrink ? S.shrink({ rawGap: s.rbar, rawSe: s.se, tau2: gtau2, mu: gpool.mu }).shrunkGap : s.rbar, 4),
+      n: s.n,
+    }));
+  }
+  return { student: { points: studentPoints }, school: { points: schoolPoints, byGrade } };
 }
 
 // ---- serialize -------------------------------------------------------------

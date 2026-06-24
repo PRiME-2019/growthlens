@@ -50,9 +50,12 @@ function districtMeanRE(schools, tauSquared) {
 }
 window.districtMeanRE = districtMeanRE;
 const DEMOS = {
-  frl:     'FRL · economically disadvantaged',
+  frl:         'FRL · economically disadvantaged',
+  direct_cert: 'Direct cert · directly certified for meals',
   iep:     'IEP · students with disabilities',
   el:      'EL · English learners',
+  gifted:  'Gifted · gifted & talented',
+  gender:  'Gender · Female vs. Male',
   race_bw: 'Race · Black vs. White',
   race_hw: 'Race · Hispanic vs. White',
 };
@@ -77,6 +80,12 @@ function loadAnalysisPrefs() {
   catch { return {}; }
 }
 
+// Version announcement: the changelog file is the source of truth for the
+// current version; we store the last version a visitor dismissed so the
+// "what's new" banner only reappears when there's something new to see.
+const CURRENT_VERSION = (window.GL_RELEASE && window.GL_RELEASE.version) || null;
+const SEEN_VERSION_KEY = 'gl-seen-version';
+
 function AppBody() {
   const [page, setPage]           = React.useState('landing');
   const [subject, setSubjectState] = React.useState(() =>
@@ -97,11 +106,33 @@ function AppBody() {
   // demoVar is gone too — Demographics shows every group at once.
   const [achLevel, setAchLevel]   = React.useState('school');
   const [achShowMeans, setAchShowMeans] = React.useState(true);
+  // Scores-vs-growth grade filter ('all' or a grade string like '5'). Not
+  // persisted — it's a transient lens on one page, and which grades exist
+  // depends on the loaded dataset.
+  const [achGrade, setAchGrade] = React.useState('all');
   // Bumped by the Upload page when data lands or is removed, so the shell
   // (DatasetStrip, store re-pointing, availability) refreshes without waiting
   // for a navigation.
   const [, setDataRev] = React.useState(0);
   const bumpDataRev = React.useCallback(() => setDataRev((r) => r + 1), []);
+
+  // Version + "what's new" announcement. The changelog (window.GL_CHANGELOG) is
+  // the single source of truth for the current version; we remember the last
+  // version a visitor acknowledged in localStorage and surface a dismissible
+  // banner whenever the live version is newer (or on a first-ever visit). No
+  // student data is involved — this is the same UI-preference channel as prefs.
+  const [showChangelog, setShowChangelog] = React.useState(false);
+  const [seenVersion, setSeenVersion] = React.useState(() => {
+    try { return localStorage.getItem(SEEN_VERSION_KEY); } catch { return null; }
+  });
+  const hasUpdate = !!CURRENT_VERSION && seenVersion !== CURRENT_VERSION;
+  const markVersionSeen = React.useCallback(() => {
+    try { localStorage.setItem(SEEN_VERSION_KEY, CURRENT_VERSION); } catch { /* private mode */ }
+    setSeenVersion(CURRENT_VERSION);
+  }, []);
+  // Opening the changelog counts as acknowledging the current version.
+  const openChangelog = React.useCallback(() => { setShowChangelog(true); markVersionSeen(); }, [markVersionSeen]);
+  const closeChangelog = React.useCallback(() => setShowChangelog(false), []);
 
   // Seed the bundled Math demo once (reads the window.* fixtures), then point
   // the well-known window.* globals at the active (subject, subgroup) via the
@@ -169,7 +200,9 @@ function AppBody() {
     estimate, setEstimate, unit, setUnit,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
+    achGrade, setAchGrade,
     bumpDataRev,
+    hasUpdate, openChangelog, markVersionSeen,
   };
 
   const sliceLabel = `${SUBJECTS[subject]} · ${DEMOS[demo].split(' · ')[0]}`;
@@ -203,6 +236,7 @@ function AppBody() {
         {page === 'resources'    && window.ResourcesPage    && <window.ResourcesPage    ctx={ctx} />}
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
+      {showChangelog && <ChangelogModal onClose={closeChangelog} />}
     </div>
   );
 }
@@ -431,6 +465,109 @@ function LandingCard({ eyebrow, title, body, cta, onClick, accent }) {
   );
 }
 
+// "What's new" announcement, shown on the landing page until the visitor opens
+// the changelog or dismisses it. Acknowledging it stores the current version so
+// it won't reappear until the next release.
+function AnnouncementBanner({ ctx }) {
+  const rel = window.GL_RELEASE || {};
+  return (
+    <div role="status" style={{
+      display: 'flex', alignItems: 'flex-start', gap: 12,
+      padding: '11px 14px', borderRadius: 8,
+      background: 'rgba(0, 61, 165, 0.06)', border: `1px solid rgba(0, 61, 165, 0.18)`,
+    }}>
+      <span aria-hidden="true" style={{
+        flex: 'none', marginTop: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 22, height: 22, borderRadius: '50%', background: SLU.blue, color: '#fff',
+        fontFamily: LABEL, fontWeight: 700, fontSize: 13, lineHeight: 1,
+      }}>✦</span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: SLU.ink, letterSpacing: -0.1 }}>
+          GrowthLens {window.GL_VERSION_LABEL || ('v' + (rel.version || ''))} is here{rel.title ? ` — ${rel.title}` : ''}
+        </div>
+        <div style={{ marginTop: 2, fontSize: 12.5, lineHeight: 1.5, color: SLU.ink2 }}>
+          <button type="button" onClick={ctx.openChangelog}
+            style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+                     fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 700,
+                     color: SLU.blue, textDecoration: 'underline' }}>
+            See what’s new
+          </button>
+          {' '}since your last visit.
+        </div>
+      </div>
+      <button type="button" onClick={ctx.markVersionSeen} aria-label="Dismiss update notice"
+        style={{ flex: 'none', border: 'none', background: 'none', cursor: 'pointer',
+                 color: SLU.mute, fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+    </div>
+  );
+}
+
+// Full release history, opened from the version badge or the announcement.
+function ChangelogModal({ onClose }) {
+  const releases = window.GL_CHANGELOG || [];
+  // Close on Escape; restore nothing fancy — the overlay click also closes.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label="What's new in GrowthLens"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(26, 27, 31, 0.45)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: '6vh 16px 16px', overflowY: 'auto',
+      }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 'min(640px, 100%)', background: '#fff', borderRadius: 12,
+        boxShadow: '0 20px 60px rgba(26, 27, 31, 0.30)',
+        border: `1px solid ${SLU.rule2}`, overflow: 'hidden',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      gap: 12, padding: '16px 20px', borderBottom: `1px solid ${SLU.rule2}` }}>
+          <div>
+            <div style={{ fontFamily: LABEL, fontSize: 10.5, fontWeight: 700, color: SLU.mute,
+                          textTransform: 'uppercase', letterSpacing: 1.4 }}>What’s new</div>
+            <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 600, color: SLU.ink,
+                          letterSpacing: -0.3, lineHeight: 1.1 }}>Release history</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            style={{ flex: 'none', border: 'none', background: 'none', cursor: 'pointer',
+                     color: SLU.mute, fontSize: 24, lineHeight: 1, padding: '0 2px' }}>×</button>
+        </div>
+        <div style={{ padding: '4px 20px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
+          {releases.map((rel, i) => (
+            <section key={rel.version} style={{
+              padding: '16px 0',
+              borderTop: i === 0 ? 'none' : `1px solid ${SLU.rule2}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '2px 8px', borderRadius: 4,
+                  background: i === 0 ? 'rgba(0, 61, 165, 0.10)' : SLU.rule2,
+                  color: i === 0 ? SLU.blue : SLU.ink2,
+                  fontFamily: LABEL, fontSize: 11, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: 0.8, whiteSpace: 'nowrap',
+                }}>v{rel.version}{rel.stage ? ` ${rel.stage}` : ''}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: SLU.ink, letterSpacing: -0.2 }}>{rel.title}</span>
+                {rel.date && <span style={{ marginLeft: 'auto', fontSize: 11.5, color: SLU.mute, fontFamily: LABEL }}>{rel.date}</span>}
+              </div>
+              <ul style={{ margin: '10px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(rel.items || []).map((it, j) => (
+                  <li key={j} style={{ fontSize: 13.5, lineHeight: 1.5, color: SLU.ink2, textWrap: 'pretty' }}>{it}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverviewPage({ ctx }) {
   // Seed from the store so navigating away and back doesn't show "Waiting for
   // file" over data that is still loaded and driving every figure.
@@ -540,15 +677,18 @@ function OverviewPage({ ctx }) {
   const anyReady = stages.ela === 'ready' || stages.math === 'ready';
   return (
     <>
+      {ctx.hasUpdate && <AnnouncementBanner ctx={ctx} />}
       <header style={{ display: 'flex', flexDirection: 'column',
                        alignItems: 'flex-start', gap: 10, paddingBottom: 4 }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '4px 9px', borderRadius: 4,
-          background: 'rgba(0, 61, 165, 0.08)', color: SLU.blue,
-          fontSize: 11, fontFamily: LABEL, fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: 1.0, whiteSpace: 'nowrap',
-        }}>GrowthLens · v0.7 preview</span>
+        <button type="button" onClick={ctx.openChangelog}
+          title="See what's new in this release"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 9px', borderRadius: 4, border: 'none', cursor: 'pointer',
+            background: 'rgba(0, 61, 165, 0.08)', color: SLU.blue,
+            fontSize: 11, fontFamily: LABEL, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: 1.0, whiteSpace: 'nowrap',
+          }}>GrowthLens · {window.GL_VERSION_LABEL || 'v0.7 preview'}</button>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: SLU.ink,
                      letterSpacing: -0.5, lineHeight: 1.12, textWrap: 'balance',
                      maxWidth: 760 }}>
@@ -673,8 +813,11 @@ function OverviewPage({ ctx }) {
         <AuxCard title="What your file should include" collapsible defaultOpen>
           <p style={{ margin: '0 0 10px', fontSize: 12.5, color: SLU.mute, lineHeight: 1.5 }}>
             This is the standard Missouri DESE / MOSIS growth export — one file per subject, and
-            most assessment systems can produce it. GrowthLens figures out the subject from the
-            growth column’s prefix (<code style={{ fontFamily: MONO }}>{'{SUBJECT}'}</code> is{' '}
+            most assessment systems can produce it. Upload it just as it downloads — the
+            tab-delimited <code style={{ fontFamily: MONO }}>.txt</code> works directly, as does a{' '}
+            <code style={{ fontFamily: MONO }}>.csv</code>, so there’s no need to open it in Excel first.
+            GrowthLens figures out the subject from the growth column’s prefix
+            (<code style={{ fontFamily: MONO }}>{'{SUBJECT}'}</code> is{' '}
             <code style={{ fontFamily: MONO }}>MATH</code> or <code style={{ fontFamily: MONO }}>COMM_ARTS</code>),
             so you don’t need a separate subject column. Column names don’t have to match upper- or
             lower-case exactly.
@@ -706,6 +849,10 @@ function OverviewPage({ ctx }) {
                   small to read reliably are flagged so you don’t over-interpret them. And
                   the numbers describe what’s happening, not why — use them to ask sharper
                   questions, not to assign blame.</>,
+            },
+            {
+              q: 'Do I need to convert the file to CSV first?',
+              a: <>No. Drop in the DESE growth export exactly as it downloads — the tab-delimited <code style={{ fontFamily: MONO }}>.txt</code> loads directly, and so does a <code style={{ fontFamily: MONO }}>.csv</code> if you already have one. There’s no need to open it in Excel and re-save it.</>,
             },
             {
               q: 'Where does my data go?',
@@ -805,7 +952,7 @@ function SubjectDropZone({ subjectKey, subjectLabel, accent, stage, setStage, fi
           {ready ? 'Replace' : 'Choose file'}
           {/* Visually hidden (not display:none) so keyboard users can Tab to it
               and press Enter to open the file picker. */}
-          <input type="file" accept=".csv,text/csv"
+          <input type="file" accept=".txt,.csv,text/plain,text/csv,text/tab-separated-values"
                  aria-label={`Choose ${subjectLabel} file`}
                  style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
                           overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}

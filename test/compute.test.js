@@ -23,14 +23,20 @@ function fakeConn(rows) {
 
       let out;
       if (/GROUP BY school_id, grade/.test(s)) {
+        // Serves both buildHeatmap (reads school_id) and cellsOverallByGrade
+        // (reads g + status), so emit both id aliases and a status mean.
         const g = {};
         for (const r of filtered) (g[`${r.school_id}|${r.grade}`] = g[`${r.school_id}|${r.grade}`] || []).push(r);
-        out = Object.entries(g).map(([k, rs]) => ({
-          school_id: k.split('|')[0], grade: String(k.split('|')[1]),
-          n: rs.length, rbar: mean(rs.map((r) => r.residual)),
-          s2: varSamp(rs.map((r) => r.residual)),
-          ms2: mean(rs.map((r) => r.residual_se ** 2)),
-        }));
+        out = Object.entries(g).map(([k, rs]) => {
+          const st = rs.filter((r) => r.status != null).map((r) => r.status);
+          return {
+            school_id: k.split('|')[0], g: k.split('|')[0], grade: String(k.split('|')[1]),
+            n: rs.length, rbar: mean(rs.map((r) => r.residual)),
+            s2: varSamp(rs.map((r) => r.residual)),
+            ms2: mean(rs.map((r) => r.residual_se ** 2)),
+            status: st.length ? mean(st) : null,
+          };
+        });
       } else if (/GROUP BY school_id/.test(s)) {
         const g = {};
         for (const r of filtered) (g[r.school_id] = g[r.school_id] || []).push(r);
@@ -43,8 +49,8 @@ function fakeConn(rows) {
         }));
       } else if (/SELECT avg\(residual\) AS m/.test(s)) {
         out = [{ m: filtered.length ? mean(filtered.map((r) => r.residual)) : null }];
-      } else if (/SELECT school_id, status AS x, residual AS y/.test(s)) {
-        out = filtered.map((r) => ({ school_id: r.school_id, x: r.status, y: r.residual }));
+      } else if (/SELECT school_id, grade, status AS x, residual AS y/.test(s)) {
+        out = filtered.map((r) => ({ school_id: r.school_id, grade: r.grade, x: r.status, y: r.residual }));
       } else if (/SELECT residual FROM/.test(s)) {
         out = filtered.map((r) => ({ residual: r.residual }));
       } else {
@@ -104,6 +110,26 @@ test('computeSlice: emits all five comparisons with focal − reference signs', 
     assert.ok(Array.isArray(s.raw_ci95) && Array.isArray(s.shrunk_ci95));
     assert.ok(s.shrinkage_factor >= 0 && s.shrinkage_factor <= 1);
   }
+});
+
+test('computeSlice: optional gender/gifted slices appear only when the data carries them', async () => {
+  // Same rows as the base fixture, but now each student also has gender + gifted
+  // populated. The skip-empty-side rule should surface both new comparisons.
+  const rows = makeRows({});
+  rows.forEach((r, i) => { r.female = i % 2 === 0; r.male = !r.female; r.gifted = i % 6 === 0; r.direct_cert = i % 3 === 0; });
+  const C = freshCompute(rows);
+  const out = await C.computeSlice('math');
+  assert.deepEqual(Object.keys(out.GAPS_DATA_BY_DEMO).sort(),
+    ['direct_cert', 'el', 'frl', 'gender', 'gifted', 'iep', 'race_bw', 'race_hw']);
+  assert.equal(out.GAPS_DATA_BY_DEMO.direct_cert.meta.groupA, 'Direct cert');
+  assert.equal(out.GAPS_DATA_BY_DEMO.direct_cert.meta.groupB, 'non-Direct cert');
+  assert.equal(out.GAPS_DATA_BY_DEMO.gender.meta.groupA, 'Female');
+  assert.equal(out.GAPS_DATA_BY_DEMO.gender.meta.groupB, 'Male');
+  assert.equal(out.GAPS_DATA_BY_DEMO.gifted.meta.groupA, 'Gifted');
+  assert.equal(out.GAPS_DATA_BY_DEMO.gifted.meta.groupB, 'non-Gifted');
+  // And they flow through to the demographics box-plot data too.
+  assert.ok(out.DEMO_DATA.gender && out.DEMO_DATA.gender.groups.length === 2);
+  assert.ok(out.DEMO_DATA.gifted && out.DEMO_DATA.gifted.groups.length === 2);
 });
 
 test('computeSlice: heatmap cells shrink toward their grade pool; Overall matches Status & Growth', async () => {
@@ -232,6 +258,28 @@ test('computeSlice: zero reliable schools → district gap is null, not a fabric
   for (const s of out.GAPS_DATA_BY_DEMO.frl.schools) {
     assert.ok(Number.isFinite(s.raw_gap));
     assert.equal(s.shrinkage_factor, 1);
+  }
+});
+
+test('computeSlice: achievement carries grade on student points and per-grade school buckets', async () => {
+  const rows = makeRows({});
+  const C = freshCompute(rows);
+  const out = await C.computeSlice('math');
+  // Student points carry their grade for the per-student grade filter.
+  const withStatus = rows.filter((r) => r.status != null);
+  assert.equal(out.ACH_DATA.student.points.length, withStatus.length);
+  assert.ok(out.ACH_DATA.student.points.every((p) => p.grade >= 3 && p.grade <= 8));
+  // School view gains a byGrade bucket per grade present (makeRows spans 3–8).
+  const byGrade = out.ACH_DATA.school.byGrade;
+  assert.ok(byGrade && typeof byGrade === 'object');
+  assert.deepEqual(Object.keys(byGrade).sort(), ['3', '4', '5', '6', '7', '8']);
+  // Each grade-5 school point has the scatter fields, and hue matches the
+  // all-grades point for the same school (stable color across the filter).
+  const allById = Object.fromEntries(out.ACH_DATA.school.points.map((p) => [p.school_id, p]));
+  for (const p of byGrade['5']) {
+    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y_raw) && Number.isFinite(p.y_shrunk));
+    assert.ok(p.n > 0);
+    assert.equal(p.hue, allById[p.school_id].hue);
   }
 });
 

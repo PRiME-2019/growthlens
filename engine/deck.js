@@ -26,8 +26,11 @@
     const sections = [];
     const groupsOf = (key) => (dd[key] && dd[key].groups) || [];
     if (groupsOf('frl').length) sections.push({ title: 'Income', groups: groupsOf('frl') });
+    if (groupsOf('direct_cert').length) sections.push({ title: 'Direct certification', groups: groupsOf('direct_cert') });
     if (groupsOf('iep').length) sections.push({ title: 'Disability', groups: groupsOf('iep') });
     if (groupsOf('el').length) sections.push({ title: 'Language', groups: groupsOf('el') });
+    if (groupsOf('gifted').length) sections.push({ title: 'Gifted', groups: groupsOf('gifted') });
+    if (groupsOf('gender').length) sections.push({ title: 'Gender', groups: groupsOf('gender') });
     const raceKeys = ['race_bw', 'race_hw'].filter((k) => groupsOf(k).length);
     if (raceKeys.length) {
       const counts = {};
@@ -41,7 +44,7 @@
       }));
       sections.push({ title: 'Race', groups: [...focal, ...shared] });
     }
-    const known = new Set(['frl', 'iep', 'el', 'race_bw', 'race_hw']);
+    const known = new Set(['frl', 'direct_cert', 'iep', 'el', 'gifted', 'gender', 'race_bw', 'race_hw']);
     for (const [key, v] of Object.entries(dd)) {
       if (known.has(key) || !v || !v.groups || !v.groups.length) continue;
       sections.push({ title: v.label || key, groups: v.groups });
@@ -49,7 +52,7 @@
     return sections;
   }
 
-  const GAP_KEYS = ['frl', 'iep', 'el', 'race_bw', 'race_hw'];
+  const GAP_KEYS = ['frl', 'direct_cert', 'iep', 'el', 'gifted', 'gender', 'race_bw', 'race_hw'];
   const isReliable = (m) => !!(m && m.districtCi95 && (m.districtCi95[0] > 0 || m.districtCi95[1] < 0));
 
   // One table row per comparison the data carries. `reliable` drives the
