@@ -39,6 +39,21 @@ test('weeksPerSD: grade-average when no grade given', () => {
   const avgEs = (0.44 + 0.46 + 0.48 + 0.50 + 0.52) / 5; // 2025 math grades 4–8
   assert.ok(Math.abs(U.weeksPerSD(CF, { year: 2025, subject: 'math' }) - 38 / avgEs) < 1e-9);
 });
+test('weeksPerSD: string grade resolves its exact factor, not the average', () => {
+  // Regression: grade context often travels as object keys (strings) — the
+  // scan overview and insights takeaways were converting with the grade
+  // average while the heatmap cells used exact factors, so weeks mode
+  // disagreed between the overview card and the table.
+  assert.ok(Math.abs(U.weeksPerSD(CF, { year: 2025, subject: 'math', grade: '4' }) - 38 / 0.44) < 1e-9);
+  assert.equal(
+    U.weeksPerSD(CF, { year: 2025, subject: 'math', grade: '7' }),
+    U.weeksPerSD(CF, { year: 2025, subject: 'math', grade: 7 }));
+});
+test('weeksPerSD: non-numeric grade falls back to the grade average', () => {
+  assert.equal(
+    U.weeksPerSD(CF, { year: 2025, subject: 'math', grade: 'all' }),
+    U.weeksPerSD(CF, { year: 2025, subject: 'math' }));
+});
 test('weeksPerSD: unknown grade (3) falls back to the grade average', () => {
   assert.equal(
     U.weeksPerSD(CF, { year: 2025, subject: 'math', grade: 3 }),

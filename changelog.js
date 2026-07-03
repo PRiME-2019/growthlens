@@ -22,6 +22,16 @@
 //                         the person using the tool, not the commit messages.
 window.GL_CHANGELOG = [
   {
+    version: '0.72',
+    date: '2026-07-02',
+    stage: 'preview',
+    title: 'Weeks-of-learning numbers now agree everywhere',
+    items: [
+      'Fixed: with units set to weeks of learning, the per-grade numbers in the Growth by school & grade overview and key takeaways (in the app and in exported decks) converted with a grades 4–8 average factor instead of each grade’s own, so they could disagree with the heat map. Easiest to spot in one-school districts, where the overview now matches the school’s row exactly.',
+      'Numbers shown in SD (standard scale) were never affected.',
+    ],
+  },
+  {
     version: '0.71',
     date: '2026-06-23',
     stage: 'preview',

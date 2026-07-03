@@ -41,8 +41,12 @@
     const matches = cf.factors.filter(f => f.year === useYear && f.subject === subject);
 
     let es = null;
-    if (grade != null) {
-      const exact = matches.find(f => f.grade === grade);
+    // Grades often arrive as strings (object keys — heatmap grade maps,
+    // Object.entries in insights); match numerically so '6' and 6 resolve the
+    // same factor instead of silently averaging.
+    const g = grade == null ? NaN : Number(grade);
+    if (Number.isFinite(g)) {
+      const exact = matches.find(f => f.grade === g);
       if (exact) es = exact.annual_growth_effect_size;
     }
     if (es == null) {
