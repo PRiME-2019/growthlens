@@ -5,6 +5,12 @@
   Subject line: Your GrowthLens sign-in code
   Email-safe: single table, inline CSS only, no webfonts (Georgia stands in
   for Crimson Pro).
+
+  DELIBERATELY LINK-FREE — do not add {{ .ConfirmationURL }} back. Outlook
+  SafeLinks (and similar corporate scanners) rewrite and PREFETCH links; a
+  prefetched magic link is consumed before the human clicks it, which breaks
+  sign-in with "token expired or invalid". A typed code gives scanners nothing
+  to click. The panel's code boxes are the only sign-in path by design.
 -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F7F7F8;padding:32px 12px;">
   <tr>
@@ -26,7 +32,7 @@
         </tr>
         <tr>
           <td align="center" style="padding:18px 36px 6px 36px;">
-            <div style="display:inline-block;background-color:#F0F4FB;border-radius:10px;padding:14px 28px;font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:bold;letter-spacing:8px;color:#003DA5;">{{ .Token }}</div>
+            <div style="display:inline-block;background-color:#F0F4FB;border-radius:10px;padding:14px 24px;font-family:'Courier New',Courier,monospace;font-size:30px;font-weight:bold;letter-spacing:6px;color:#003DA5;">{{ .Token }}</div>
           </td>
         </tr>
         <tr>

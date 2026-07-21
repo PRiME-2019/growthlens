@@ -24,11 +24,16 @@ Andrew can do. Order matters only where noted.
 5. Quick check: the panel's **Publish to site** button should now start the
    workflow (verify on the repo's Actions tab) rather than returning an error.
 
-## 3. Email template
+## 3. Email template + OTP settings
 
 6. Supabase Dashboard → **Authentication → Email Templates → Magic Link** →
    - Subject: `Your GrowthLens sign-in code`
    - Body: paste `docs/runbooks/otp-email.html` (keep `{{ .Token }}` intact).
+   - **Keep the template link-free** — no `{{ .ConfirmationURL }}`. Outlook
+     SafeLinks prefetches links and can consume a one-time link before it's
+     clicked; the typed code is the only sign-in path on purpose. The
+     panel's `OTP_LENGTH` constant (admin.jsx) must match the **Email OTP
+     length** auth setting — both are 8 as of 2026-07-21.
 
 ## 4. Resend SMTP
 

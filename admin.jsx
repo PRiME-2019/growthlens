@@ -24,6 +24,8 @@ const LABEL = '"Archivo Narrow", "Mulish", sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, Consolas, monospace';
 
 const ADMIN_EMAIL_KEY = 'gl:admin-email';
+// Must match Supabase Auth → Email OTP length (set to 8, 2026-07-21).
+const OTP_LENGTH = 8;
 
 // Column orders MUST match tools/publish-resources.js — the diff badge and
 // the published CSVs depend on identical ordering.
@@ -66,10 +68,11 @@ function ErrLine({ children }) {
 
 function CodeBoxes({ value, onChange, onComplete }) {
   const refs = React.useRef([]);
+  const last = OTP_LENGTH - 1;
   const set = (next) => {
-    const clean = next.replace(/\D/g, '').slice(0, 6);
+    const clean = next.replace(/\D/g, '').slice(0, OTP_LENGTH);
     onChange(clean);
-    if (clean.length === 6) onComplete(clean);
+    if (clean.length === OTP_LENGTH) onComplete(clean);
   };
   const handleKey = (i, e) => {
     if (e.key === 'Backspace' && !value[i] && i > 0) refs.current[i - 1].focus();
@@ -77,29 +80,29 @@ function CodeBoxes({ value, onChange, onComplete }) {
   const handleChange = (i, e) => {
     const d = e.target.value.replace(/\D/g, '');
     if (!d) { set(value.slice(0, i)); return; }
-    const next = (value.slice(0, i) + d + value.slice(i + 1)).slice(0, 6);
+    const next = (value.slice(0, i) + d + value.slice(i + 1)).slice(0, OTP_LENGTH);
     set(next);
-    const focusAt = Math.min(i + d.length, 5);
+    const focusAt = Math.min(i + d.length, last);
     if (refs.current[focusAt]) refs.current[focusAt].focus();
   };
   const handlePaste = (e) => {
     e.preventDefault();
-    const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+    const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, OTP_LENGTH);
     set(digits);
-    const at = Math.min(digits.length, 5);
+    const at = Math.min(digits.length, last);
     if (refs.current[at]) refs.current[at].focus();
   };
   return (
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }} onPaste={handlePaste}>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }} onPaste={handlePaste}>
+      {Array.from({ length: OTP_LENGTH }, (_, i) => (
         <input key={i} ref={(el) => { refs.current[i] = el; }}
           inputMode="numeric" autoComplete="one-time-code" maxLength={2}
           aria-label={`Digit ${i + 1}`}
           value={value[i] || ''}
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKey(i, e)}
-          style={{ width: 42, height: 52, textAlign: 'center', fontFamily: MONO,
-                   fontSize: 22, fontWeight: 600, color: ADMIN.ink,
+          style={{ width: 36, height: 48, textAlign: 'center', fontFamily: MONO,
+                   fontSize: 20, fontWeight: 600, color: ADMIN.ink,
                    border: `1.5px solid ${ADMIN.rule}`, borderRadius: 8 }} />
       ))}
     </div>
@@ -152,7 +155,7 @@ function LoginCard() {
   return (
     <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center',
                   justifyContent: 'center', padding: 16 }}>
-      <div style={{ width: 'min(400px, 100%)', background: '#fff', borderRadius: 12,
+      <div style={{ width: 'min(440px, 100%)', background: '#fff', borderRadius: 12,
                     border: `1px solid ${ADMIN.rule2}`,
                     boxShadow: '0 20px 60px rgba(26, 27, 31, 0.10)', overflow: 'hidden' }}>
         <div style={{ height: 3, background: ADMIN.goldLight }} />
@@ -183,7 +186,7 @@ function LoginCard() {
           ) : (
             <>
               <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: ADMIN.ink2 }}>
-                We sent a 6-digit code to <strong>{email.trim()}</strong>. It expires in an hour.
+                We sent an {OTP_LENGTH}-digit code to <strong>{email.trim()}</strong>. It expires in an hour.
               </p>
               <CodeBoxes value={code} onChange={setCode} onComplete={verify} />
               <ErrLine>{err}</ErrLine>

@@ -145,6 +145,16 @@ Auth SMTP settings → sender `no-reply@<your-domain>` → test. Rate-limit note
 5. Live smoke: OTP login, view summary, edit a field, Publish, watch the
    Action run and Netlify deploy, revert the edit, Publish again.
 
+## Amendment (2026-07-21): 8-digit OTP, link-free email
+
+Andrew set Supabase's Email OTP length to **8** and reported Outlook's link
+cleaning mangling Supabase's default sign-in links. Changes: the code entry is
+driven by an `OTP_LENGTH = 8` constant (boxes, paste, auto-verify, copy), and
+the email template is **deliberately link-free** — no `{{ .ConfirmationURL }}`
+— because Outlook SafeLinks rewrites and prefetches links, and a prefetched
+one-time link is consumed before the human clicks it. The typed code is the
+only sign-in path; scanners can't consume a plain-text code.
+
 ## Out of scope (deliberate)
 
 - Multi-admin roles; audit log of edits (Postgres has `updated_at` only).
