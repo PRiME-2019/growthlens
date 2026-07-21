@@ -170,5 +170,51 @@
     };
   }
 
-  return { IDENTITY_KEY, MAX_STR, truncate, sanitizeProps, filterDistricts, createClient };
+  // ---- Browser bootstrap ----------------------------------------------------
+  // Supabase project credentials. The anon key is public by design — RLS
+  // allows it to INSERT into public.events and nothing else (see the spec).
+  // Empty until the Supabase project exists; the client drops batches
+  // silently while unconfigured, so the app behaves identically either way.
+  const SUPABASE_URL = '';
+  const SUPABASE_ANON_KEY = '';
+
+  const FLUSH_MS = 30000;
+  let singleton = null;
+
+  function start() {
+    if (typeof window === 'undefined' || !window.document) return null;
+    if (singleton) return singleton;
+    let storage;
+    try { storage = window.localStorage; } catch { storage = null; }
+    singleton = createClient({
+      fetchFn: (u, o) => window.fetch(u, o),
+      storage: storage || { getItem: () => null, setItem: () => {} },
+      uuid: () => (window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : 'no-uuid-' + String(Math.random()).slice(2)),
+      // window.GL_TELEMETRY_URL / _KEY are test seams (Playwright sets them
+      // before load to intercept sends); production uses the constants.
+      url: window.GL_TELEMETRY_URL || SUPABASE_URL,
+      key: window.GL_TELEMETRY_KEY || SUPABASE_ANON_KEY,
+      version: window.GL_VERSION || null,
+    });
+    singleton.init();
+    window.setInterval(() => singleton.flush(), FLUSH_MS);
+    window.document.addEventListener('visibilitychange', () => {
+      if (window.document.visibilityState === 'hidden') singleton.flush({ keepalive: true });
+    });
+    return singleton;
+  }
+
+  return {
+    IDENTITY_KEY, MAX_STR, truncate, sanitizeProps, filterDistricts, createClient,
+    start,
+    log: (event, props) => { if (singleton) singleton.log(event, props); },
+    flush: () => (singleton ? singleton.flush() : Promise.resolve()),
+    getIdentity: () => (singleton ? singleton.getIdentity() : null),
+    needsPrompt: () => (singleton ? singleton.needsPrompt() : false),
+    setIdentity: (v) => { if (singleton) singleton.setIdentity(v); },
+    setOptOut: (v) => { if (singleton) singleton.setOptOut(v); },
+    dismissPrompt: () => { if (singleton) singleton.dismissPrompt(); },
+  };
 });

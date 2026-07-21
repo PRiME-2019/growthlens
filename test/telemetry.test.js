@@ -196,3 +196,17 @@ test('client: corrupted localStorage JSON is survived', () => {
   assert.equal(c.needsPrompt(), true);
   assert.ok(c.getIdentity().deviceId);
 });
+
+// ---- browser bootstrap (Node-side safety) -----------------------------------
+
+test('module: requiring without a window is safe; start() is a no-op returning null', () => {
+  assert.equal(typeof T.start, 'function');
+  assert.equal(T.start(), null);
+});
+test('module: pre-start delegates are safe no-ops', async () => {
+  assert.doesNotThrow(() => T.log('page_view', { page: 'scan' }));
+  assert.equal(T.getIdentity(), null);
+  assert.equal(T.needsPrompt(), false);
+  assert.doesNotThrow(() => T.dismissPrompt());
+  await T.flush(); // resolves without a singleton
+});
