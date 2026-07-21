@@ -203,3 +203,47 @@ payload, opt-out silences logging, reopening via chip works.
 - Rate limiting / abuse hardening beyond insert-only RLS.
 - Multi-year identity migration (localStorage shape is versioned by key name
   `gl:identity`; a future change mints a new key).
+
+## Amendment (2026-07-20): resources workbench + publish pipeline
+
+Approved in-session after the telemetry implementation. The future admin panel
+must manage the evidence resources, which today live as two same-origin CSVs:
+`reference/evidence_resources.csv` (curated links) and
+`reference/evidence_crosswalk.csv` (finding → resource matching rules, FK to
+resources). `engine/resources.js` parses both in-browser.
+
+**Architecture decision — static serving, Supabase workbench.** The app keeps
+reading the static CSVs (fast, cached, same-origin, immune to a paused free
+project). Supabase holds the *editable copy*: `resources` and
+`resource_crosswalk` tables mirroring the CSV columns, plus `position`
+(preserves file ordering exactly) and `updated_at`. A paused project breaks
+nothing user-facing — only editing.
+
+**RLS:** anon + authenticated get SELECT (the content is public in the repo
+already; anon read also lets the publish workflow use the anon key instead of
+the service-role key). `authenticated` gets full write — the admin panel
+later; Supabase Table Editor until then.
+
+**One-pass console setup:** the whole SQL — events table, resource tables,
+policies, and seed INSERTs generated from the current CSVs — lives in a
+committed `supabase/schema.sql`. Console session = create project → paste one
+file → auth settings → copy keys.
+
+**Publish pipeline (GitHub-API commit):** `tools/publish-resources.js`
+(dependency-free Node, CJS like the other tools) fetches both tables ordered
+by `position` and rewrites the two CSVs in the exact all-quoted dialect
+`engine/resources.js` parses (LF line endings, trailing newline — matching
+the git blobs). `.github/workflows/publish-resources.yml`
+(`workflow_dispatch`) runs it and commits only when the files changed, using
+the built-in `GITHUB_TOKEN` with `contents: write` — no PAT. Netlify deploys
+the push. The admin panel's future Publish button triggers this workflow.
+
+**Tests:** round-trip (`parseCsv(writeCsv(rows))` returns the rows) and
+fidelity (parsing each current CSV and re-writing it reproduces the file
+byte-for-byte after CRLF normalization) — proving the workbench → publish
+path lossless before the console is ever touched.
+
+**Accepted trade-offs:** the workflow can only be verified end-to-end after
+the approved push; triggering stays manual (GitHub UI / `gh workflow run`)
+until the admin panel exists; `updated_at` is set on insert only until the
+panel manages updates.

@@ -1053,34 +1053,11 @@ git commit -m "docs: disclose usage logging in README, FAQ, methods note; change
 
 - [ ] **Step 1: Create the project** at supabase.com — org: personal, name `growthlens`, region: a US region, free tier. Note the **Project URL** and the **anon public key** (Settings → API).
 
-- [ ] **Step 2: Run the schema** in SQL Editor:
-
-```sql
-create table public.events (
-  id bigint generated always as identity primary key,
-  created_at timestamptz not null default now(),
-  district_id text not null check (char_length(district_id) between 1 and 120),
-  is_custom boolean not null default false,
-  device_id uuid,
-  session_id uuid,
-  event text not null check (char_length(event) <= 40),
-  props jsonb not null default '{}'::jsonb check (pg_column_size(props) <= 2048),
-  app_version text check (char_length(app_version) <= 20)
-);
-
-alter table public.events enable row level security;
-
--- The public anon key may ONLY insert. No select/update/delete policies exist
--- for anon, so RLS denies them regardless of default grants.
-create policy events_insert_anon on public.events
-  for insert to anon with check (true);
-
--- The admin dashboard (next project) reads as an authenticated user.
-create policy events_select_admin on public.events
-  for select to authenticated using (true);
-
-create index events_created_at_idx on public.events (created_at);
-```
+- [ ] **Step 2: Run the schema** — paste the entire committed `supabase/schema.sql`
+  (Task 10) into the SQL Editor and run it once. It creates the `events` table
+  (insert-only anon RLS), the `resources` + `resource_crosswalk` workbench
+  tables (public read, authenticated write), and seeds the resource tables
+  from the current CSVs.
 
 - [ ] **Step 3: Lock down auth** — Authentication → Sign In / Up: **disable new user signups**; enable Email provider (OTP); Authentication → Users → invite `andrewmcamp@gmail.com`. (With signups closed, OTP login is an allowlist of invited emails.)
 
@@ -1097,6 +1074,10 @@ curl -si -X POST "https://<ref>.supabase.co/rest/v1/events" \
 
 # Read as anon — expect HTTP 200 with an EMPTY body [] (RLS blocks reads):
 curl -s "https://<ref>.supabase.co/rest/v1/events?select=*" \
+  -H "apikey: <anon>" -H "Authorization: Bearer <anon>"
+
+# Resources ARE anon-readable (public content) — expect 22 rows:
+curl -s "https://<ref>.supabase.co/rest/v1/resources?select=resource_id" \
   -H "apikey: <anon>" -H "Authorization: Bearer <anon>"
 ```
 
@@ -1222,6 +1203,71 @@ git commit -m "fix(telemetry): browser-verification follow-ups"
 - [ ] **Step 4: Report** — summarize event coverage, verification evidence, and the two outstanding user-gated items (Task 7 console steps if not yet done; Task 8 Step 4 after approved push).
 
 ---
+
+### Task 10: Resources workbench schema — supabase/schema.sql
+
+*(Added by the 2026-07-20 spec amendment: resources workbench + publish pipeline.)*
+
+**Files:**
+- Create: `supabase/schema.sql` — the complete one-pass console script.
+
+**Interfaces:**
+- Consumes: the events-table SQL formerly inlined in Task 7; the current
+  `reference/evidence_resources.csv` + `reference/evidence_crosswalk.csv`
+  contents (seeds are generated from them via `engine/resources.js` parseCsv,
+  never hand-typed).
+- Produces: tables `public.resources` (PK `resource_id`, CSV columns +
+  `position` + `updated_at`) and `public.resource_crosswalk` (surrogate PK,
+  FK → resources ON DELETE CASCADE, CSV columns + `position` + `updated_at`).
+  RLS: anon+authenticated SELECT; authenticated ALL. Task 11's publish tool
+  reads these tables ordered by `position`.
+
+- [ ] **Step 1:** Generate the seed INSERTs with a scratchpad script that
+  `require()`s `engine/resources.js`, parses both CSVs, and emits
+  single-quote-escaped SQL. Assemble `supabase/schema.sql`:
+  events DDL (verbatim from the original Task 7 block) + resources DDL +
+  crosswalk DDL + policies + seeds (resources before crosswalk, FK order).
+- [ ] **Step 2:** Sanity-check: seed row counts match the CSVs (22 + 63);
+  every `'` in titles/notes/rationale doubled; script contains no service-role
+  references.
+- [ ] **Step 3:** Commit: `feat(resources): one-pass Supabase schema with workbench tables + seeds`
+
+### Task 11: Publish pipeline — tool + workflow (TDD)
+
+**Files:**
+- Create: `tools/publish-resources.js` (CJS, dependency-free, like other tools)
+- Create: `.github/workflows/publish-resources.yml`
+- Test: `test/publish-resources.test.js`
+
+**Interfaces:**
+- Consumes: `GLResources.parseCsv` (engine/resources.js) in tests;
+  `SUPABASE_URL` / `SUPABASE_ANON_KEY` env at runtime; tables from Task 10.
+- Produces: `writeCsv(header: string[], rows: object[]): string` (all fields
+  quoted, `"`→`""`, LF endings, trailing newline) and
+  `RESOURCE_COLUMNS` / `CROSSWALK_COLUMNS` exports; `main()` fetches both
+  tables ordered by `position.asc` and overwrites the two CSVs in
+  `reference/`.
+
+- [ ] **Step 1:** Failing tests: (a) round-trip — `parseCsv(writeCsv(h, rows))`
+  returns the rows for fields containing commas, doubled quotes, newlines;
+  (b) fidelity — for each current CSV: `writeCsv(COLUMNS, parseCsv(file))`
+  equals the file content with CRLF normalized to LF; (c) column-order
+  constants match the CSV headers exactly.
+- [ ] **Step 2:** Run: `node --test test/publish-resources.test.js` — FAIL (module missing).
+- [ ] **Step 3:** Implement `tools/publish-resources.js`: `writeCsv`, column
+  constants, `fetchTable(base, key, table, columns)` via global fetch with
+  `?select=<cols>&order=position.asc`, `main()` writing both files with LF.
+  Guard: `if (require.main === module) main()`.
+- [ ] **Step 4:** Tests pass; full `node --test` green.
+- [ ] **Step 5:** Workflow `publish-resources.yml`: `workflow_dispatch`,
+  `permissions: contents: write`, checkout, setup-node 22, run the tool with
+  the two secrets, commit-if-changed as `github-actions[bot]`, push. Netlify
+  deploys the push.
+- [ ] **Step 6:** Commit: `feat(resources): Supabase→CSV publish tool and workflow`
+- [ ] **Step 7 (DEFERRED until after approved push + Task 7):**
+  `gh workflow run publish-resources` — expect a no-op run (seeds == CSVs, no
+  commit). Then edit one row in Table Editor, run again — expect a commit
+  changing exactly that field, and Netlify deploy.
 
 ## Execution notes
 
