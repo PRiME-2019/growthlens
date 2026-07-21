@@ -247,8 +247,157 @@ function Shell({ session }) {
   );
 }
 
-// Placeholders — replaced by Tasks 4 and 5.
-function SummaryView() { return <div style={{ color: ADMIN.mute }}>Summary coming in Task 4</div>; }
+// ---- telemetry summary ------------------------------------------------------
+
+// Page past PostgREST's 1000-row cap; volume is tiny (hundreds/week).
+async function fetchAllEvents(sinceIso) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    let q = sb.from('events')
+      .select('district_id,device_id,session_id,event,props,created_at')
+      .order('created_at', { ascending: true })
+      .range(from, from + 999);
+    if (sinceIso) q = q.gte('created_at', sinceIso);
+    const { data, error } = await q;
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) return out;
+  }
+}
+
+function StatCard({ label, value }) {
+  return (
+    <div style={{ flex: 1, minWidth: 140, background: '#fff', borderRadius: 10,
+                  border: `1px solid ${ADMIN.rule2}`, padding: '14px 16px' }}>
+      <Eyebrow>{label}</Eyebrow>
+      <div style={{ fontFamily: MONO, fontSize: 28, fontWeight: 600, color: ADMIN.ink,
+                    marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
+function Spark({ weekly }) {
+  if (!weekly.length) return null;
+  const max = Math.max(...weekly.map((w) => w.count));
+  const bw = 12, gap = 4, h = 64;
+  const width = weekly.length * (bw + gap);
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${ADMIN.rule2}`,
+                  padding: '14px 16px' }}>
+      <Eyebrow>Events by week</Eyebrow>
+      <svg width={width} height={h + 18} style={{ marginTop: 8, maxWidth: '100%' }}
+           role="img" aria-label="Weekly event counts">
+        {weekly.map((w, i) => {
+          const bh = Math.max(2, Math.round((w.count / max) * h));
+          return <rect key={w.week} x={i * (bw + gap)} y={h - bh} width={bw} height={bh}
+                       fill={ADMIN.blue} rx={2}><title>{`${w.week}: ${w.count}`}</title></rect>;
+        })}
+        <text x={0} y={h + 14} fontSize={9.5} fontFamily={LABEL} fill={ADMIN.mute}>
+          {weekly[0].week}</text>
+        <text x={width} y={h + 14} fontSize={9.5} fontFamily={LABEL} fill={ADMIN.mute}
+              textAnchor="end">{weekly[weekly.length - 1].week}</text>
+      </svg>
+    </div>
+  );
+}
+
+function MiniTable({ title, cols, rows }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${ADMIN.rule2}`,
+                  padding: '14px 16px', overflowX: 'auto' }}>
+      <Eyebrow>{title}</Eyebrow>
+      {rows.length === 0
+        ? <div style={{ fontSize: 12.5, color: ADMIN.mute, marginTop: 8 }}>None in this window.</div>
+        : (
+          <table style={{ borderCollapse: 'collapse', marginTop: 8, width: '100%' }}>
+            <thead><tr>
+              {cols.map((c) => <th key={c} style={{ textAlign: 'left', fontFamily: LABEL,
+                fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase',
+                color: ADMIN.mute, padding: '4px 14px 4px 0' }}>{c}</th>)}
+            </tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} style={{ borderTop: `1px solid ${ADMIN.rule2}` }}>
+                  {r.map((v, j) => <td key={j} style={{ fontSize: 13, color: ADMIN.ink2,
+                    padding: '6px 14px 6px 0', fontFamily: j === 0 ? FONT : MONO,
+                    whiteSpace: 'nowrap' }}>{v}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+    </div>
+  );
+}
+
+const day10 = (iso) => String(iso || '').slice(0, 10);
+
+function SummaryView() {
+  const [win, setWin] = React.useState('30');
+  const [summary, setSummary] = React.useState(null);
+  const [err, setErr] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const load = React.useCallback(async (w) => {
+    setBusy(true); setErr(null);
+    try {
+      const sinceIso = w === 'all' ? null
+        : new Date(Date.now() - Number(w) * 864e5).toISOString();
+      const rows = await fetchAllEvents(sinceIso);
+      setSummary(window.GLAdminData.summarize(rows));
+    } catch (e) {
+      setErr(e.message || String(e));
+    }
+    setBusy(false);
+  }, []);
+  React.useEffect(() => { load(win); }, [win, load]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {[['30', 'Last 30 days'], ['90', 'Last 90 days'], ['all', 'All time']].map(([k, label]) => (
+          <button key={k} type="button" onClick={() => setWin(k)}
+            style={{ border: `1px solid ${win === k ? ADMIN.blue : ADMIN.rule}`,
+                     background: win === k ? 'rgba(0, 61, 165, 0.08)' : '#fff',
+                     color: win === k ? ADMIN.blue : ADMIN.ink2, cursor: 'pointer',
+                     fontFamily: FONT, fontSize: 12.5, fontWeight: 700,
+                     padding: '6px 12px', borderRadius: 999 }}>{label}</button>
+        ))}
+        {busy && <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Loading…</span>}
+      </div>
+      {err && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <ErrLine>Couldn’t load events: {err}</ErrLine>
+          <Btn kind="line" small onClick={() => load(win)}>Retry</Btn>
+        </div>
+      )}
+      {summary && summary.events === 0 && !busy && (
+        <div style={{ color: ADMIN.mute, fontSize: 13.5 }}>No events in this window.</div>
+      )}
+      {summary && summary.events > 0 && (
+        <>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <StatCard label="Districts seen" value={summary.districts} />
+            <StatCard label="Devices" value={summary.devices} />
+            <StatCard label="Sessions" value={summary.sessions} />
+            <StatCard label="Events" value={summary.events} />
+          </div>
+          <Spark weekly={summary.weekly} />
+          <div style={{ display: 'grid', gap: 14,
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+            <MiniTable title="Top pages" cols={['Page', 'Views']}
+              rows={summary.topPages.map((p) => [p.page, p.count])} />
+            <MiniTable title="Upload errors" cols={['Code', 'Count']}
+              rows={summary.uploadErrors.map((e) => [e.code, e.count])} />
+          </div>
+          <MiniTable title="Districts"
+            cols={['District', 'First seen', 'Last seen', 'Sessions', 'Devices', 'Events']}
+            rows={summary.perDistrict.map((d) => [d.district, day10(d.firstSeen),
+              day10(d.lastSeen), d.sessions, d.devices, d.events])} />
+        </>
+      )}
+    </div>
+  );
+}
 function PublishBar() { return null; }
 function EditorTab() { return <div style={{ color: ADMIN.mute }}>Editor coming in Task 5</div>; }
 
