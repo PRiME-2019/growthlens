@@ -16,6 +16,8 @@
 // round-trip is lossless against the shipped files.
 'use strict';
 
+const { writeCsv } = require('../engine/csv.js');
+
 const RESOURCE_COLUMNS = [
   'resource_id', 'title', 'series', 'evidence_type', 'subject',
   'grade_band', 'population', 'url', 'notes',
@@ -24,14 +26,6 @@ const CROSSWALK_COLUMNS = [
   'finding_type', 'subgroup', 'subject', 'grade_band', 'resource_id',
   'match_strength', 'rationale',
 ];
-
-function writeCsv(header, rows) {
-  const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const line = (vals) => vals.map(cell).join(',');
-  return [line(header)]
-    .concat(rows.map((r) => line(header.map((h) => r[h]))))
-    .join('\n') + '\n';
-}
 
 async function fetchTable(base, key, table, columns, fetchFn = fetch) {
   const url = `${base}/rest/v1/${table}?select=${columns.join(',')}&order=position.asc`;
