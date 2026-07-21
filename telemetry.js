@@ -71,5 +71,104 @@
     return starts.concat(contains).slice(0, limit);
   }
 
-  return { IDENTITY_KEY, MAX_STR, truncate, sanitizeProps, filterDistricts };
+  // The batching client. All I/O comes in through deps so Node tests can stub
+  // it: { fetchFn, storage, uuid, url, key, version, flushAt }. Nothing here
+  // may throw into the caller — telemetry must never break the app.
+  function createClient(deps) {
+    const { fetchFn, storage, uuid, url, key, version = null, flushAt = 20 } = deps;
+    let identity = null;
+    let sessionId = null;
+    let queue = [];
+
+    function writeIdentity() {
+      try { storage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch { /* private mode */ }
+    }
+    function readIdentity() {
+      let raw = null;
+      try { raw = JSON.parse(storage.getItem(IDENTITY_KEY) || 'null'); } catch { raw = null; }
+      if (!raw || typeof raw !== 'object') {
+        raw = { district: null, isCustom: false, deviceId: null, optOut: false, setAt: null, dismissedAt: null };
+      }
+      identity = raw;
+      if (!identity.deviceId) { identity.deviceId = uuid(); writeIdentity(); }
+    }
+
+    function enqueue(event, props, force) {
+      if (!identity) readIdentity();
+      if (identity.optOut && !force) return;
+      const clean = sanitizeProps(event, props);
+      if (clean == null) return;
+      queue.push({
+        district_id: identity.district == null ? '(unset)' : truncate(identity.district),
+        is_custom: !!identity.isCustom,
+        device_id: identity.deviceId,
+        session_id: sessionId,
+        event,
+        props: clean,
+        app_version: version,
+      });
+      if (queue.length >= flushAt) flush();
+    }
+
+    async function flush(opts) {
+      if (!queue.length) return;
+      const batch = queue;
+      queue = [];
+      if (!url || !key) return; // not configured yet — drop, never error
+      const send = () => fetchFn(url + '/rest/v1/events', {
+        method: 'POST',
+        keepalive: !!(opts && opts.keepalive),
+        headers: {
+          apikey: key,
+          Authorization: 'Bearer ' + key,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(batch),
+      });
+      try { const r = await send(); if (r && r.ok) return; } catch { /* retry below */ }
+      try { await send(); } catch { /* drop — telemetry never surfaces errors */ }
+    }
+
+    return {
+      init() {
+        readIdentity();
+        sessionId = uuid();
+        enqueue('session_start', {});
+      },
+      log(event, props) { try { enqueue(event, props); } catch { /* never throw */ } },
+      flush,
+      setIdentity({ district, isCustom }) {
+        if (!identity) readIdentity();
+        identity.district = truncate(String(district));
+        identity.isCustom = !!isCustom;
+        identity.setAt = new Date().toISOString();
+        writeIdentity();
+        enqueue('identity_set', { custom: !!isCustom });
+        flush();
+      },
+      setOptOut(flag) {
+        if (!identity) readIdentity();
+        identity.optOut = !!flag;
+        writeIdentity();
+        enqueue(flag ? 'opt_out' : 'opt_in', {}, true);
+        flush();
+      },
+      getIdentity() {
+        if (!identity) readIdentity();
+        return { ...identity };
+      },
+      needsPrompt() {
+        if (!identity) readIdentity();
+        return identity.district == null && !identity.dismissedAt;
+      },
+      dismissPrompt() {
+        if (!identity) readIdentity();
+        identity.dismissedAt = new Date().toISOString();
+        writeIdentity();
+      },
+    };
+  }
+
+  return { IDENTITY_KEY, MAX_STR, truncate, sanitizeProps, filterDistricts, createClient };
 });
