@@ -398,8 +398,281 @@ function SummaryView() {
     </div>
   );
 }
-function PublishBar() { return null; }
-function EditorTab() { return <div style={{ color: ADMIN.mute }}>Editor coming in Task 5</div>; }
+// ---- resource workbench editor ----------------------------------------------
+
+const TABLE_META = {
+  resources: {
+    columns: RESOURCE_COLUMNS,
+    listCols: ['resource_id', 'title', 'population', 'url'],
+    keyOf: (r) => r.resource_id,
+    matchKey: 'resource_id',
+    label: 'resource',
+  },
+  resource_crosswalk: {
+    columns: CROSSWALK_COLUMNS,
+    listCols: ['finding_type', 'subgroup', 'subject', 'grade_band', 'resource_id', 'match_strength'],
+    keyOf: (r) => r.id,
+    matchKey: 'id',
+    label: 'matching rule',
+  },
+};
+
+// PublishBar and the editor tabs are siblings; a window event keeps the badge
+// honest after every save without threading state through Shell.
+const workbenchChanged = () => window.dispatchEvent(new Event('gl-workbench-changed'));
+
+function PublishBar() {
+  const [dirty, setDirty] = React.useState(null); // null=checking, bool=known
+  const [msg, setMsg] = React.useState(null);
+  const [err, setErr] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const check = React.useCallback(async () => {
+    setDirty(null);
+    try {
+      const [res, xw, resCsv, xwCsv] = await Promise.all([
+        sb.from('resources').select('*').order('position'),
+        sb.from('resource_crosswalk').select('*').order('position'),
+        fetch('reference/evidence_resources.csv', { cache: 'no-store' }).then((r) => r.text()),
+        fetch('reference/evidence_crosswalk.csv', { cache: 'no-store' }).then((r) => r.text()),
+      ]);
+      if (res.error || xw.error) throw (res.error || xw.error);
+      setDirty(
+        window.GLAdminData.diffPublished(RESOURCE_COLUMNS, res.data, resCsv) ||
+        window.GLAdminData.diffPublished(CROSSWALK_COLUMNS, xw.data, xwCsv),
+      );
+    } catch { setDirty(false); }
+  }, []);
+  React.useEffect(() => {
+    check();
+    window.addEventListener('gl-workbench-changed', check);
+    return () => window.removeEventListener('gl-workbench-changed', check);
+  }, [check]);
+
+  const publish = async () => {
+    setBusy(true); setMsg(null); setErr(null);
+    const { error } = await sb.functions.invoke('publish');
+    setBusy(false);
+    if (error) { setErr(error.message || 'Publish failed'); return; }
+    setMsg('Publish started — the site updates when the workflow lands.');
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+                  background: '#fff', border: `1px solid ${ADMIN.rule2}`, borderRadius: 10,
+                  padding: '10px 14px', flexWrap: 'wrap' }}>
+      {dirty === null && <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Checking…</span>}
+      {dirty === true && (
+        <span style={{ fontFamily: LABEL, fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
+                       textTransform: 'uppercase', color: ADMIN.amber,
+                       background: ADMIN.amberBg, padding: '3px 10px', borderRadius: 999 }}>
+          Unpublished changes
+        </span>
+      )}
+      {dirty === false && (
+        <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Everything published</span>
+      )}
+      <span style={{ flex: 1 }} />
+      {msg && <span style={{ fontSize: 12.5, color: ADMIN.ink2 }}>{msg}{' '}
+        <a href="https://github.com/PRiME-2019/growthlens/actions/workflows/publish-resources.yml"
+           target="_blank" rel="noopener noreferrer"
+           style={{ color: ADMIN.blue, fontWeight: 600 }}>View workflow ↗</a></span>}
+      <ErrLine>{err}</ErrLine>
+      <Btn onClick={publish} disabled={busy} small>{busy ? 'Publishing…' : 'Publish to site'}</Btn>
+    </div>
+  );
+}
+
+function Field({ name, value, onChange, textarea, options, datalist }) {
+  const shared = { width: '100%', boxSizing: 'border-box', padding: '8px 10px',
+    fontSize: 13.5, color: ADMIN.ink, border: `1.5px solid ${ADMIN.rule}`, borderRadius: 7,
+    fontFamily: FONT };
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: LABEL,
+                    fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8,
+                    textTransform: 'uppercase', color: ADMIN.mute }}>
+      {name}
+      {options ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)} style={shared}>
+          <option value="">— choose —</option>
+          {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : textarea ? (
+        <textarea value={value} rows={3} onChange={(e) => onChange(e.target.value)}
+                  style={{ ...shared, resize: 'vertical' }} />
+      ) : (
+        <>
+          <input value={value} list={datalist ? `${name}-dl` : undefined}
+                 onChange={(e) => onChange(e.target.value)} style={shared} />
+          {datalist && (
+            <datalist id={`${name}-dl`}>
+              {datalist.map((d) => <option key={d} value={d} />)}
+            </datalist>
+          )}
+        </>
+      )}
+    </label>
+  );
+}
+
+function EditorTab({ table }) {
+  const meta = TABLE_META[table];
+  const [rows, setRows] = React.useState(null);
+  const [resourceIds, setResourceIds] = React.useState([]);
+  const [editing, setEditing] = React.useState(null); // { row, isNew }
+  const [formErrs, setFormErrs] = React.useState([]);
+  const [err, setErr] = React.useState(null);
+
+  const load = React.useCallback(async () => {
+    setErr(null);
+    const { data, error } = await sb.from(table).select('*').order('position');
+    if (error) { setErr(error.message); return; }
+    setRows(data);
+    if (table === 'resource_crosswalk') {
+      const r = await sb.from('resources').select('resource_id').order('position');
+      if (!r.error) setResourceIds(r.data.map((x) => x.resource_id));
+    }
+  }, [table]);
+  React.useEffect(() => { load(); }, [load]);
+
+  const write = async (fn) => {
+    setErr(null);
+    const error = await fn();
+    if (error) { setErr(error.message); return false; }
+    await load();
+    workbenchChanged();
+    return true;
+  };
+
+  // UNIQUE(position) forbids a naive swap — park A at -1 first.
+  const move = async (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= rows.length) return;
+    const A = rows[i], B = rows[j];
+    const kA = meta.keyOf(A), kB = meta.keyOf(B);
+    await write(async () => {
+      let r = await sb.from(table).update({ position: -1 }).eq(meta.matchKey, kA);
+      if (r.error) return r.error;
+      r = await sb.from(table).update({ position: A.position }).eq(meta.matchKey, kB);
+      if (r.error) return r.error;
+      r = await sb.from(table).update({ position: B.position }).eq(meta.matchKey, kA);
+      return r.error;
+    });
+  };
+
+  const startEdit = (row) => { setEditing({ row: { ...row }, isNew: false, orig: meta.keyOf(row) }); setFormErrs([]); };
+  const startAdd = () => {
+    const blank = Object.fromEntries(meta.columns.map((c) => [c, '']));
+    setEditing({ row: blank, isNew: true, orig: null }); setFormErrs([]);
+  };
+  const save = async () => {
+    const r = editing.row;
+    const errs = table === 'resources'
+      ? window.GLAdminData.validateResource(r,
+          rows.filter((x) => meta.keyOf(x) !== editing.orig).map((x) => x.resource_id))
+      : window.GLAdminData.validateCrosswalk(r, resourceIds);
+    setFormErrs(errs);
+    if (errs.length) return;
+    const payload = Object.fromEntries(meta.columns.map((c) => [c, String(r[c] ?? '').trim()]));
+    payload.updated_at = new Date().toISOString();
+    const ok = await write(async () => {
+      if (editing.isNew) {
+        payload.position = rows.length ? Math.max(...rows.map((x) => x.position)) + 1 : 1;
+        const res = await sb.from(table).insert(payload);
+        return res.error;
+      }
+      const res = await sb.from(table).update(payload).eq(meta.matchKey, editing.orig);
+      return res.error;
+    });
+    if (ok) setEditing(null);
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete this ${meta.label}? This cannot be undone here.`)) return;
+    const ok = await write(async () => {
+      const res = await sb.from(table).delete().eq(meta.matchKey, editing.orig);
+      return res.error;
+    });
+    if (ok) setEditing(null);
+  };
+
+  if (err && !rows) return <ErrLine>Couldn’t load: {err}</ErrLine>;
+  if (!rows) return <div style={{ color: ADMIN.mute, fontSize: 13 }}>Loading…</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ErrLine>{err}</ErrLine>
+      {editing ? (
+        <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${ADMIN.rule2}`,
+                      padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Eyebrow>{editing.isNew ? `New ${meta.label}` : `Edit ${meta.label}`}</Eyebrow>
+          <div style={{ display: 'grid', gap: 12,
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {meta.columns.map((c) => (
+              <div key={c} style={{ gridColumn: (c === 'notes' || c === 'rationale' || c === 'title') ? '1 / -1' : undefined }}>
+                <Field name={c}
+                  value={String(editing.row[c] ?? '')}
+                  onChange={(v) => setEditing((e) => ({ ...e, row: { ...e.row, [c]: v } }))}
+                  textarea={c === 'notes' || c === 'rationale'}
+                  options={table === 'resource_crosswalk' && c === 'resource_id' ? resourceIds : null}
+                  datalist={c === 'match_strength' ? ['direct', 'adjacent'] : null} />
+              </div>
+            ))}
+          </div>
+          {formErrs.length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {formErrs.map((e, i) => <li key={i}><ErrLine>{e}</ErrLine></li>)}
+            </ul>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn onClick={save}>Save</Btn>
+            <Btn kind="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
+            <span style={{ flex: 1 }} />
+            {!editing.isNew && <Btn kind="danger" onClick={remove}>Delete</Btn>}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Btn small onClick={startAdd}>Add {meta.label}</Btn>
+        </div>
+      )}
+      <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${ADMIN.rule2}`,
+                    padding: '6px 14px 10px', overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead><tr>
+            <th style={{ width: 52 }} />
+            {meta.listCols.map((c) => <th key={c} style={{ textAlign: 'left', fontFamily: LABEL,
+              fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase', color: ADMIN.mute,
+              padding: '8px 14px 4px 0' }}>{c}</th>)}
+            <th />
+          </tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={meta.keyOf(r)} style={{ borderTop: `1px solid ${ADMIN.rule2}` }}>
+                <td style={{ whiteSpace: 'nowrap', padding: '4px 6px 4px 0' }}>
+                  <button type="button" aria-label={`Move row ${i + 1} up`} disabled={i === 0}
+                    onClick={() => move(i, -1)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer',
+                             color: i === 0 ? ADMIN.rule : ADMIN.mute, fontSize: 13 }}>▲</button>
+                  <button type="button" aria-label={`Move row ${i + 1} down`} disabled={i === rows.length - 1}
+                    onClick={() => move(i, 1)}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer',
+                             color: i === rows.length - 1 ? ADMIN.rule : ADMIN.mute, fontSize: 13 }}>▼</button>
+                </td>
+                {meta.listCols.map((c) => (
+                  <td key={c} style={{ fontSize: 13, color: ADMIN.ink2, padding: '7px 14px 7px 0',
+                                       maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis',
+                                       whiteSpace: 'nowrap' }}>{String(r[c] ?? '')}</td>
+                ))}
+                <td style={{ textAlign: 'right' }}>
+                  <Btn kind="line" small onClick={() => startEdit(r)}>Edit</Btn>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 // ---- gate -------------------------------------------------------------------
 
