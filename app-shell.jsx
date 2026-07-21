@@ -1054,6 +1054,10 @@ function OverviewPage({ ctx }) {
               a: <>Right now GrowthLens treats any group with fewer than 10 students as too small to read reliably, and flags those groups everywhere they appear. The ability to change that number to match your district’s privacy or small-group rules is coming in a future release.</>,
             },
             {
+              q: 'What does GrowthLens record about how I use it?',
+              a: <>Which pages and features are used, plus the district name you enter when prompted — never your data, your files, or your results. This helps PRiME see which parts of the tool are earning their keep. You can turn it off any time by clicking your district name at the bottom of the sidebar; if you do, we record only that you turned it off.</>,
+            },
+            {
               q: 'Want the statistical details?',
               a: <>The methods note explains how growth compared with expectations is defined, how the numbers are steadied for smaller schools (including a few cases that can feel counter-intuitive), how the spread between schools is estimated, and what the known limitations are. <a href="methods.html" target="_blank" rel="noopener" style={{ color: SLU.blue, fontWeight: 600 }}>Open methods note ↗</a></>,
             },

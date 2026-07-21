@@ -22,6 +22,16 @@
 //                         the person using the tool, not the commit messages.
 window.GL_CHANGELOG = [
   {
+    version: '0.73',
+    date: '2026-07-20',
+    stage: 'preview',
+    title: 'Tell us your district — and see how GrowthLens is used',
+    items: [
+      'A one-time prompt asks which district you’re with — pick from the list or type anything. Your answer lives in your browser and shows at the bottom of the sidebar; click it any time to change it.',
+      'GrowthLens now records which pages and features are used (never your data, files, or results) so PRiME can improve the parts that matter. Turn it off any time from your district name in the sidebar.',
+    ],
+  },
+  {
     version: '0.72',
     date: '2026-07-02',
     stage: 'preview',

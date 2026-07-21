@@ -89,7 +89,7 @@ node --test
 
 ## Status
 
-The data layer is **real**: a district drops its own DESE files and every page renders computed values, with the "nothing leaves the browser" promise verifiable in DevTools (only same-origin requests during analysis). The bundled Math demo remains for stakeholder review without a file.
+The data layer is **real**: a district drops its own DESE files and every page renders computed values, with the "nothing leaves the browser" promise verifiable in DevTools — analysis itself makes only same-origin requests; the one outbound call is a small usage ping (page and feature names plus the district name you enter, never data or results), and it can be switched off from the district chip in the sidebar. The bundled Math demo remains for stakeholder review without a file.
 
 **Deliberately deferred** (the seams are in place):
 - **Multi-year UI** — the compute unit is `computeSlice(subject)`, which pins each subject to its latest year; a year parameter is the planned seam.
@@ -130,6 +130,10 @@ data.js                 bundled Math demo (generated): 7 grade-banded schools, a
 heatmap-data.js         demo school × grade residual cells (3–5 elementary, 6–8 middle) + ok flags
 demo-data.js            demo demographics box-plots + achievement scatter (generated through
                         engine/stats.js — raw/shrunken coherent by construction)
+
+telemetry.js            usage logging: props whitelist, batching client (node-tested),
+                        browser bootstrap; sends page/feature names only — never data
+reference/mo-districts.js  MO district list for the identity typeahead
 
 methods.html            stand-alone methods note (linked from sidebar)
 prime-logo.png          asset; not currently referenced (final lockup is text-only)
