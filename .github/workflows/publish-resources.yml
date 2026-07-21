@@ -1,0 +1,37 @@
+# Publishes the Supabase resource workbench back to the static CSVs the app
+# serves. Manual trigger (GitHub UI "Run workflow" or `gh workflow run
+# publish-resources`); the future admin panel's Publish button will fire the
+# same dispatch. Commits only when the CSVs actually changed — a no-op run is
+# the expected result when the workbench matches what's already published.
+# Uses the built-in GITHUB_TOKEN (contents: write) — no PAT anywhere.
+name: publish-resources
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Regenerate CSVs from Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node tools/publish-resources.js
+      - name: Verify round-trip before committing
+        run: node --test test/publish-resources.test.js
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reference/evidence_resources.csv reference/evidence_crosswalk.csv
+          if git diff --staged --quiet; then
+            echo "No changes — workbench matches the published CSVs."
+          else
+            git commit -m "chore(resources): publish from Supabase workbench"
+            git push
+          fi

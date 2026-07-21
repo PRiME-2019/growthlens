@@ -122,6 +122,10 @@ deck-figures.js         SVG figure builders shared by the PPTX export (rasterize
                         and the on-page carousel (Node-tested)
 tools/build-demo.js     regenerates ALL demo fixtures (data.js + heatmap-data.js + demo-data.js)
                         from one synthetic student dataset via engine/stats.js
+tools/publish-resources.js  rewrites the evidence CSVs from the Supabase resource
+                        workbench (run by the publish-resources workflow)
+supabase/schema.sql     one-pass Supabase setup: telemetry events table + resource
+                        workbench tables (RLS + seeds); paste once into the SQL editor
 vendor/duckdb/          vendored DuckDB-WASM + Apache Arrow, same-origin (has its own README)
 test/                   node --test specs (stats, ingest helpers, store)
 
