@@ -87,7 +87,20 @@ create policy resources_write_admin on public.resources
 create policy crosswalk_write_admin on public.resource_crosswalk
   for all to authenticated using (true) with check (true);
 
--- ---- 3. seeds ---------------------------------------------------------------
+-- ---- 3. table privileges ----------------------------------------------------
+-- RLS policies (above) gate ROWS; these grants gate the tables themselves.
+-- Newer Supabase projects don't pre-grant table privileges to the API roles,
+-- so both layers must be explicit. Grants are deliberately minimal: anon can
+-- only ever insert events and read resources — exactly what the policies allow.
+
+grant insert on public.events to anon;
+grant select on public.events to authenticated;
+grant select on public.resources, public.resource_crosswalk to anon, authenticated;
+grant insert, update, delete on public.resources, public.resource_crosswalk to authenticated;
+-- Identity columns draw from sequences; inserting roles need USAGE on them.
+grant usage on all sequences in schema public to anon, authenticated;
+
+-- ---- 4. seeds ---------------------------------------------------------------
 
 insert into public.resources
   (resource_id, title, series, evidence_type, subject, grade_band, population, url, notes, position)

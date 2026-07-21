@@ -171,12 +171,13 @@
   }
 
   // ---- Browser bootstrap ----------------------------------------------------
-  // Supabase project credentials. The anon key is public by design — RLS
-  // allows it to INSERT into public.events and nothing else (see the spec).
-  // Empty until the Supabase project exists; the client drops batches
-  // silently while unconfigured, so the app behaves identically either way.
-  const SUPABASE_URL = '';
-  const SUPABASE_ANON_KEY = '';
+  // Supabase project credentials. The publishable key is public by design —
+  // RLS allows it to INSERT into public.events and nothing else (see the
+  // spec). Local development (localhost/127.0.0.1) sends nothing so dev
+  // clicks never pollute the production table; the GL_TELEMETRY_URL test
+  // seam still works there for verification.
+  const SUPABASE_URL = 'https://slhlkltahmybgkjzuech.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_CqONVSh4-PvqZvLgs-_dHw_oGKWTMqf';
 
   const FLUSH_MS = 30000;
   let singleton = null;
@@ -194,7 +195,9 @@
         : 'no-uuid-' + String(Math.random()).slice(2)),
       // window.GL_TELEMETRY_URL / _KEY are test seams (Playwright sets them
       // before load to intercept sends); production uses the constants.
-      url: window.GL_TELEMETRY_URL || SUPABASE_URL,
+      // On localhost with no seam set, url is '' → the client drops batches.
+      url: window.GL_TELEMETRY_URL ||
+        (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname) ? '' : SUPABASE_URL),
       key: window.GL_TELEMETRY_KEY || SUPABASE_ANON_KEY,
       version: window.GL_VERSION || null,
     });
