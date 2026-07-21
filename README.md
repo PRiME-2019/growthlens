@@ -89,7 +89,7 @@ node --test
 
 ## Status
 
-The data layer is **real**: a district drops its own DESE files and every page renders computed values, with the "nothing leaves the browser" promise verifiable in DevTools — analysis itself makes only same-origin requests; the one outbound call is a small usage ping (page and feature names plus the district name you enter, never data or results), and it can be switched off from the district chip in the sidebar. The bundled Math demo remains for stakeholder review without a file.
+The data layer is **real**: a district drops its own DESE files and every page renders computed values, with the "nothing leaves the browser" promise verifiable in DevTools — analysis itself makes only same-origin requests; the one outbound call is a small usage ping (page and feature names plus the district name you enter, never data or results), and it can be switched off from the district chip in the sidebar. An OTP-gated admin panel at `/admin.html` reads that telemetry and manages the evidence-resource workbench (see `docs/runbooks/`). The bundled Math demo remains for stakeholder review without a file.
 
 **Deliberately deferred** (the seams are in place):
 - **Multi-year UI** — the compute unit is `computeSlice(subject)`, which pins each subject to its latest year; a year parameter is the planned seam.
@@ -138,6 +138,14 @@ demo-data.js            demo demographics box-plots + achievement scatter (gener
 telemetry.js            usage logging: props whitelist, batching client (node-tested),
                         browser bootstrap; sends page/feature names only — never data
 reference/mo-districts.js  MO district list for the identity typeahead
+
+admin.html / admin.jsx  admin panel (OTP-gated): telemetry summary + resource
+                        workbench editor with publish-to-site; supabase-js loads
+                        only on this page
+engine/csv.js           shared writeCsv (publish tool + admin diff badge)
+engine/admin-data.js    admin aggregations/validation/diff — pure, node-tested
+supabase/functions/publish/  edge function firing the publish-resources workflow
+docs/runbooks/          go-live checklist, Resend SMTP setup, OTP email template
 
 methods.html            stand-alone methods note (linked from sidebar)
 prime-logo.png          asset; not currently referenced (final lockup is text-only)
