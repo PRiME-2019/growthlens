@@ -134,6 +134,28 @@ function AppBody() {
   const openChangelog = React.useCallback(() => { setShowChangelog(true); markVersionSeen(); }, [markVersionSeen]);
   const closeChangelog = React.useCallback(() => setShowChangelog(false), []);
 
+  // District identity + usage telemetry. start() is idempotent and must run
+  // before the page_view effect so the first landing view is captured.
+  const [showDistrictModal, setShowDistrictModal] = React.useState(false);
+  const [, setIdentityRev] = React.useState(0); // chip re-render after modal saves
+  const openDistrictModal = React.useCallback(() => setShowDistrictModal(true), []);
+  const closeDistrictModal = React.useCallback(() => {
+    const T = window.GLTelemetry;
+    // Closing the first-visit prompt without choosing counts as "later" —
+    // remember the dismissal so the modal doesn't nag every visit.
+    if (T && T.needsPrompt()) T.dismissPrompt();
+    setShowDistrictModal(false);
+    setIdentityRev((r) => r + 1);
+  }, []);
+  React.useEffect(() => {
+    const T = window.GLTelemetry;
+    if (!T) return;
+    T.start();
+    if (T.needsPrompt()) setShowDistrictModal(true);
+  }, []);
+  const identityDistrict =
+    ((window.GLTelemetry && window.GLTelemetry.getIdentity()) || {}).district || null;
+
   // Seed the bundled Math demo once (reads the window.* fixtures), then point
   // the well-known window.* globals at the active (subject, subgroup) via the
   // store. Pages are re-keyed on `subject` so figures re-read the swapped globals.
@@ -203,6 +225,7 @@ function AppBody() {
     achGrade, setAchGrade,
     bumpDataRev,
     hasUpdate, openChangelog, markVersionSeen,
+    openDistrictModal, identityDistrict,
   };
 
   const sliceLabel = `${SUBJECTS[subject]} · ${DEMOS[demo].split(' · ')[0]}`;
@@ -237,6 +260,7 @@ function AppBody() {
         {page === 'exportpg'     && window.ExportPage       && <window.ExportPage       ctx={ctx} />}
       </main>
       {showChangelog && <ChangelogModal onClose={closeChangelog} />}
+      {showDistrictModal && <DistrictModal onClose={closeDistrictModal} />}
     </div>
   );
 }
@@ -307,6 +331,18 @@ function LeftNav({ page, setPage, ctx }) {
       <div style={{ padding: '12px 12px 16px', display: 'flex', flexDirection: 'column', gap: 1,
                      borderTop: `1px solid ${SLU.rule2}`, marginTop: 8, paddingTop: 14 }}>
         <NavItem label="Methods" href="methods.html" external />
+        <button type="button" onClick={ctx.openDistrictModal}
+          title="Your district — click to change"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                   border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+                   padding: '7px 12px', borderRadius: 6, color: SLU.mute,
+                   fontFamily: FONT, fontSize: 12.5, fontWeight: 600 }}>
+          <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%',
+                   background: ctx.identityDistrict ? SLU.goldLight : SLU.rule, flex: 'none' }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {ctx.identityDistrict || 'Set your district'}
+          </span>
+        </button>
       </div>
 
       <span style={{ flex: 1 }} />
@@ -562,6 +598,130 @@ function ChangelogModal({ onClose }) {
               </ul>
             </section>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// First-visit district prompt; reopened any time from the sidebar chip.
+// The input is the source of truth: Save commits whatever is in the box
+// (list pick or free text), plus any change to the opt-out toggle.
+function DistrictModal({ onClose }) {
+  const T = window.GLTelemetry;
+  const current = (T && T.getIdentity()) || {};
+  const [query, setQuery] = React.useState(current.district || '');
+  const [open, setOpen] = React.useState(false);   // dropdown visibility
+  const [hover, setHover] = React.useState(-1);    // keyboard highlight
+  const [optOut, setOptOutFlag] = React.useState(!!current.optOut);
+  const list = window.MO_DISTRICTS || [];
+
+  const matches = (T && open) ? T.filterDistricts(list, query) : [];
+  const q = query.trim();
+  const exact = q && list.some((d) => d.toLowerCase() === q.toLowerCase());
+  const rows = matches.map((d) => ({ label: d, custom: false }));
+  if (open && q && !exact) rows.push({ label: q, custom: true });
+
+  const pick = (row) => { setQuery(row.label); setOpen(false); setHover(-1); };
+  const save = () => {
+    if (T) {
+      const had = current.district || null;
+      if (q && q !== had) {
+        T.setIdentity({ district: q, isCustom: !list.some((d) => d.toLowerCase() === q.toLowerCase()) });
+      }
+      if (optOut !== !!current.optOut) T.setOptOut(optOut);
+    }
+    onClose();
+  };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setHover((h) => Math.min(h + 1, rows.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHover((h) => Math.max(h - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (open && hover >= 0 && rows[hover]) pick(rows[hover]); else save(); }
+  };
+  React.useEffect(() => {
+    const onEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Tell us your district"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(26, 27, 31, 0.45)',
+               display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+               padding: '10vh 16px 16px', overflowY: 'auto' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 'min(480px, 100%)', background: '#fff', borderRadius: 12,
+        boxShadow: '0 20px 60px rgba(26, 27, 31, 0.30)',
+        border: `1px solid ${SLU.rule2}`, overflow: 'visible' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      gap: 12, padding: '16px 20px', borderBottom: `1px solid ${SLU.rule2}` }}>
+          <div>
+            <div style={{ fontFamily: LABEL, fontSize: 10.5, fontWeight: 700, color: SLU.mute,
+                          textTransform: 'uppercase', letterSpacing: 1.4 }}>Welcome</div>
+            <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 600, color: SLU.ink,
+                          letterSpacing: -0.3, lineHeight: 1.1 }}>Which district are you with?</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            style={{ flex: 'none', border: 'none', background: 'none', cursor: 'pointer',
+                     color: SLU.mute, fontSize: 24, lineHeight: 1, padding: '0 2px' }}>×</button>
+        </div>
+        <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              autoFocus
+              value={query}
+              placeholder="Start typing your district's name…"
+              onChange={(e) => { setQuery(e.target.value); setOpen(true); setHover(-1); }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={onKey}
+              role="combobox" aria-expanded={open && rows.length > 0} aria-autocomplete="list"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+                       fontFamily: FONT, fontSize: 14.5, color: SLU.ink,
+                       border: `1.5px solid ${SLU.rule2}`, borderRadius: 8, outline: 'none' }} />
+            {open && rows.length > 0 && (
+              <div role="listbox" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                       marginTop: 4, background: '#fff', border: `1px solid ${SLU.rule2}`,
+                       borderRadius: 8, boxShadow: '0 12px 32px rgba(26, 27, 31, 0.18)',
+                       maxHeight: 260, overflowY: 'auto' }}>
+                {rows.map((row, i) => (
+                  <div key={row.custom ? '__custom' : row.label} role="option" aria-selected={i === hover}
+                    onMouseDown={(e) => { e.preventDefault(); pick(row); }}
+                    onMouseEnter={() => setHover(i)}
+                    style={{ padding: '9px 12px', cursor: 'pointer', fontSize: 14,
+                             color: row.custom ? SLU.blue : SLU.ink,
+                             fontWeight: row.custom ? 600 : 500,
+                             background: i === hover ? 'rgba(0, 61, 165, 0.07)' : 'none',
+                             borderTop: row.custom && rows.length > 1 ? `1px solid ${SLU.rule2}` : 'none' }}>
+                    {row.custom ? `Use “${row.label}”` : row.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: SLU.ink2 }}>
+            GrowthLens records which pages and features you use — never your data or your
+            results. If you turn logging off, we record only that you turned it off.
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+                          color: SLU.ink2, cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={optOut}
+              onChange={(e) => setOptOutFlag(e.target.checked)} />
+            Don’t log my usage
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" onClick={onClose}
+              style={{ border: 'none', background: 'none', cursor: 'pointer',
+                       fontFamily: FONT, fontSize: 13.5, color: SLU.mute, padding: '9px 6px' }}>
+              Not now
+            </button>
+            <button type="button" onClick={save}
+              style={{ border: 'none', borderRadius: 8, cursor: 'pointer',
+                       fontFamily: FONT, fontSize: 13.5, fontWeight: 700, color: '#fff',
+                       background: SLU.blue, padding: '9px 18px' }}>
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
