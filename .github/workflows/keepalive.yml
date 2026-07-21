@@ -1,0 +1,25 @@
+# Supabase pauses free projects after ~7 days without API activity, and school
+# tools go quiet over breaks. This inserts one "(system)" keepalive event every
+# 5 days (worst month-boundary gap ~6 days) through the same REST path the app
+# uses — keeping the project awake AND verifying the insert pipeline.
+# The dashboard filters district_id = '(system)' out of all reporting.
+name: supabase-keepalive
+on:
+  schedule:
+    - cron: '0 12 */5 * *'
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Insert keepalive event
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -sS --fail-with-body -X POST "$SUPABASE_URL/rest/v1/events" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d '[{"district_id":"(system)","event":"keepalive","props":{}}]'
