@@ -331,6 +331,9 @@ function loadPptxGen() {
 }
 
 async function buildPPTX(deck) {
+  if (window.GLTelemetry) window.GLTelemetry.log('export', {
+    subjects: ['math', 'ela'].filter((s) => window.GLStore && window.GLStore.available(s)),
+  });
   await loadPptxGen();
   if (typeof window.PptxGenJS !== 'function') throw new Error('PptxGenJS failed to load');
   // Rasterize every data graphic once (SVG → 3× PNG ≈ 300 DPI) before any

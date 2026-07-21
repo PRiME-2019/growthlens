@@ -155,6 +155,20 @@ function AppBody() {
   }, []);
   const identityDistrict =
     ((window.GLTelemetry && window.GLTelemetry.getIdentity()) || {}).district || null;
+  React.useEffect(() => {
+    if (window.GLTelemetry) window.GLTelemetry.log('page_view', { page });
+  }, [page]);
+  // interact-instrumented setters: every consumer goes through ctx, so wrapping
+  // here catches the Analysis panel, the statewide page's own toggle, and any
+  // future call site without touching each one.
+  const setUnitTracked = React.useCallback((v) => {
+    if (window.GLTelemetry) window.GLTelemetry.log('interact', { control: 'units', value: v });
+    setUnit(v);
+  }, []);
+  const setAchGradeTracked = React.useCallback((v) => {
+    if (window.GLTelemetry) window.GLTelemetry.log('interact', { control: 'grade_filter', value: String(v) });
+    setAchGrade(v);
+  }, []);
 
   // Seed the bundled Math demo once (reads the window.* fixtures), then point
   // the well-known window.* globals at the active (subject, subgroup) via the
@@ -219,10 +233,10 @@ function AppBody() {
 
   const ctx = {
     page, setPage, subject, setSubject, disabledSubjects, demo, setDemo, disabledDemos,
-    estimate, setEstimate, unit, setUnit,
+    estimate, setEstimate, unit, setUnit: setUnitTracked,
     achLevel, setAchLevel,
     achShowMeans, setAchShowMeans,
-    achGrade, setAchGrade,
+    achGrade, setAchGrade: setAchGradeTracked,
     bumpDataRev,
     hasUpdate, openChangelog, markVersionSeen,
     openDistrictModal, identityDistrict,
@@ -766,18 +780,25 @@ function OverviewPage({ ctx }) {
         // Matches the FAQ's promised "up to about 50 MB" limit.
         setStages((s) => ({ ...s, [key]: 'idle' }));
         setErrors((e) => ({ ...e, [key]: { error: 'too_large', message: 'That file is over the 50 MB limit. Most district exports land between 5 and 20 MB — double-check this is one subject for one district.' } }));
+        if (window.GLTelemetry) window.GLTelemetry.log('upload_error', { subject: key, code: 'too_large' });
         return;
       }
       setStages((s) => ({ ...s, [key]: 'parsing' }));
       if (!window.GL || !window.GLIngest || !window.GLCompute || !window.GLStore) {
         setStages((s) => ({ ...s, [key]: 'idle' }));
         setErrors((e) => ({ ...e, [key]: { error: 'exception', message: 'GrowthLens didn’t finish loading. Check your internet connection and reload the page, then try again.' } }));
+        if (window.GLTelemetry) window.GLTelemetry.log('upload_error', { subject: key, code: 'engine_unavailable' });
         return;
       }
       try {
         const conn = await window.GL.getConnection();
         const res = await window.GLIngest.loadSubjectFile(file, conn, key);
-        if (!res.ok) { setStages((s) => ({ ...s, [key]: 'idle' })); setErrors((e) => ({ ...e, [key]: res })); return; }
+        if (!res.ok) {
+          setStages((s) => ({ ...s, [key]: 'idle' }));
+          setErrors((e) => ({ ...e, [key]: res }));
+          if (window.GLTelemetry) window.GLTelemetry.log('upload_error', { subject: key, code: res.error || 'unknown' });
+          return;
+        }
         const shapes = await window.GLCompute.computeSlice(key);
         // School names: when the file carries a district code and the PRiME
         // database is reachable, stamp real names onto the shapes. A failed
@@ -796,10 +817,12 @@ function OverviewPage({ ctx }) {
             ? `${res.meta.nDroppedGrades.toLocaleString()} rows outside grades 3–8 were set aside.` : null,
         }));
         setStages((s) => ({ ...s, [key]: 'ready' }));
+        if (window.GLTelemetry) window.GLTelemetry.log('upload_ok', { subject: key });
         ctx.bumpDataRev();   // re-render the shell so the DatasetStrip & globals refresh now
       } catch (err) {
         setStages((s) => ({ ...s, [key]: 'idle' }));
         setErrors((e) => ({ ...e, [key]: { error: 'exception', message: String(err) } }));
+        if (window.GLTelemetry) window.GLTelemetry.log('upload_error', { subject: key, code: 'exception' });
       }
     } finally {
       inFlight.current[key] = false;

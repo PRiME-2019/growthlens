@@ -133,7 +133,9 @@ function ColumnHeader({ cellW, idW, sort, setSort, showOverall = false, stretch 
   const sortable = !!setSort;
   const cycle = (descKey, ascKey) => {
     if (!sortable) return;
-    setSort(sort === descKey ? ascKey : descKey);
+    const next = sort === descKey ? ascKey : descKey;
+    if (window.GLTelemetry) window.GLTelemetry.log('interact', { control: 'heatmap_sort', value: next });
+    setSort(next);
   };
   const HCell = ({ children, descKey, ascKey, width, align = 'center', uppercase = false, grow = false }) => {
     const active = sort === descKey || sort === ascKey;
