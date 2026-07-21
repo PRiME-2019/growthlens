@@ -145,6 +145,8 @@ admin.html / admin.jsx  admin panel (OTP-gated): telemetry summary + resource
 engine/csv.js           shared writeCsv (publish tool + admin diff badge)
 engine/admin-data.js    admin aggregations/validation/diff — pure, node-tested
 supabase/functions/publish/  edge function firing the publish-resources workflow
+tools/verify-admin.js   browser smoke for /admin.html (Playwright, Supabase
+                        intercepted — see its header for setup)
 docs/runbooks/          go-live checklist, Resend SMTP setup, OTP email template
 
 methods.html            stand-alone methods note (linked from sidebar)

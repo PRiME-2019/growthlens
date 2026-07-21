@@ -69,6 +69,8 @@ function ErrLine({ children }) {
 function CodeBoxes({ value, onChange, onComplete }) {
   const refs = React.useRef([]);
   const last = OTP_LENGTH - 1;
+  // Focus moves from the email field straight into the code (spec: managed focus).
+  React.useEffect(() => { if (refs.current[0]) refs.current[0].focus(); }, []);
   const set = (next) => {
     const clean = next.replace(/\D/g, '').slice(0, OTP_LENGTH);
     onChange(clean);
@@ -80,9 +82,12 @@ function CodeBoxes({ value, onChange, onComplete }) {
   const handleChange = (i, e) => {
     const d = e.target.value.replace(/\D/g, '');
     if (!d) { set(value.slice(0, i)); return; }
-    const next = (value.slice(0, i) + d + value.slice(i + 1)).slice(0, OTP_LENGTH);
+    // Last typed digit wins: overtyping a filled box REPLACES it — splicing
+    // both characters in would shift the rest and auto-submit a wrong code.
+    const ch = d.slice(-1);
+    const next = (value.slice(0, i) + ch + value.slice(i + 1)).slice(0, OTP_LENGTH);
     set(next);
-    const focusAt = Math.min(i + d.length, last);
+    const focusAt = Math.min(i + 1, last);
     if (refs.current[focusAt]) refs.current[focusAt].focus();
   };
   const handlePaste = (e) => {
@@ -146,7 +151,9 @@ function LoginCard() {
     const { error } = await sb.auth.verifyOtp({ email: email.trim(), token, type: 'email' });
     setBusy(false);
     if (error) {
-      setErr('That code didn’t work — it may have expired. Try again or resend.');
+      setErr(/token|otp|expired|invalid/i.test(error.message || '')
+        ? 'That code didn’t work — it may have expired. Try again or resend.'
+        : 'Couldn’t reach the sign-in service — check your connection and try again.');
       setCode('');
     }
     // success: onAuthStateChange flips the gate; nothing to do here.
@@ -259,6 +266,7 @@ async function fetchAllEvents(sinceIso) {
     let q = sb.from('events')
       .select('district_id,device_id,session_id,event,props,created_at')
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true }) // stable tiebreaker: created_at isn't unique
       .range(from, from + 999);
     if (sinceIso) q = q.gte('created_at', sinceIso);
     const { data, error } = await q;
@@ -340,19 +348,26 @@ function SummaryView() {
   const [summary, setSummary] = React.useState(null);
   const [err, setErr] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
-  const load = React.useCallback(async (w) => {
-    setBusy(true); setErr(null);
-    try {
-      const sinceIso = w === 'all' ? null
-        : new Date(Date.now() - Number(w) * 864e5).toISOString();
-      const rows = await fetchAllEvents(sinceIso);
-      setSummary(window.GLAdminData.summarize(rows));
-    } catch (e) {
-      setErr(e.message || String(e));
-    }
-    setBusy(false);
-  }, []);
-  React.useEffect(() => { load(win); }, [win, load]);
+  const [reload, setReload] = React.useState(0);
+  // Stale-response guard: switching windows mid-flight must not let the
+  // earlier (slower) response overwrite the newer window's numbers.
+  React.useEffect(() => {
+    let stale = false;
+    (async () => {
+      setBusy(true); setErr(null);
+      try {
+        const sinceIso = win === 'all' ? null
+          : new Date(Date.now() - Number(win) * 864e5).toISOString();
+        const rows = await fetchAllEvents(sinceIso);
+        if (!stale) setSummary(window.GLAdminData.summarize(rows));
+      } catch (e) {
+        if (!stale) setErr(e.message || String(e));
+      }
+      if (!stale) setBusy(false);
+    })();
+    return () => { stale = true; };
+  }, [win, reload]);
+  const load = () => setReload((r) => r + 1);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -370,7 +385,7 @@ function SummaryView() {
       {err && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <ErrLine>Couldn’t load events: {err}</ErrLine>
-          <Btn kind="line" small onClick={() => load(win)}>Retry</Btn>
+          <Btn kind="line" small onClick={load}>Retry</Btn>
         </div>
       )}
       {summary && summary.events === 0 && !busy && (
@@ -425,25 +440,29 @@ const TABLE_META = {
 const workbenchChanged = () => window.dispatchEvent(new Event('gl-workbench-changed'));
 
 function PublishBar() {
-  const [dirty, setDirty] = React.useState(null); // null=checking, bool=known
+  // 'checking' | 'clean' | 'dirty' | 'unknown' — never claim "published"
+  // when the check itself failed.
+  const [state, setState] = React.useState('checking');
   const [msg, setMsg] = React.useState(null);
   const [err, setErr] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const check = React.useCallback(async () => {
-    setDirty(null);
+    setState('checking');
     try {
+      const text = (r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); };
       const [res, xw, resCsv, xwCsv] = await Promise.all([
         sb.from('resources').select('*').order('position'),
         sb.from('resource_crosswalk').select('*').order('position'),
-        fetch('reference/evidence_resources.csv', { cache: 'no-store' }).then((r) => r.text()),
-        fetch('reference/evidence_crosswalk.csv', { cache: 'no-store' }).then((r) => r.text()),
+        fetch('reference/evidence_resources.csv', { cache: 'no-store' }).then(text),
+        fetch('reference/evidence_crosswalk.csv', { cache: 'no-store' }).then(text),
       ]);
       if (res.error || xw.error) throw (res.error || xw.error);
-      setDirty(
+      setState(
         window.GLAdminData.diffPublished(RESOURCE_COLUMNS, res.data, resCsv) ||
-        window.GLAdminData.diffPublished(CROSSWALK_COLUMNS, xw.data, xwCsv),
+        window.GLAdminData.diffPublished(CROSSWALK_COLUMNS, xw.data, xwCsv)
+          ? 'dirty' : 'clean',
       );
-    } catch { setDirty(false); }
+    } catch { setState('unknown'); }
   }, []);
   React.useEffect(() => {
     check();
@@ -455,7 +474,14 @@ function PublishBar() {
     setBusy(true); setMsg(null); setErr(null);
     const { error } = await sb.functions.invoke('publish');
     setBusy(false);
-    if (error) { setErr(error.message || 'Publish failed'); return; }
+    if (error) {
+      // FunctionsHttpError's own message is generic; the edge function's real
+      // reason (missing PAT, GitHub status) is in the response body.
+      let detail = null;
+      try { detail = error.context ? await error.context.json() : null; } catch { /* not json */ }
+      setErr((detail && (detail.error || detail.detail)) || error.message || 'Publish failed');
+      return;
+    }
     setMsg('Publish started — the site updates when the workflow lands.');
   };
 
@@ -463,16 +489,24 @@ function PublishBar() {
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
                   background: '#fff', border: `1px solid ${ADMIN.rule2}`, borderRadius: 10,
                   padding: '10px 14px', flexWrap: 'wrap' }}>
-      {dirty === null && <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Checking…</span>}
-      {dirty === true && (
+      {state === 'checking' && <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Checking…</span>}
+      {state === 'dirty' && (
         <span style={{ fontFamily: LABEL, fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
                        textTransform: 'uppercase', color: ADMIN.amber,
                        background: ADMIN.amberBg, padding: '3px 10px', borderRadius: 999 }}>
           Unpublished changes
         </span>
       )}
-      {dirty === false && (
+      {state === 'clean' && (
         <span style={{ fontSize: 12.5, color: ADMIN.mute }}>Everything published</span>
+      )}
+      {state === 'unknown' && (
+        <span style={{ fontSize: 12.5, color: ADMIN.amber }}>
+          Couldn’t check publish status{' '}
+          <button type="button" onClick={check}
+            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                     color: ADMIN.blue, fontWeight: 700, fontSize: 12.5 }}>Recheck</button>
+        </span>
       )}
       <span style={{ flex: 1 }} />
       {msg && <span style={{ fontSize: 12.5, color: ADMIN.ink2 }}>{msg}{' '}
@@ -532,7 +566,8 @@ function EditorTab({ table }) {
     setRows(data);
     if (table === 'resource_crosswalk') {
       const r = await sb.from('resources').select('resource_id').order('position');
-      if (!r.error) setResourceIds(r.data.map((x) => x.resource_id));
+      if (r.error) setErr('Couldn’t load the resource list for the dropdown: ' + r.error.message);
+      else setResourceIds(r.data.map((x) => x.resource_id));
     }
   }, [table]);
   React.useEffect(() => { load(); }, [load]);
@@ -540,26 +575,49 @@ function EditorTab({ table }) {
   const write = async (fn) => {
     setErr(null);
     const error = await fn();
-    if (error) { setErr(error.message); return false; }
+    if (error) {
+      setErr(/foreign key|violates/i.test(error.message || '')
+        ? 'That resource_id is referenced by matching rules — update or delete those rules first (renames don’t cascade).'
+        : error.message);
+      await load(); // resync the list — a mid-sequence failure must not show stale order
+      return false;
+    }
     await load();
     workbenchChanged();
     return true;
   };
 
-  // UNIQUE(position) forbids a naive swap — park A at -1 first.
+  // UNIQUE(position) forbids a naive swap — park A at -1 first. If a later
+  // step fails, best-effort restore A so no row stays stranded at -1.
+  const movingRef = React.useRef(false);
   const move = async (i, dir) => {
+    if (movingRef.current) return; // ignore rapid clicks — interleaved swaps collide
     const j = i + dir;
     if (j < 0 || j >= rows.length) return;
+    movingRef.current = true;
     const A = rows[i], B = rows[j];
     const kA = meta.keyOf(A), kB = meta.keyOf(B);
-    await write(async () => {
-      let r = await sb.from(table).update({ position: -1 }).eq(meta.matchKey, kA);
-      if (r.error) return r.error;
-      r = await sb.from(table).update({ position: A.position }).eq(meta.matchKey, kB);
-      if (r.error) return r.error;
-      r = await sb.from(table).update({ position: B.position }).eq(meta.matchKey, kA);
-      return r.error;
-    });
+    try {
+      await write(async () => {
+        let r = await sb.from(table).update({ position: -1 }).eq(meta.matchKey, kA);
+        if (r.error) return r.error;
+        r = await sb.from(table).update({ position: A.position }).eq(meta.matchKey, kB);
+        if (r.error) {
+          await sb.from(table).update({ position: A.position }).eq(meta.matchKey, kA);
+          return r.error;
+        }
+        r = await sb.from(table).update({ position: B.position }).eq(meta.matchKey, kA);
+        if (r.error) {
+          // B currently holds A's old slot — free it before restoring A.
+          await sb.from(table).update({ position: B.position }).eq(meta.matchKey, kB);
+          await sb.from(table).update({ position: A.position }).eq(meta.matchKey, kA);
+          return r.error;
+        }
+        return null;
+      });
+    } finally {
+      movingRef.current = false;
+    }
   };
 
   const startEdit = (row) => { setEditing({ row: { ...row }, isNew: false, orig: meta.keyOf(row) }); setFormErrs([]); };
@@ -589,13 +647,38 @@ function EditorTab({ table }) {
     if (ok) setEditing(null);
   };
   const remove = async () => {
-    if (!window.confirm(`Delete this ${meta.label}? This cannot be undone here.`)) return;
+    // Deleting a resource CASCADES to its matching rules (schema FK) — say so
+    // with a live count instead of letting rationales vanish silently.
+    let warning = `Delete this ${meta.label}? This cannot be undone here.`;
+    if (table === 'resources') {
+      const { count } = await sb.from('resource_crosswalk')
+        .select('id', { count: 'exact', head: true })
+        .eq('resource_id', editing.orig);
+      if (count > 0) {
+        warning = `Delete this resource AND its ${count} matching rule${count === 1 ? '' : 's'}? ` +
+          'The rules are deleted with it and cannot be recovered here.';
+      }
+    }
+    if (!window.confirm(warning)) return;
     const ok = await write(async () => {
       const res = await sb.from(table).delete().eq(meta.matchKey, editing.orig);
       return res.error;
     });
     if (ok) setEditing(null);
   };
+
+  // Datalist suggestions from what's actually in the data (spec: observed
+  // values), so e.g. match_strength offers 'general' — the most common value.
+  const observed = React.useMemo(() => {
+    const cols = ['finding_type', 'subgroup', 'subject', 'grade_band', 'match_strength',
+                  'series', 'evidence_type', 'population'];
+    const out = {};
+    for (const c of cols) {
+      const vals = [...new Set((rows || []).map((r) => String(r[c] ?? '').trim()).filter(Boolean))];
+      if (vals.length) out[c] = vals.sort();
+    }
+    return out;
+  }, [rows]);
 
   if (err && !rows) return <ErrLine>Couldn’t load: {err}</ErrLine>;
   if (!rows) return <div style={{ color: ADMIN.mute, fontSize: 13 }}>Loading…</div>;
@@ -616,7 +699,7 @@ function EditorTab({ table }) {
                   onChange={(v) => setEditing((e) => ({ ...e, row: { ...e.row, [c]: v } }))}
                   textarea={c === 'notes' || c === 'rationale'}
                   options={table === 'resource_crosswalk' && c === 'resource_id' ? resourceIds : null}
-                  datalist={c === 'match_strength' ? ['direct', 'adjacent'] : null} />
+                  datalist={observed[c] || null} />
               </div>
             ))}
           </div>

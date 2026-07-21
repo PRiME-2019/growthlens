@@ -8,11 +8,13 @@
 //
 // CORS stays permissive on purpose: the security boundary is the JWT check
 // below (signups are closed, so any authenticated user is the admin).
-import { createClient } from "jsr:@supabase/supabase-js@2";
+// x-client-info MUST stay in the allow-list — supabase-js sends it by
+// default and the preflight fails without it, breaking functions.invoke().
+import { createClient } from "jsr:@supabase/supabase-js@2.45.4";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -22,14 +24,18 @@ const json = (body: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
 
+  // Pass the token explicitly rather than relying on header-forwarding
+  // fallbacks inside auth-js — version-proof and unambiguous.
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return json({ error: "not signed in" }, 401);
   const supa = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
   );
-  const { data: { user } } = await supa.auth.getUser();
-  if (!user) return json({ error: "not signed in" }, 401);
+  const { data: { user }, error: authError } = await supa.auth.getUser(token);
+  if (authError || !user) return json({ error: "not signed in" }, 401);
 
   const r = await fetch(
     "https://api.github.com/repos/PRiME-2019/growthlens/actions/workflows/publish-resources.yml/dispatches",
