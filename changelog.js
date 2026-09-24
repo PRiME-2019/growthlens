@@ -22,6 +22,15 @@
 //                         the person using the tool, not the commit messages.
 window.GL_CHANGELOG = [
   {
+    version: '0.74',
+    date: '2026-09-24',
+    stage: 'preview',
+    title: 'Behind-the-scenes maintenance',
+    items: [
+      'Routine site update. Nothing changes in how you use GrowthLens.',
+    ],
+  },
+  {
     version: '0.73',
     date: '2026-07-20',
     stage: 'preview',
